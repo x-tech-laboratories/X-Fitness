@@ -11,13 +11,13 @@ import { bind_methods, open_store, type FitnessMethods } from "../src/shared/sto
 import { set_page_api } from "../src/web/api.ts";
 import { App } from "../src/web/App.tsx";
 
-// The page's calls answered by a real store on a throwaway database, as a host would.
+// The page's calls answered by a real store on a throwaway database, as the desktop app would, which needs no sign-in.
 function fake_page(): FitnessMethods {
   const database = new DatabaseSync(":memory:");
   open_store(database);
   const methods = bind_methods(() => database, () => undefined);
   const calls = Object.fromEntries(Object.entries(methods).map(([name, call]) => [name, async (...args: unknown[]) => (call as (...args: unknown[]) => unknown)(...args)]));
-  set_page_api({ host: "web", calls: calls as unknown as Client<FitnessMethods>, device: null, on_change: () => () => undefined });
+  set_page_api({ host: "desktop", calls: calls as unknown as Client<FitnessMethods>, device: null, on_change: () => () => undefined });
   return methods;
 }
 
