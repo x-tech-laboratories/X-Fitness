@@ -18,7 +18,8 @@ server. Read `README.md` first, then `docs/architecture.md`. It follows the
   `src/shared/store.ts`, `src/web/features.tsx` and `src/web/App.tsx` only list features.
 - Code in `src/shared/` runs on the server, in Electron's main process and in the phone's page: no DOM, no `node:` imports.
 - A store call that only reads is named `list_`, `get_`, `search_`, `lookup_` or `export_`; any other name announces a change.
-- A released migration step is never edited; add a new step after it.
+- A released migration step is never edited; add a new step after it. For a feature on Drizzle, change `schema.ts` and run `npm run db:generate`.
+- Queries go through X-Libs `drizzle` (`drizzle_of(database)`), never an import of `drizzle-orm` itself.
 - Store weights in kg, lengths in cm, distances in km and energy in kcal; convert for display with X-Libs `units`.
 - Use X-Libs widgets and Halon classes; `app.css` holds layout only and never a colour. A widget two apps could use goes into X-Libs.
 - Tests use a throwaway database (`:memory:` or a temp file), never `dev-data/` or a real profile.

@@ -20,8 +20,12 @@ device changed something.
 A feature is two folders:
 
 - `src/shared/<feature>/store.ts` exports a `define_feature({ id, migrations, tables, methods, setting_defaults })`.
-  - `migrations` are SQL steps run once each, in order, tracked per feature in `schema_versions`.
-  - `tables` lists the tables that sync, parents first, with the columns that name a row on every device. Rows need
+  - `migrations` run once each, in order, through X-Libs' `migrate` with the feature as owner, tracked in
+    `schema_versions`. A feature on Drizzle (Body so far) keeps its tables in `schema.ts`, and `npm run db:generate` writes
+    each change as a migration under `migrations/` and bundles them into `migrations/index.ts`; a migration that only
+    moves data is made with `npx drizzle-kit generate --config src/shared/<feature>/drizzle.config.ts --custom`.
+  - `tables` lists the tables that sync, parents first, with the columns that name a row on every device; on Drizzle,
+    `synced_tables(...)` reads them from the schema's primary keys. Rows need
     ids every device can make alone, such as `new_id()`; never an autoincrement key.
   - `methods` take the database first, then the page's arguments, and run synchronously or return a promise. A method
     that only reads is named `list_`, `get_`, `search_`, `lookup_` or `export_`.

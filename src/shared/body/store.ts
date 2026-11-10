@@ -2,10 +2,12 @@
 
 // ── Imports ──────────────────────────────────────────────────────────────────
 
+import { and, asc, count, desc, eq, gte, lte, max, ne, sql, synced_tables } from "@x-tech-laboratories/x-libs/drizzle";
 import { in_transaction, type SqlDatabase } from "@x-tech-laboratories/x-libs/sql";
 
-import { define_feature, new_id } from "../feature.ts";
+import { define_feature, drizzle_of, new_id } from "../feature.ts";
 import { import_trilium_body } from "./importer.ts";
+import { migrations } from "./migrations/index.ts";
 import {
   average_days,
   body_mass_index,
@@ -21,6 +23,7 @@ import {
   type Point,
   type SeriesStats,
 } from "./readings.ts";
+import { body_days, body_metrics, body_readings, body_tables } from "./schema.ts";
 
 // ── Shapes ───────────────────────────────────────────────────────────────────
 
@@ -74,47 +77,45 @@ export const body_setting_defaults = {
   "body.height": 0,
 };
 
-// Fixed ids, so two devices that both start fresh hold the same metrics rather than one copy each.
-const default_metrics: [id: string, name: string, kind: string, unit: string][] = [
-  ["weight", "Weight", "weight", ""],
-  ["bodyfat", "Body Fat", "percent", ""],
-  ["waist", "Waist", "length", ""],
-  ["chest", "Chest", "length", ""],
-  ["hips", "Hips", "length", ""],
-  ["arm", "Arm", "length", ""],
-  ["thigh", "Thigh", "length", ""],
-  ["neck", "Neck", "length", ""],
-  ["restinghr", "Resting Heart Rate", "custom", "bpm"],
-];
-
-const seed_sql = default_metrics
-  .map(([id, name, kind, unit], position) => `INSERT INTO body_metrics (id, name, kind, unit, position) VALUES ('${id}', '${name}', '${kind}', '${unit}', ${position});`)
-  .join("\n");
-
 // ── Reading ──────────────────────────────────────────────────────────────────
 
-const metric_columns = "id, name, kind, unit, goal, comment, position";
+const metric_fields = {
+  id: body_metrics.id,
+  name: body_metrics.name,
+  kind: body_metrics.kind,
+  unit: body_metrics.unit,
+  goal: body_metrics.goal,
+  comment: body_metrics.comment,
+  position: body_metrics.position,
+};
 
 function list_metrics(database: SqlDatabase): BodyMetric[] {
-  const rows = database.prepare(`SELECT ${metric_columns} FROM body_metrics ORDER BY position, name`).all() as unknown as BodyMetric[];
+  const rows = drizzle_of(database).select(metric_fields).from(body_metrics).orderBy(asc(body_metrics.position), asc(body_metrics.name)).all();
   return rows.map((row) => ({ ...row, kind: kind_of(row.kind) }));
 }
 
 function find_metric(database: SqlDatabase, id: string): BodyMetric {
-  const row = database.prepare(`SELECT ${metric_columns} FROM body_metrics WHERE id = ?`).get(id) as BodyMetric | undefined;
+  const row = drizzle_of(database).select(metric_fields).from(body_metrics).where(eq(body_metrics.id, id)).get();
   if (!row) throw new Error(`No metric ${id}`);
   return { ...row, kind: kind_of(row.kind) };
 }
 
+const point_fields = { date: body_readings.date, value: body_readings.value };
+
 // Every reading of one metric, oldest first.
 function metric_series(database: SqlDatabase, metric_id: string): Point[] {
-  const rows = database.prepare("SELECT date, value FROM body_readings WHERE metric_id = ? ORDER BY date").all(metric_id) as unknown as Point[];
-  return rows.map((row) => ({ ...row }));
+  return drizzle_of(database).select(point_fields).from(body_readings).where(eq(body_readings.metric_id, metric_id)).orderBy(asc(body_readings.date)).all();
 }
 
 function latest_on_or_before(database: SqlDatabase, metric_id: string, date: string): Point | null {
-  const row = database.prepare("SELECT date, value FROM body_readings WHERE metric_id = ? AND date <= ? ORDER BY date DESC LIMIT 1").get(metric_id, date) as Point | undefined;
-  return row ? { ...row } : null;
+  const row = drizzle_of(database)
+    .select(point_fields)
+    .from(body_readings)
+    .where(and(eq(body_readings.metric_id, metric_id), lte(body_readings.date, date)))
+    .orderBy(desc(body_readings.date))
+    .limit(1)
+    .get();
+  return row ?? null;
 }
 
 function height_of(database: SqlDatabase): number {
@@ -135,29 +136,33 @@ function check_day(date: unknown): string {
 
 // Every day with anything logged from the day given, newest first.
 function list_history(database: SqlDatabase, from: string): HistoryDay[] {
+  const db = drizzle_of(database);
   const history = new Map<string, HistoryDay>();
   const day_of = (date: string) => history.get(date) ?? history.set(date, { date, values: {}, comment: "" }).get(date)!;
-  const readings = database.prepare("SELECT metric_id, date, value FROM body_readings WHERE date >= ?").all(from) as { metric_id: string; date: string; value: number }[];
+  const readings = db.select().from(body_readings).where(gte(body_readings.date, from)).all();
   for (const reading of readings) day_of(reading.date).values[reading.metric_id] = reading.value;
-  const notes = database.prepare("SELECT date, comment FROM body_days WHERE date >= ?").all(from) as { date: string; comment: string }[];
-  for (const note of notes) day_of(note.date).comment = note.comment;
+  for (const note of db.select().from(body_days).where(gte(body_days.date, from)).all()) day_of(note.date).comment = note.comment;
   return [...history.values()].sort((first, second) => second.date.localeCompare(first.date));
+}
+
+// The position after every metric's.
+export function next_metric_position(database: SqlDatabase): number {
+  return drizzle_of(database).select({ next: sql<number>`coalesce(max(${body_metrics.position}) + 1, 0)` }).from(body_metrics).get()!.next;
 }
 
 // ── Writing ──────────────────────────────────────────────────────────────────
 
 function save_metric(database: SqlDatabase, input: MetricInput): string {
+  const db = drizzle_of(database);
   const metric = normalize_metric(input);
-  const existing = input.id ? database.prepare("SELECT id FROM body_metrics WHERE id = ?").get(input.id) : undefined;
+  const fields = { name: metric.name, kind: metric.kind, unit: metric.unit, goal: metric.goal, comment: metric.comment };
+  const existing = input.id ? db.select({ id: body_metrics.id }).from(body_metrics).where(eq(body_metrics.id, input.id)).get() : undefined;
   if (existing && input.id) {
-    database.prepare("UPDATE body_metrics SET name = ?, kind = ?, unit = ?, goal = ?, comment = ? WHERE id = ?")
-      .run(metric.name, metric.kind, metric.unit, metric.goal, metric.comment, input.id);
+    db.update(body_metrics).set(fields).where(eq(body_metrics.id, input.id)).run();
     return input.id;
   }
   const id = input.id || new_id();
-  const { next } = database.prepare("SELECT COALESCE(MAX(position) + 1, 0) AS next FROM body_metrics").get() as { next: number };
-  database.prepare("INSERT INTO body_metrics (id, name, kind, unit, goal, comment, position) VALUES (?, ?, ?, ?, ?, ?, ?)")
-    .run(id, metric.name, metric.kind, metric.unit, metric.goal, metric.comment, next);
+  db.insert(body_metrics).values({ id, ...fields, position: next_metric_position(database) }).run();
   return id;
 }
 
@@ -169,8 +174,9 @@ function move_metric(database: SqlDatabase, id: string, delta: number): void {
   if (index < 0 || target < 0 || target >= ids.length) return;
   [ids[index], ids[target]] = [ids[target]!, ids[index]!];
   in_transaction(database, () => {
-    const update = database.prepare("UPDATE body_metrics SET position = ? WHERE id = ? AND position IS NOT ?");
-    ids.forEach((metric_id, position) => update.run(position, metric_id, position));
+    ids.forEach((metric_id, position) =>
+      drizzle_of(database).update(body_metrics).set({ position }).where(and(eq(body_metrics.id, metric_id), ne(body_metrics.position, position))).run(),
+    );
   });
 }
 
@@ -178,38 +184,15 @@ function move_metric(database: SqlDatabase, id: string, delta: number): void {
 
 export const body_feature = define_feature({
   id: "body",
-  migrations: [
-    `CREATE TABLE body_metrics (
-      id TEXT PRIMARY KEY,
-      name TEXT NOT NULL,
-      kind TEXT NOT NULL,
-      unit TEXT NOT NULL DEFAULT '',
-      goal REAL NOT NULL DEFAULT 0,
-      comment TEXT NOT NULL DEFAULT '',
-      position INTEGER NOT NULL DEFAULT 0
-    );
-    CREATE TABLE body_readings (
-      metric_id TEXT NOT NULL REFERENCES body_metrics (id) ON DELETE CASCADE,
-      date TEXT NOT NULL,
-      value REAL NOT NULL,
-      PRIMARY KEY (metric_id, date)
-    );
-    CREATE INDEX body_readings_by_date ON body_readings (date);
-    CREATE TABLE body_days (date TEXT PRIMARY KEY, comment TEXT NOT NULL);
-    ${seed_sql}`,
-  ],
-  tables: [
-    { name: "body_metrics", key_columns: ["id"] },
-    { name: "body_readings", key_columns: ["metric_id", "date"] },
-    { name: "body_days", key_columns: ["date"] },
-  ],
+  migrations: migrations.map((migration) => migration.statements),
+  tables: synced_tables(body_tables),
   methods: {
     list_body_metrics: (database: SqlDatabase): MetricSummary[] => {
-      const counts = database.prepare("SELECT metric_id, COUNT(*) AS readings, MAX(date) AS last_date FROM body_readings GROUP BY metric_id").all() as {
-        metric_id: string;
-        readings: number;
-        last_date: string;
-      }[];
+      const counts = drizzle_of(database)
+        .select({ metric_id: body_readings.metric_id, readings: count(), last_date: max(body_readings.date) })
+        .from(body_readings)
+        .groupBy(body_readings.metric_id)
+        .all();
       const by_metric = new Map(counts.map((row) => [row.metric_id, row]));
       return list_metrics(database).map((metric) => ({ ...metric, readings: by_metric.get(metric.id)?.readings ?? 0, last_date: by_metric.get(metric.id)?.last_date ?? "" }));
     },
@@ -221,18 +204,20 @@ export const body_feature = define_feature({
     // A metric's readings go with it, since nothing else could show them; gives how many went.
     delete_body_metric: (database: SqlDatabase, id: string): number =>
       in_transaction(database, () => {
-        const { changes } = database.prepare("DELETE FROM body_readings WHERE metric_id = ?").run(id);
-        database.prepare("DELETE FROM body_metrics WHERE id = ?").run(id);
+        const db = drizzle_of(database);
+        const { changes } = db.delete(body_readings).where(eq(body_readings.metric_id, id)).run();
+        db.delete(body_metrics).where(eq(body_metrics.id, id)).run();
         return Number(changes);
       }),
 
     // One day as the log shows it: each metric's reading, the one before it, and BMI from the latest weight.
     get_body_day: (database: SqlDatabase, date: string): BodyDay => {
       check_day(date);
+      const db = drizzle_of(database);
       const metrics = list_metrics(database);
-      const values = database.prepare("SELECT metric_id, value FROM body_readings WHERE date = ?").all(date) as { metric_id: string; value: number }[];
+      const values = db.select({ metric_id: body_readings.metric_id, value: body_readings.value }).from(body_readings).where(eq(body_readings.date, date)).all();
       const by_metric = new Map(values.map((row) => [row.metric_id, row.value]));
-      const day = database.prepare("SELECT comment FROM body_days WHERE date = ?").get(date) as { comment: string } | undefined;
+      const day = db.select({ comment: body_days.comment }).from(body_days).where(eq(body_days.date, date)).get();
       const rows = metrics.map((metric) => ({ metric, value: by_metric.get(metric.id) ?? null, previous: latest_on_or_before(database, metric.id, shift_day(date, -1)) }));
       const weight = weight_metric(metrics);
       const weight_reading = weight ? latest_on_or_before(database, weight.id, date) : null;
@@ -243,20 +228,24 @@ export const body_feature = define_feature({
     // A value of null or not above 0 removes the day's reading.
     set_body_reading: (database: SqlDatabase, metric_id: string, date: string, value: number | null): void => {
       check_day(date);
+      const db = drizzle_of(database);
       if (value === null || !(Number(value) > 0)) {
-        database.prepare("DELETE FROM body_readings WHERE metric_id = ? AND date = ?").run(metric_id, date);
+        db.delete(body_readings).where(and(eq(body_readings.metric_id, metric_id), eq(body_readings.date, date))).run();
         return;
       }
-      database.prepare("INSERT INTO body_readings (metric_id, date, value) VALUES (?, ?, ?) ON CONFLICT (metric_id, date) DO UPDATE SET value = excluded.value")
-        .run(metric_id, date, Number(value));
+      db.insert(body_readings)
+        .values({ metric_id, date, value: Number(value) })
+        .onConflictDoUpdate({ target: [body_readings.metric_id, body_readings.date], set: { value: Number(value) } })
+        .run();
     },
 
     // An empty note removes the day's row, so a day with nothing in it leaves nothing behind.
     set_body_note: (database: SqlDatabase, date: string, comment: string): void => {
       check_day(date);
+      const db = drizzle_of(database);
       const text = comment.trim();
-      if (!text) database.prepare("DELETE FROM body_days WHERE date = ?").run(date);
-      else database.prepare("INSERT INTO body_days (date, comment) VALUES (?, ?) ON CONFLICT (date) DO UPDATE SET comment = excluded.comment").run(date, text);
+      if (!text) db.delete(body_days).where(eq(body_days.date, date)).run();
+      else db.insert(body_days).values({ date, comment: text }).onConflictDoUpdate({ target: body_days.date, set: { comment: text } }).run();
     },
 
     // One metric over the days ending today, 0 for all time; the average runs over the whole series so the first days in range have a full window.

@@ -19,6 +19,7 @@
     "start": "NODE_ENV=production node src/server/main.ts",
     "start:desktop": "electron-vite preview",
     "typecheck": "tsc -b",
+    "db:generate": "for config in src/shared/*/drizzle.config.ts; do drizzle-kit generate --config \"$config\" && x-libs-bundle-migrations \"$(dirname \"$config\")/migrations\" || exit 1; done",
     "test": "vitest run",
     "lint": "oxlint"
   },
@@ -44,6 +45,7 @@
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
     "@vitejs/plugin-react": "^6.2.1",
+    "drizzle-kit": "1.0.0-rc.5",
     "electron": "^43.0.0",
     "electron-vite": "^6.0.0",
     "jsdom": "^31.0.0",

@@ -3,10 +3,13 @@
 
 // ── Imports ──────────────────────────────────────────────────────────────────
 
+import { eq, sql } from "@x-tech-laboratories/x-libs/drizzle";
 import { in_transaction, type SqlDatabase } from "@x-tech-laboratories/x-libs/sql";
 import { to_stored, type LengthUnit, type MassUnit } from "@x-tech-laboratories/x-libs/units";
 
+import { drizzle_of } from "../feature.ts";
 import { is_day, kind_of, normalize_metric, positive_number, trimmed_text, type MetricKind } from "./readings.ts";
+import { body_days, body_metrics, body_readings } from "./schema.ts";
 
 // ── Shapes ───────────────────────────────────────────────────────────────────
 
@@ -90,33 +93,38 @@ export function import_trilium_body(database: SqlDatabase, json_text: string, un
   const length_unit: LengthUnit = file.units.length === "in" || file.units.length === "cm" ? file.units.length : units.length_unit ?? (setting_of(database, "length_unit") === "in" ? "in" : "cm");
 
   return in_transaction(database, () => {
-    const known = new Map((database.prepare("SELECT id, kind FROM body_metrics").all() as { id: string; kind: string }[]).map((row) => [row.id, kind_of(row.kind)]));
+    const db = drizzle_of(database);
+    const known = new Map(db.select({ id: body_metrics.id, kind: body_metrics.kind }).from(body_metrics).all().map((row) => [row.id, kind_of(row.kind)]));
     const kinds = new Map(known);
     for (const metric of file.metrics) if (!kinds.has(metric.id)) kinds.set(metric.id, metric.kind);
     const stored = (kind: MetricKind | undefined, value: number) =>
       kind === "weight" ? to_stored(value, mass_unit) : kind === "length" ? to_stored(value, length_unit) : value;
 
     let added_metrics = 0;
-    const { next } = database.prepare("SELECT COALESCE(MAX(position) + 1, 0) AS next FROM body_metrics").get() as { next: number };
-    const insert_metric = database.prepare("INSERT INTO body_metrics (id, name, kind, unit, goal, comment, position) VALUES (?, ?, ?, ?, ?, ?, ?)");
+    const next = db.select({ next: sql<number>`coalesce(max(${body_metrics.position}) + 1, 0)` }).from(body_metrics).get()!.next;
     for (const metric of file.metrics) {
       if (known.has(metric.id)) continue;
       known.set(metric.id, metric.kind);
       const unit = metric.kind === "custom" ? metric.unit : "";
-      insert_metric.run(metric.id, metric.name, metric.kind, unit, stored(metric.kind, metric.goal), metric.comment, next + added_metrics);
+      db.insert(body_metrics)
+        .values({ id: metric.id, name: metric.name, kind: metric.kind, unit, goal: stored(metric.kind, metric.goal), comment: metric.comment, position: next + added_metrics })
+        .run();
       added_metrics++;
     }
 
     let added_readings = 0;
-    const insert_reading = database.prepare("INSERT INTO body_readings (metric_id, date, value) VALUES (?, ?, ?) ON CONFLICT (metric_id, date) DO NOTHING");
-    const insert_note = database.prepare("INSERT INTO body_days (date, comment) VALUES (?, ?) ON CONFLICT (date) DO UPDATE SET comment = excluded.comment WHERE body_days.comment = ''");
     for (const [date, day] of file.log) {
       for (const [metric_id, value] of Object.entries(day.values)) {
         // A reading of a metric neither side knows has nowhere to show, as in the add-on.
         if (!known.has(metric_id)) continue;
-        added_readings += Number(insert_reading.run(metric_id, date, stored(kinds.get(metric_id), value)).changes);
+        added_readings += Number(db.insert(body_readings).values({ metric_id, date, value: stored(kinds.get(metric_id), value) }).onConflictDoNothing().run().changes);
       }
-      if (day.comment) insert_note.run(date, day.comment);
+      if (day.comment) {
+        db.insert(body_days)
+          .values({ date, comment: day.comment })
+          .onConflictDoUpdate({ target: body_days.date, set: { comment: day.comment }, setWhere: eq(body_days.comment, "") })
+          .run();
+      }
     }
     return { metrics: file.metrics.length, days: file.log.size, added_metrics, added_readings };
   });
