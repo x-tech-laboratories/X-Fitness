@@ -4,7 +4,7 @@
 // ── Imports ──────────────────────────────────────────────────────────────────
 
 import type { ApiSpec } from "@x-tech-laboratories/x-libs/api_spec";
-import { migrate, type SqlDatabase } from "@x-tech-laboratories/x-libs/sql";
+import { in_transaction, migrate, type SqlDatabase } from "@x-tech-laboratories/x-libs/sql";
 import { create_sync_engine } from "@x-tech-laboratories/x-libs/sync_engine";
 
 import { body_feature } from "./body/store.ts";
@@ -29,6 +29,21 @@ function has_old_versions(database: SqlDatabase): boolean {
   return database.prepare("SELECT 1 FROM pragma_table_info('schema_versions') WHERE name = 'feature'").get() !== undefined;
 }
 
+// Each feature's one step from before X-Libs kept the versions, as the count of its steps now; body's became two.
+const steps_before_owners: Record<string, number> = { body: 2 };
+
+// The old versions move to an owner column, counted in today's steps, so no step runs twice.
+function adopt_old_versions(database: SqlDatabase): void {
+  if (!has_old_versions(database)) return;
+  in_transaction(database, () => {
+    const rows = database.prepare("SELECT feature, version FROM schema_versions").all() as { feature: string; version: number }[];
+    database.exec("DROP TABLE schema_versions");
+    database.exec("CREATE TABLE schema_versions (owner TEXT PRIMARY KEY, version INTEGER NOT NULL)");
+    const insert = database.prepare("INSERT INTO schema_versions (owner, version) VALUES (?, ?)");
+    for (const row of rows) insert.run(row.feature, row.version === 1 ? (steps_before_owners[row.feature] ?? 1) : row.version);
+  });
+}
+
 // Whether opening would change the schema of a database that already holds data, so it can be backed up first.
 export function needs_upgrade(database: SqlDatabase): boolean {
   const has_versions = database.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'schema_versions'").get() !== undefined;
@@ -41,7 +56,7 @@ export function needs_upgrade(database: SqlDatabase): boolean {
 // Brings an open connection up to date and sets sync to stamp every change; run once each time the database opens.
 export function open_store(database: SqlDatabase): void {
   database.exec("PRAGMA foreign_keys = ON");
-  if (has_old_versions(database)) database.exec("ALTER TABLE schema_versions RENAME COLUMN feature TO owner");
+  adopt_old_versions(database);
   // Each feature keeps its own schema version, so features grow apart without renumbering each other's steps.
   for (const feature of features) migrate(database, feature.migrations, { owner: feature.id });
   install_history(database);
