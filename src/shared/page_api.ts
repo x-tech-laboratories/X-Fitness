@@ -4,7 +4,7 @@
 // ── Imports ──────────────────────────────────────────────────────────────────
 
 import type { Client } from "@x-tech-laboratories/x-libs/electron/bridge";
-import type { SyncCredentials, SyncDirection, SyncStatus } from "@x-tech-laboratories/x-libs/sync_protocol";
+import { sync_device_method_names, type SyncDeviceMethods, type SyncStatus } from "@x-tech-laboratories/x-libs/sync_protocol";
 
 import type { FitnessMethods } from "./store.ts";
 
@@ -17,15 +17,9 @@ export const events_api_name = "x_fitness_events";
 // ── Device calls ─────────────────────────────────────────────────────────────
 
 // Sync with a server, which only a device with its own database does; a browser is already on the server.
-export interface DeviceMethods {
-  get_sync_status: () => SyncStatus;
-  // Signs this device in with a name and password, or keeps its sign-in when given null.
-  connect_sync: (server_url: string, credentials: SyncCredentials | null, direction: SyncDirection) => Promise<SyncStatus>;
-  disconnect_sync: () => SyncStatus;
-  sync_now: () => Promise<SyncStatus>;
-}
+export type DeviceMethods = SyncDeviceMethods;
 
-export const device_method_names = ["get_sync_status", "connect_sync", "disconnect_sync", "sync_now"] as const satisfies readonly (keyof DeviceMethods)[];
+export const device_method_names = sync_device_method_names;
 
 // What the main process tells the page on its own: the data changed elsewhere, or sync's status moved.
 export type FitnessEvents = { changed: null; sync_status: SyncStatus };

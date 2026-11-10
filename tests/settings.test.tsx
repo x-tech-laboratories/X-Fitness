@@ -4,6 +4,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { Client } from "@x-tech-laboratories/x-libs/electron/bridge";
+import { Dialogs } from "@x-tech-laboratories/x-libs/web/react/dialog";
 
 import type { DeviceMethods } from "../src/shared/page_api.ts";
 import { setting_defaults, type FitnessMethods } from "../src/shared/store.ts";
@@ -46,12 +47,13 @@ describe("settings", () => {
       sync_now: vi.fn(),
     } as unknown as Client<DeviceMethods>;
     set_page_api({ host: "desktop", calls: fake_calls({}), device, on_change: () => () => undefined });
-    render(<SettingsView />);
+    render(<><SettingsView /><Dialogs /></>);
 
     fireEvent.change(await screen.findByLabelText("Server address"), { target: { value: "https://fitness.example.org" } });
     fireEvent.change(screen.getByLabelText("User name"), { target: { value: "ada" } });
     fireEvent.change(screen.getByLabelText("Password"), { target: { value: "secret" } });
     fireEvent.click(screen.getByRole("button", { name: "Use the server's fitness data" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Use the server's" }));
     await waitFor(() => expect(device.connect_sync).toHaveBeenCalledWith("https://fitness.example.org", { name: "ada", password: "secret" }, "download"));
   });
 });
