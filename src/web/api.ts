@@ -18,17 +18,19 @@ export const data_watch = create_watch();
 let page_api: PageApi | null = null;
 
 // A write tells this page's views too, since the host only tells the other pages.
+// Calls are looked up by name as they are made, since a browser's calls are a proxy with no list of names.
 export function set_page_api(api: PageApi): void {
-  const calls = Object.fromEntries(
-    Object.entries(api.calls).map(([name, call]) => [
-      name,
-      async (...args: unknown[]) => {
-        const result: unknown = await (call as (...args: unknown[]) => Promise<unknown>)(...args);
+  const host_calls = api.calls as unknown as Record<string, (...args: unknown[]) => Promise<unknown>>;
+  const calls = new Proxy({} as Client<FitnessMethods>, {
+    get: (_target, name) => {
+      if (typeof name !== "string") return undefined;
+      return async (...args: unknown[]) => {
+        const result = await host_calls[name]!(...args);
         if (!is_read_only(name)) data_watch.bump();
         return result;
-      },
-    ]),
-  ) as Client<FitnessMethods>;
+      };
+    },
+  });
   page_api = { ...api, calls };
   api.on_change(() => data_watch.bump());
 }
