@@ -9,11 +9,11 @@ import { NumberField } from "@x-tech-laboratories/x-libs/web/react/controls";
 import { confirm_dialog } from "@x-tech-laboratories/x-libs/web/react/dialog";
 import { FormRow, PageHeading, Toolbar } from "@x-tech-laboratories/x-libs/web/react/layout";
 import { DataTable, type TableColumn } from "@x-tech-laboratories/x-libs/web/react/table";
+import { ComboField } from "@x-tech-laboratories/x-libs/web/react/suggestions";
 
 import { by_id, food_label, normalize_recipe, nutrients, recipe_nutrients_per_serving, type FoodsById, type Ingredient, type Nutrients, type Recipe } from "../../shared/diet/model.ts";
 import type { DietData } from "../../shared/diet/store.ts";
 import { calls } from "../api.ts";
-import { ComboInput } from "./controls.tsx";
 import { attempt, format_amount, format_nutrient } from "./format.ts";
 import { CategoryEditor, CategoryFilter, FoodUnitSelect, GroupToggle, ItemSelect, use_category_view, with_draft, type ListRow } from "./widgets.tsx";
 
@@ -88,7 +88,7 @@ export function RecipeForm({ initial, data, energy, on_done }: { initial: Recipe
           <FormRow label="Servings" id="diet-recipe-unit">
             <div className="diet-inline">
               <NumberField label="Servings" bare min={0.01} value={recipe.servings} on_change={(servings) => change({ servings: servings ?? 1 })} />
-              <ComboInput id="diet-recipe-unit" label="Serving unit" placeholder="serving, bowl, slice…" value={recipe.serving_unit} suggestions={data.units} on_change={(serving_unit) => change({ serving_unit })} />
+              <ComboField id="diet-recipe-unit" label="Serving unit" placeholder="serving, bowl, slice…" value={recipe.serving_unit} options={data.units} on_change={(serving_unit) => change({ serving_unit })} />
             </div>
           </FormRow>
           <FormRow label="Categories" id="diet-recipe-categories">

@@ -10,12 +10,12 @@ import { confirm_dialog } from "@x-tech-laboratories/x-libs/web/react/dialog";
 import { FormRow, PageHeading, Toolbar } from "@x-tech-laboratories/x-libs/web/react/layout";
 import { use_pref } from "@x-tech-laboratories/x-libs/web/react/prefs";
 import { DataTable, type TableColumn } from "@x-tech-laboratories/x-libs/web/react/table";
+import { ComboField } from "@x-tech-laboratories/x-libs/web/react/suggestions";
 
 import { food_label, food_unit_problems, normalize_food, nutrients, serving_unit, type Food, type Portion } from "../../shared/diet/model.ts";
 import type { LookupReply, LookupResult } from "../../shared/diet/lookup.ts";
 import type { DietData } from "../../shared/diet/store.ts";
 import { calls } from "../api.ts";
-import { ComboInput } from "./controls.tsx";
 import { attempt, error_text, format_amount, format_nutrient } from "./format.ts";
 import { CategoryEditor, CategoryFilter, GroupToggle, NutrientFields, serving_label, use_category_view, with_draft, type ListRow } from "./widgets.tsx";
 
@@ -95,7 +95,7 @@ function PortionRows({ food, units, on_change }: { food: Food; units: string[]; 
         return (
           <div key={index} className="diet-inline diet-portion">
             <NumberField label="How many" bare min={0.01} value={portion.amount} on_change={(amount) => set_portion(index, { amount: amount ?? 1 })} />
-            <ComboInput label="Unit" placeholder="tortilla" value={portion.unit} suggestions={units} on_change={(unit) => set_portion(index, { unit })} />
+            <ComboField label="Unit" placeholder="tortilla" value={portion.unit} options={units} on_change={(unit) => set_portion(index, { unit })} />
             <span aria-hidden="true">=</span>
             <NumberField label="Equals" bare min={0.01} value={portion.size} on_change={(size) => set_portion(index, { size: size ?? 1 })} />
             <Select label="Measured in" bare options={size_units} value={portion.size_unit || food.serving_unit} on_change={(size_unit) => set_portion(index, { size_unit })} />
@@ -144,12 +144,12 @@ export function FoodForm({ initial, data, energy, has_usda_key, on_done }: FoodF
             <input id="diet-food-name" type="text" value={food.name} onChange={(event) => change({ name: event.currentTarget.value })} />
           </FormRow>
           <FormRow label="Brand" id="diet-food-brand">
-            <ComboInput id="diet-food-brand" label="Brand" placeholder="Optional" value={food.brand} suggestions={data.brands} on_change={(brand) => change({ brand })} />
+            <ComboField id="diet-food-brand" label="Brand" placeholder="Optional" value={food.brand} options={data.brands} on_change={(brand) => change({ brand })} />
           </FormRow>
           <FormRow label="Serving" id="diet-food-serving">
             <div className="diet-inline">
               <NumberField label="Serving size" bare min={0.01} value={food.serving_size} on_change={(size) => change({ serving_size: size ?? 100 })} />
-              <ComboInput id="diet-food-serving" label="Serving unit" placeholder="g, ml, cup…" value={food.serving_unit} suggestions={data.units} on_change={(serving_unit) => change({ serving_unit })} />
+              <ComboField id="diet-food-serving" label="Serving unit" placeholder="g, ml, cup…" value={food.serving_unit} options={data.units} on_change={(serving_unit) => change({ serving_unit })} />
             </div>
           </FormRow>
           <FormRow label="Other units" id="diet-food-units">

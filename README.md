@@ -8,6 +8,7 @@ whenever it can be reached.
 - **Diet:** foods and meals, what was eaten each day, and the day's calories and nutrients against targets.
 - **Body:** weight, body fat, girths and any measure of your own, with goals and trends, and a 3D body shaped to
   your readings and to your goals.
+- **Overview:** today's eating against its targets, the weeks' training and every body metric's trend on one page.
 
 ## Running it
 

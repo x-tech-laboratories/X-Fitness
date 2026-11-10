@@ -119,7 +119,7 @@ describe("diet foods and recipes", () => {
     expect((screen.getByRole("textbox", { name: "Name" }) as HTMLInputElement).value).toBe("Peanut Butter");
     expect((screen.getByRole("textbox", { name: "Calories" }) as HTMLInputElement).value).toBe("600");
     expect((screen.getByRole("textbox", { name: "Sodium" }) as HTMLInputElement).value).toBe("400");
-    fireEvent.change(screen.getByRole("combobox", { name: "Add a category" }), { target: { value: "Spreads" } });
+    fireEvent.change(screen.getByRole("combobox", { name: "Categories" }), { target: { value: "Spreads" } });
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
     expect(await screen.findByRole("cell", { name: "Peanut Butter" })).toBeTruthy();

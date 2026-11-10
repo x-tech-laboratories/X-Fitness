@@ -7,11 +7,11 @@ import { useState, type CSSProperties } from "react";
 import { confirm_dialog, Dialog } from "@x-tech-laboratories/x-libs/web/react/dialog";
 import { Toolbar } from "@x-tech-laboratories/x-libs/web/react/layout";
 import { Empty, Loaded } from "@x-tech-laboratories/x-libs/web/react/states";
+import { ComboField } from "@x-tech-laboratories/x-libs/web/react/suggestions";
 import { DataTable, type TableColumn } from "@x-tech-laboratories/x-libs/web/react/table";
 
 import type { CategoryUsage } from "../../shared/workouts/store.ts";
 import { calls, use_data } from "../api.ts";
-import { SuggestField } from "./controls.tsx";
 
 // ── Tab ──────────────────────────────────────────────────────────────────────
 
@@ -71,7 +71,7 @@ export function CategoriesTab() {
         <>
           <Toolbar>
             <span className="workouts-inline">
-              <SuggestField label="New category" placeholder="New category (use / to nest)…" value={draft} suggestions={list.map((category) => category.name)} on_change={set_draft} on_commit={() => void add()} />
+              <ComboField label="New category" placeholder="New category (use / to nest)…" value={draft} options={list.map((category) => category.name)} list_on_focus={false} on_change={set_draft} on_enter={() => void add()} />
               <button type="button" className="accent solid" disabled={!draft.trim()} onClick={() => void add()}>
                 Add
               </button>

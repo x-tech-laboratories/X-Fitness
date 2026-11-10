@@ -38,7 +38,7 @@ import {
   type WorkoutsDocument,
 } from "./model.ts";
 import { evaluate_progression, type Outcome } from "./progression.ts";
-import { exercise_history, exercise_stats, exercise_trend, leaderboard, leaderboards, weekly_totals, type ExerciseStats, type HistoryRecord, type TrendPoint, type WeekTotals } from "./reports.ts";
+import { category_sets, daily_activity, exercise_history, exercise_stats, exercise_trend, leaderboard, leaderboards, weekly_totals, type CategorySets, type DayActivity, type ExerciseStats, type HistoryRecord, type TrendPoint, type WeekTotals } from "./reports.ts";
 import { exercises, program_sessions, programs, session_exercises, workout_categories, workout_exercises, workout_sets, workout_tables, workouts } from "./schema.ts";
 import { workout_setting_defaults } from "./settings.ts";
 import { read_trilium_database, write_trilium_database, type FileUnits } from "./trilium.ts";
@@ -426,8 +426,11 @@ export interface LeaderRow {
 export interface WorkoutReport {
   weeks: WeekTotals[];
   leaders: { key: string; label: string; kind: "weight" | "sets" | "sessions"; rows: LeaderRow[] }[];
-  // Every exercise ever logged, newest first.
-  bests: { exercise: Exercise; stats: ExerciseStats }[];
+  // Every day of those weeks up to today, and the sets per category over them.
+  days: DayActivity[];
+  categories: CategorySets[];
+  // Every exercise ever logged, newest first, with its last few sessions for a sparkline.
+  bests: { exercise: Exercise; stats: ExerciseStats; trend: TrendPoint[] }[];
 }
 
 export interface ExerciseReport {
@@ -785,10 +788,17 @@ export const workouts_feature = define_feature({
       const exercises = load_exercises(database);
       const workouts = load_workouts(database);
       const ranked = exercises
-        .map((exercise) => ({ exercise, stats: exercise_stats(exercise_history(workouts, exercise.id), exercise.measurement) }))
+        .map((exercise) => {
+          const history = exercise_history(workouts, exercise.id);
+          return { exercise, stats: exercise_stats(history, exercise.measurement), trend: exercise_trend(history, exercise.measurement).slice(-12) };
+        })
         .filter((item) => item.stats.workouts > 0);
+      const weeks = weekly_totals(workouts, measurement_map(exercises), options.weeks, options.today, options.week_start);
+      const first = weeks[0]?.week_start ?? options.today;
       return {
-        weeks: weekly_totals(workouts, measurement_map(exercises), options.weeks, options.today, options.week_start),
+        weeks,
+        days: daily_activity(workouts, first, options.today),
+        categories: category_sets(workouts, exercises, first, options.today),
         leaders: leaderboards.map((board) => ({
           ...board,
           rows: leaderboard(ranked, board.key).map((item) => ({ exercise_id: item.exercise.id, name: item.exercise.name, value: item.stats[board.key] })),

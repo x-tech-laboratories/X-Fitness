@@ -3,10 +3,10 @@
 // ── Imports ──────────────────────────────────────────────────────────────────
 
 import { useMemo, useState } from "react";
-import { add_days, format_local, parse_local, relative_day_label } from "@x-tech-laboratories/x-libs/dates";
+import { format_local } from "@x-tech-laboratories/x-libs/dates";
 import type { EnergyUnit } from "@x-tech-laboratories/x-libs/units";
 import { Meters, type Meter } from "@x-tech-laboratories/x-libs/web/react/charts";
-import { NumberField, Segmented } from "@x-tech-laboratories/x-libs/web/react/controls";
+import { NumberField, PeriodStepper, Segmented } from "@x-tech-laboratories/x-libs/web/react/controls";
 import { Section, Toolbar } from "@x-tech-laboratories/x-libs/web/react/layout";
 import { use_pref } from "@x-tech-laboratories/x-libs/web/react/prefs";
 import { Loaded } from "@x-tech-laboratories/x-libs/web/react/states";
@@ -23,10 +23,6 @@ import { FoodUnitSelect, ItemSelect } from "./widgets.tsx";
 
 export function today(): string {
   return format_local(new Date(), false);
-}
-
-function shift(date: string, days: number): string {
-  return format_local(add_days(parse_local(date), days), false);
 }
 
 function is_date(value: unknown): value is string {
@@ -155,13 +151,7 @@ export function DiaryTab({ data, settings, energy }: { data: DietData; settings:
   return (
     <div className="stack">
       <Toolbar>
-        <div className="diet-inline" role="group" aria-label="Day">
-          <button type="button" className="icon" aria-label="Previous day" onClick={() => set_date(shift(date, -1))}>‹</button>
-          <input type="date" aria-label="Date" value={date} onChange={(event) => is_date(event.currentTarget.value) && set_date(event.currentTarget.value)} />
-          <button type="button" className="icon" aria-label="Next day" onClick={() => set_date(shift(date, 1))}>›</button>
-          <button type="button" disabled={date === today()} onClick={() => set_date(today())}>Today</button>
-          <span className="muted">{relative_day_label(date)}</span>
-        </div>
+        <PeriodStepper label="Day" period="day" value={date} on_change={set_date} />
       </Toolbar>
       <Loaded resource={day}>
         {(loaded) => (

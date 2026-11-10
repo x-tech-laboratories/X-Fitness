@@ -5,7 +5,7 @@
 
 import { useMemo, useState, type CSSProperties, type ReactNode } from "react";
 import type { EnergyUnit } from "@x-tech-laboratories/x-libs/units";
-import { Chip, Chips } from "@x-tech-laboratories/x-libs/web/react/badges";
+import { ChipField } from "@x-tech-laboratories/x-libs/web/react/chip_field";
 import { NumberField, Select } from "@x-tech-laboratories/x-libs/web/react/controls";
 import { use_pref } from "@x-tech-laboratories/x-libs/web/react/prefs";
 import type { RowGroup, Sorting } from "@x-tech-laboratories/x-libs/web/react/table";
@@ -24,7 +24,6 @@ import {
   type NutrientKey,
   type Nutrients,
 } from "../../shared/diet/model.ts";
-import { ComboInput, GroupedSelect } from "./controls.tsx";
 import { field_value, format_amount, shown_unit, to_shown_value, to_stored_value } from "./format.ts";
 
 // ── Pickers ──────────────────────────────────────────────────────────────────
@@ -60,7 +59,7 @@ export function ItemSelect({ label, items, categories, value, placeholder, empty
     const loose = available.filter((item) => item.categories.length === 0);
     return loose.length ? [...grouped, { label: uncategorized, options: loose.map(option) }] : grouped;
   }, [items, categories, exclude]);
-  return <GroupedSelect id={id} label={label} groups={groups} value={value} placeholder={groups.length === 0 && empty_label ? empty_label : placeholder} on_change={on_change} />;
+  return <Select id={id} label={label} bare options={[["", groups.length === 0 && empty_label ? empty_label : placeholder]]} groups={groups} value={value} on_change={on_change} />;
 }
 
 export function serving_label(food: Food): string {
@@ -94,43 +93,20 @@ interface CategoryEditorProps {
   on_draft_change: (draft: string) => void;
 }
 
-// Chips for the categories carried and a field offering the rest; the draft lives with the form so Save keeps it too.
+// Chips for the categories carried and a field offering the rest, kept as the tree's paths; the draft lives with the form
+// so Save keeps it too.
 export function CategoryEditor({ categories, draft, suggestions, on_change, on_draft_change }: CategoryEditorProps) {
-  const unused = useMemo(() => suggestions.filter((tag) => !categories.includes(tag)), [suggestions, categories]);
-  const add = () => {
-    if (!draft.trim()) return;
-    on_change(with_draft(categories, draft));
-    on_draft_change("");
-  };
   return (
-    <div className="stack tight">
-      {categories.length ? (
-        <Chips>
-          {categories.map((tag) => (
-            <Chip key={tag} on_remove={() => on_change(categories.filter((other) => other !== tag))} remove_label={`Remove ${tag}`}>
-              {tag}
-            </Chip>
-          ))}
-        </Chips>
-      ) : (
-        <span className="muted small">No categories.</span>
-      )}
-      <div className="diet-inline">
-        <ComboInput
-          label="Add a category"
-          placeholder="Add a category…"
-          value={draft}
-          suggestions={unused}
-          on_change={on_draft_change}
-          on_pick={(tag) => {
-            on_change(normalize_categories([...categories, tag]));
-            on_draft_change("");
-          }}
-          on_enter={add}
-        />
-        <button type="button" aria-label="Add category" disabled={!draft.trim()} onClick={add}>Add</button>
-      </div>
-    </div>
+    <ChipField
+      label="Categories"
+      values={categories}
+      suggestions={suggestions}
+      draft={draft}
+      on_draft={on_draft_change}
+      on_change={(next) => on_change(normalize_categories(next))}
+      placeholder="Add a category…"
+      empty_text="No categories."
+    />
   );
 }
 

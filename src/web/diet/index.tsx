@@ -1,15 +1,15 @@
-// The Diet section: its tabs for the diary, trends, recipes, foods, grocery list, categories and units, and its own
+// The Diet section: its pages for the diary, trends, recipes, foods, grocery list, categories and units, and its own
 // settings.
 
 // ── Imports ──────────────────────────────────────────────────────────────────
 
 import "./diet.css";
 import type { SettingsSection } from "@x-tech-laboratories/x-libs/web/react/layout";
-import { PageHeading, Tabs } from "@x-tech-laboratories/x-libs/web/react/layout";
+import { PageHeading } from "@x-tech-laboratories/x-libs/web/react/layout";
 import { Loaded } from "@x-tech-laboratories/x-libs/web/react/states";
 
 import { use_data, use_settings } from "../api.ts";
-import type { FeatureSettingsProps } from "../features.tsx";
+import type { FeaturePage, FeatureSettingsProps } from "../features.tsx";
 import { CategoriesTab, UnitsTab } from "./CategoriesTab.tsx";
 import { DataSettings, GrocerySettings, LookupSettings, TargetSettings } from "./DietSettings.tsx";
 import { DiaryTab } from "./DiaryTab.tsx";
@@ -21,7 +21,7 @@ import { TrendsTab } from "./TrendsTab.tsx";
 
 // ── View ─────────────────────────────────────────────────────────────────────
 
-const tabs = [
+export const diet_pages = [
   { id: "diary", label: "Diary" },
   { id: "trends", label: "Trends" },
   { id: "recipes", label: "Recipes" },
@@ -29,21 +29,20 @@ const tabs = [
   { id: "grocery", label: "Grocery" },
   { id: "categories", label: "Categories" },
   { id: "units", label: "Units" },
-] as const;
+] as const satisfies readonly FeaturePage[];
 
-type TabId = (typeof tabs)[number]["id"];
+type TabId = (typeof diet_pages)[number]["id"];
 
 // The route's parts after "diet": the tab, the diary when none.
 export function DietView({ parts }: { parts: string[] }) {
-  const tab: TabId = tabs.find((item) => item.id === parts[0])?.id ?? "diary";
+  const page = diet_pages.find((item) => item.id === parts[0]) ?? diet_pages[0];
+  const tab: TabId = page.id;
   const data = use_data((api) => api.get_diet());
   const settings = use_settings();
 
   return (
     <div className="stack">
-      <PageHeading title="Diet">
-        <Tabs label="Diet sections" active={tab} items={tabs.map((item) => ({ ...item, href: `#/diet/${item.id}` }))} />
-      </PageHeading>
+      <PageHeading title={page.label} subtitle="Diet" />
       <Loaded resource={settings}>
         {(values) => {
           const energy = energy_unit_of(values);

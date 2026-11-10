@@ -1,20 +1,21 @@
-// What the log adds up to: totals per week against the weekly target, the leading exercises, one exercise's records,
-// trend and history, and every exercise's personal best.
+// What the log adds up to: totals per week against the weekly target, the days trained, sets per category, the leading
+// exercises, one exercise's records, trend and history, and every exercise's personal best with its recent sessions.
 
 // ── Imports ──────────────────────────────────────────────────────────────────
 
 import { useState } from "react";
 import { format_local } from "@x-tech-laboratories/x-libs/dates";
-import { BarChart, LineChart } from "@x-tech-laboratories/x-libs/web/react/charts";
+import { BarChart, Donut, LineChart, Strip } from "@x-tech-laboratories/x-libs/web/react/charts";
 import { Select } from "@x-tech-laboratories/x-libs/web/react/controls";
 import { Card, Cards, Facts, Section, Stack } from "@x-tech-laboratories/x-libs/web/react/layout";
 import { Empty, Loaded } from "@x-tech-laboratories/x-libs/web/react/states";
 import { DataTable, type TableColumn } from "@x-tech-laboratories/x-libs/web/react/table";
 
 import { measurement_of, type Exercise, type LoggedSet, type Measurement } from "../../shared/workouts/model.ts";
-import type { ExerciseStats, TrendMetric, WeekTotals } from "../../shared/workouts/reports.ts";
+import type { ExerciseStats, TrendMetric, TrendPoint, WeekTotals } from "../../shared/workouts/reports.ts";
 import type { WorkoutLibrary } from "../../shared/workouts/store.ts";
 import { use_data } from "../api.ts";
+import { FittedSparkline } from "../FittedSparkline.tsx";
 import { ExerciseSelect } from "./controls.tsx";
 import { field_to_shown, format_field, format_number, format_weight, type ShownUnits } from "./units.ts";
 
@@ -122,6 +123,19 @@ function set_label(set: LoggedSet, measurement: Measurement, units: ShownUnits):
 
 const epoch_of = (day: string) => Date.parse(`${day}T00:00:00Z`) / 1000;
 
+// The figure a sparkline follows for the measurement, the same one its Best column leads with.
+const spark_metrics: Record<Measurement, TrendMetric> = { weight: "one_rep_max", bodyweight: "top_reps", duration: "duration", cardio: "distance" };
+
+const category_colors = ["var(--series-1)", "var(--series-2)", "var(--status-info)", "var(--status-warning)"];
+
+// The biggest categories each get a slice and the rest share a grey one, so the ring stays readable.
+function category_parts(categories: { category: string; sets: number }[]) {
+  const shown = categories.length > category_colors.length + 1 ? categories.slice(0, category_colors.length) : categories.slice(0, category_colors.length + 1);
+  const rest = categories.slice(shown.length).reduce((sum, item) => sum + item.sets, 0);
+  const parts = shown.map((item, index) => ({ label: item.category || "Uncategorised", value: item.sets, color: category_colors[index] ?? "var(--series-3)" }));
+  return rest > 0 ? [...parts, { label: "Other", value: rest, color: "var(--series-3)" }] : parts;
+}
+
 // ── Per exercise ─────────────────────────────────────────────────────────────
 
 function ExerciseReportPanel({ exercise_id, units }: { exercise_id: string; units: ShownUnits }) {
@@ -197,10 +211,18 @@ export function ReportsTab({ library, units, weekly_target, week_start, today }:
     { label: `Distance (${units.distance})`, cell: (week) => format_number(field_to_shown("distance", week.distance, units)) },
   ];
 
-  type Best = { exercise: Exercise; stats: ExerciseStats };
+  type Best = { exercise: Exercise; stats: ExerciseStats; trend: TrendPoint[] };
   const best_columns: TableColumn<Best>[] = [
     { label: "Exercise", cell: (row) => row.exercise.name },
     { label: "Best", cell: (row) => best_label(row.exercise.measurement, row.stats, units) },
+    {
+      label: "Recent",
+      id: "recent",
+      cell: (row) => {
+        const key = spark_metrics[row.exercise.measurement];
+        return <FittedSparkline label={`${row.exercise.name}, last ${row.trend.length} sessions`} points={row.trend.map((point): [number, number] => [epoch_of(point.date), point[key]])} />;
+      },
+    },
     { label: "Sets", cell: (row) => row.stats.sets },
     { label: `Volume (${units.mass})`, cell: (row) => (row.stats.total_volume > 0 ? format_number(field_to_shown("weight", row.stats.total_volume, units)) : "—") },
     { label: "Last done", cell: (row) => row.stats.last_done },
@@ -234,7 +256,18 @@ export function ReportsTab({ library, units, weekly_target, week_start, today }:
               format={(value) => format_metric(metric.kind, value, units, metric.suffix)}
               bars={data.weeks.map((week) => ({ label: `Week of ${week.week_start}`, value: week[week_metric], color: week_metric === "workouts" && week.workouts >= weekly_target ? "var(--status-success)" : "var(--series-1)" }))}
             />
+            <Strip title="Days trained" cells={data.days.map((item) => ({ label: `${item.date}: ${item.workouts ? `${item.sets} sets` : "rest"}`, ok: item.workouts > 0 ? true : null }))} />
             <DataTable columns={week_columns} rows={[...data.weeks].reverse()} row_key={(week) => week.week_start} />
+          </Section>
+
+          <Section title="Sets Per Category">
+            <Donut
+              title={`Sets per category, last ${weeks} weeks`}
+              parts={category_parts(data.categories)}
+              center={String(data.categories.reduce((sum, item) => sum + item.sets, 0))}
+              center_label="sets"
+              message="No sets logged in these weeks."
+            />
           </Section>
 
           <Section title="Leaders">

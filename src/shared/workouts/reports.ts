@@ -176,3 +176,45 @@ export function weekly_totals(workouts: Workout[], measurement_by_exercise: Map<
     return totals;
   });
 }
+
+// ── Days and categories ──────────────────────────────────────────────────────
+
+export interface DayActivity {
+  date: string;
+  workouts: number;
+  sets: number;
+}
+
+// Every day from first to last, oldest first, with what was logged on it.
+export function daily_activity(workouts: Workout[], first: string, last: string): DayActivity[] {
+  const days: DayActivity[] = [];
+  for (let date = first; date <= last; date = shift_day(date, 1)) days.push({ date, workouts: 0, sets: 0 });
+  const by_date = new Map(days.map((day) => [day.date, day]));
+  for (const workout of workouts) {
+    const day = by_date.get(workout.date);
+    if (!day) continue;
+    day.workouts += 1;
+    day.sets += workout.entries.reduce((sum, entry) => sum + entry.sets.length, 0);
+  }
+  return days;
+}
+
+export interface CategorySets {
+  // The top of the exercise's category path, empty for an uncategorised exercise.
+  category: string;
+  sets: number;
+}
+
+// Sets logged from first to last per top category, most first; an exercise in several categories counts in each.
+export function category_sets(workouts: Workout[], exercises: Exercise[], first: string, last: string): CategorySets[] {
+  const tops = new Map(exercises.map((exercise) => [exercise.id, [...new Set(exercise.categories.map((category) => category.split("/")[0]!))]]));
+  const sets = new Map<string, number>();
+  for (const workout of workouts) {
+    if (workout.date < first || workout.date > last) continue;
+    for (const entry of workout.entries) {
+      const categories = tops.get(entry.exercise_id) ?? [];
+      for (const category of categories.length ? categories : [""]) sets.set(category, (sets.get(category) ?? 0) + entry.sets.length);
+    }
+  }
+  return [...sets].filter(([, count]) => count > 0).map(([category, count]) => ({ category, sets: count })).sort((first_row, second_row) => second_row.sets - first_row.sets);
+}

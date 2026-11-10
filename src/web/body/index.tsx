@@ -4,10 +4,10 @@
 
 import { lazy, Suspense } from "react";
 import type { SettingsSection } from "@x-tech-laboratories/x-libs/web/react/layout";
-import { PageHeading, Tabs } from "@x-tech-laboratories/x-libs/web/react/layout";
+import { PageHeading } from "@x-tech-laboratories/x-libs/web/react/layout";
 import { Loaded } from "@x-tech-laboratories/x-libs/web/react/states";
 
-import type { FeatureSettingsProps } from "../features.tsx";
+import type { FeaturePage, FeatureSettingsProps } from "../features.tsx";
 import { use_settings } from "../api.ts";
 import { BodyData, HeightSetting, SexSetting } from "./BodySettings.tsx";
 import { shown_units } from "./format.ts";
@@ -23,23 +23,23 @@ const ShapeTab = lazy(() => import("./ShapeTab.tsx").then((module) => ({ default
 
 type BodyTab = "log" | "reports" | "shape" | "metrics";
 
-const tabs: { id: BodyTab; label: string; href: string }[] = [
-  { id: "log", label: "Log", href: "#/body/log" },
-  { id: "reports", label: "Reports", href: "#/body/reports" },
-  { id: "shape", label: "3D", href: "#/body/shape" },
-  { id: "metrics", label: "Metrics", href: "#/body/metrics" },
+export const body_pages: (FeaturePage & { id: BodyTab })[] = [
+  { id: "log", label: "Log" },
+  { id: "reports", label: "Reports" },
+  { id: "shape", label: "3D" },
+  { id: "metrics", label: "Metrics" },
 ];
 
 // The route's parts after "body": the tab, Log unless named.
 export function BodyView({ parts }: { parts: string[] }) {
   const settings = use_settings();
-  const tab = tabs.find((item) => item.id === parts[0])?.id ?? "log";
+  const page = body_pages.find((item) => item.id === parts[0]) ?? body_pages[0]!;
+  const tab = page.id;
 
   return (
     <>
-      <PageHeading title="Body" subtitle="Weight, body fat, girths and any measure of your own, against your goals." />
+      <PageHeading title={page.label} subtitle="Body" />
       <div className="stack">
-        <Tabs label="Body" items={tabs} active={tab} />
         <Loaded resource={settings}>
           {(values) => {
             const units = shown_units(values);

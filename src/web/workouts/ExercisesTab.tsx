@@ -4,18 +4,19 @@
 // ── Imports ──────────────────────────────────────────────────────────────────
 
 import { useMemo, useState } from "react";
+import { ChipField, with_draft } from "@x-tech-laboratories/x-libs/web/react/chip_field";
 import { Select, SearchBox } from "@x-tech-laboratories/x-libs/web/react/controls";
 import { confirm_dialog, Dialog } from "@x-tech-laboratories/x-libs/web/react/dialog";
 import { FormRow, Toolbar } from "@x-tech-laboratories/x-libs/web/react/layout";
 import { Empty } from "@x-tech-laboratories/x-libs/web/react/states";
 import { DataTable, type TableColumn } from "@x-tech-laboratories/x-libs/web/react/table";
+import { ComboField } from "@x-tech-laboratories/x-libs/web/react/suggestions";
 import { toast } from "@x-tech-laboratories/x-libs/web/react/toasts";
 
 import { category_depth, category_leaf, is_in_category, measurement_of, measurements, normalize_categories, type Exercise, type Measurement } from "../../shared/workouts/model.ts";
 import type { LibraryExercise, WorkoutLibrary } from "../../shared/workouts/store.ts";
 import type { WgerResult } from "../../shared/workouts/wger.ts";
 import { calls } from "../api.ts";
-import { ChipField, SuggestField, with_draft } from "./controls.tsx";
 
 // ── Form ─────────────────────────────────────────────────────────────────────
 
@@ -122,18 +123,23 @@ export function ExerciseDialog({ initial, library, on_close }: { initial: Exerci
           <Select<Measurement> label="Measured as" bare options={measurements.map((item) => [item.key, item.label])} value={exercise.measurement} on_change={(measurement) => change({ measurement })} />
         </FormRow>
         <FormRow label="Equipment" id="exercise-equipment">
-          <SuggestField id="exercise-equipment" label="Equipment" placeholder="Barbell, dumbbell, none…" value={exercise.equipment} suggestions={library.equipment} on_change={(equipment) => change({ equipment })} />
+          <ComboField id="exercise-equipment" label="Equipment" placeholder="Barbell, dumbbell, none…" value={exercise.equipment} options={library.equipment} on_change={(equipment) => change({ equipment })} />
         </FormRow>
-        <ChipField label="Muscles" placeholder="Add a muscle…" values={exercise.muscles} draft={muscle_draft} suggestions={library.muscles} on_change={(muscles) => change({ muscles })} on_draft={set_muscle_draft} />
-        <ChipField
-          label="Categories"
-          placeholder="Add a category…"
-          values={exercise.categories}
-          draft={category_draft}
-          suggestions={library.categories}
-          on_change={(categories) => change({ categories })}
-          on_draft={set_category_draft}
-        />
+        <FormRow label="Muscles" id="exercise-muscles">
+          <ChipField id="exercise-muscles" label="Muscles" placeholder="Add a muscle…" values={exercise.muscles} draft={muscle_draft} suggestions={library.muscles} on_change={(muscles) => change({ muscles })} on_draft={set_muscle_draft} />
+        </FormRow>
+        <FormRow label="Categories" id="exercise-categories">
+          <ChipField
+            id="exercise-categories"
+            label="Categories"
+            placeholder="Add a category…"
+            values={exercise.categories}
+            draft={category_draft}
+            suggestions={library.categories}
+            on_change={(categories) => change({ categories })}
+            on_draft={set_category_draft}
+          />
+        </FormRow>
         <FormRow label="Notes" id="exercise-notes">
           <textarea id="exercise-notes" rows={2} value={exercise.notes} onChange={(event) => change({ notes: event.currentTarget.value })} />
         </FormRow>

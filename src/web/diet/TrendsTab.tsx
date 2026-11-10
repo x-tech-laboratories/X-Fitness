@@ -1,20 +1,20 @@
-// The Trends tab: energy and macros per day over the last weeks, and the average logged day against the targets.
+// The Trends tab: energy and macros per day over the last weeks, the days kept within the energy target, where the
+// energy came from, and the average logged day against the targets.
 
 // ── Imports ──────────────────────────────────────────────────────────────────
 
 import { add_days, format_local, parse_local } from "@x-tech-laboratories/x-libs/dates";
 import { to_shown, type EnergyUnit } from "@x-tech-laboratories/x-libs/units";
-import { LineChart, StackedBarChart } from "@x-tech-laboratories/x-libs/web/react/charts";
+import { Donut, LineChart, Meters, StackedBarChart, Strip } from "@x-tech-laboratories/x-libs/web/react/charts";
 import { Segmented } from "@x-tech-laboratories/x-libs/web/react/controls";
-import { Facts, Section, Toolbar } from "@x-tech-laboratories/x-libs/web/react/layout";
+import { Section, Toolbar } from "@x-tech-laboratories/x-libs/web/react/layout";
 import { use_pref } from "@x-tech-laboratories/x-libs/web/react/prefs";
 import { Empty, Loaded } from "@x-tech-laboratories/x-libs/web/react/states";
 
-import { add_nutrients, empty_nutrients, nutrients, scale_nutrients, target_key, type Nutrients } from "../../shared/diet/model.ts";
+import { add_nutrients, empty_nutrients, scale_nutrients, target_key, target_progress, type Nutrients } from "../../shared/diet/model.ts";
 import type { DayTotals } from "../../shared/diet/store.ts";
 import { use_data } from "../api.ts";
-import { format_nutrient } from "./format.ts";
-import { today } from "./DiaryTab.tsx";
+import { target_meters, today } from "./DiaryTab.tsx";
 
 // ── Figures ──────────────────────────────────────────────────────────────────
 
@@ -27,6 +27,9 @@ const macro_colors: [key: "protein" | "carbs" | "fat", label: string, color: str
   ["carbs", "Carbs", "var(--series-2)"],
   ["fat", "Fat", "var(--series-3)"],
 ];
+
+// The kcal a gram of each macro gives, for its share of the day's energy.
+const kcal_per_gram: Record<"protein" | "carbs" | "fat", number> = { protein: 4, carbs: 4, fat: 9 };
 
 // The average over the days with anything logged, so a day not tracked does not count as a day of fasting.
 export function average_logged_day(days: DayTotals[]): { count: number; average: Nutrients } {
@@ -59,13 +62,22 @@ function Charts({ days, settings, energy }: { days: DayTotals[]; settings: Recor
           format={(value) => `${Math.round(value)} g`}
         />
       </Section>
-      <Section title={`Average of ${count} logged day${count === 1 ? "" : "s"}`}>
-        <Facts
-          rows={nutrients.map((info) => {
-            const goal = Number(settings[target_key(info.key)] ?? 0);
-            return [info.label, goal > 0 ? `${format_nutrient(info, average[info.key], energy)} of ${format_nutrient(info, goal, energy)}` : format_nutrient(info, average[info.key], energy)];
-          })}
+      {target > 0 && (
+        <Section title="Energy target">
+          <Strip title="Days within the energy target" cells={days.map((day) => ({ label: day.date, ok: day.entries ? !target_progress(day.totals.calories, target).over : null }))} />
+        </Section>
+      )}
+      <Section title="Where the energy came from">
+        <Donut
+          title={`Energy from each macro, ${count} logged day${count === 1 ? "" : "s"}`}
+          parts={macro_colors.map(([key, label, color]) => ({ label, value: Math.round(average[key] * kcal_per_gram[key]), color }))}
+          center={`${Math.round(to_shown(average.calories, energy)).toLocaleString()}`}
+          center_label={`${energy} a day`}
+          message="No macros logged in these days."
         />
+      </Section>
+      <Section title={`Average of ${count} logged day${count === 1 ? "" : "s"}`}>
+        <Meters rows={target_meters(average, settings, energy)} message="Nothing tracked." />
       </Section>
     </>
   );

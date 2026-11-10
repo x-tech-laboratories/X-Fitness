@@ -139,10 +139,6 @@
   text-align: left;
 }
 
-.workouts-chip-field {
-  display: grid;
-  gap: var(--space-4);
-}
 
 .workouts-indent {
   padding-inline-start: calc(var(--depth, 0) * var(--space-6));

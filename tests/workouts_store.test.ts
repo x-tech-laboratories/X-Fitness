@@ -219,6 +219,13 @@ describe("workouts store", () => {
     expect(volume.rows).toEqual([{ exercise_id: bench, name: "Bench Press", value: 2700 }]);
     expect(report.leaders.find((board) => board.key === "sets")!.rows.map((row) => row.exercise_id)).toEqual([bench, plank]);
     expect(report.bests.map((best) => best.stats.last_done)).toEqual(["2026-11-09", "2026-11-09"]);
+    expect(report.bests.find((best) => best.exercise.id === bench)!.trend.map((point) => point.date)).toEqual(["2026-11-03", "2026-11-09"]);
+    expect(report.days).toHaveLength(9);
+    expect(report.days.filter((day) => day.workouts > 0).map((day) => [day.date, day.workouts, day.sets])).toEqual([
+      ["2026-11-03", 1, 5],
+      ["2026-11-09", 2, 10],
+    ]);
+    expect(report.categories).toEqual([{ category: "Push", sets: 9 }, { category: "", sets: 6 }]);
 
     const bench_report = store.get_exercise_report(bench)!;
     expect(bench_report.stats).toMatchObject({ workouts: 3, sets: 9, best_weight: 60, best_reps: 5, best_one_rep_max: 70, best_set_volume: 300, total_volume: 2700, last_done: "2026-11-09" });

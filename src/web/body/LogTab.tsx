@@ -4,12 +4,11 @@
 
 import { useState } from "react";
 import { format_local } from "@x-tech-laboratories/x-libs/dates";
-import { DateTimeField, NumberField } from "@x-tech-laboratories/x-libs/web/react/controls";
+import { NumberField, PeriodStepper } from "@x-tech-laboratories/x-libs/web/react/controls";
 import { Toolbar } from "@x-tech-laboratories/x-libs/web/react/layout";
 import { Loaded } from "@x-tech-laboratories/x-libs/web/react/states";
 import { DataTable, type TableColumn } from "@x-tech-laboratories/x-libs/web/react/table";
 
-import { shift_day } from "../../shared/body/readings.ts";
 import type { DayRow } from "../../shared/body/store.ts";
 import { calls, use_data } from "../api.ts";
 import { format_change, format_number, format_value, to_shown_value, to_stored_value, unit_of, type ShownUnits } from "./format.ts";
@@ -70,12 +69,7 @@ export function LogTab({ units }: { units: ShownUnits }) {
   return (
     <div className="stack">
       <Toolbar>
-        <div className="body-day">
-          <button type="button" className="icon" aria-label="Previous day" onClick={() => set_date(shift_day(date, -1))}>‹</button>
-          <DateTimeField label="Day" value={date} allow_time={false} on_change={(value) => set_date(value || today())} />
-          <button type="button" className="icon" aria-label="Next day" onClick={() => set_date(shift_day(date, 1))}>›</button>
-        </div>
-        <button type="button" onClick={() => set_date(today())}>Today</button>
+        <PeriodStepper label="Day" period="day" value={date} on_change={set_date} />
       </Toolbar>
       <Loaded resource={day}>
         {(loaded) => (

@@ -1,4 +1,4 @@
-// The Workouts section: the log, programs, the exercise library, reports and categories as tabs, and its own settings
+// The Workouts section: the log, programs, the exercise library, reports and categories as pages, and its own settings
 // with the imports from the Trilium add-on and Liftosaur.
 
 // ── Imports ──────────────────────────────────────────────────────────────────
@@ -6,14 +6,14 @@
 import { useRef, type ChangeEvent } from "react";
 import { NumberField, Switch } from "@x-tech-laboratories/x-libs/web/react/controls";
 import type { SettingsSection } from "@x-tech-laboratories/x-libs/web/react/layout";
-import { PageHeading, SettingRow, Stack, Tabs } from "@x-tech-laboratories/x-libs/web/react/layout";
+import { PageHeading, SettingRow, Stack } from "@x-tech-laboratories/x-libs/web/react/layout";
 import { Loaded } from "@x-tech-laboratories/x-libs/web/react/states";
 import { toast } from "@x-tech-laboratories/x-libs/web/react/toasts";
 
 import { workout_setting_defaults } from "../../shared/workouts/settings.ts";
 import type { WorkoutLibrary } from "../../shared/workouts/store.ts";
 import { calls, use_data, use_settings } from "../api.ts";
-import type { FeatureSettingsProps } from "../features.tsx";
+import type { FeaturePage, FeatureSettingsProps } from "../features.tsx";
 import { CategoriesTab } from "./CategoriesTab.tsx";
 import { ExercisesTab } from "./ExercisesTab.tsx";
 import { LogTab } from "./LogTab.tsx";
@@ -26,7 +26,7 @@ import "./workouts.css";
 
 type TabId = "log" | "programs" | "exercises" | "reports" | "categories";
 
-const tabs: { id: TabId; label: string }[] = [
+export const workouts_pages: (FeaturePage & { id: TabId })[] = [
   { id: "log", label: "Log" },
   { id: "programs", label: "Programs" },
   { id: "exercises", label: "Exercises" },
@@ -41,15 +41,14 @@ function setting_number(settings: Record<string, unknown>, key: keyof typeof wor
 
 // The route's parts after "workouts": the tab, such as "programs".
 export function WorkoutsView({ parts }: { parts: string[] }) {
-  const tab = tabs.find((item) => item.id === parts[0])?.id ?? "log";
+  const page = workouts_pages.find((item) => item.id === parts[0]) ?? workouts_pages[0]!;
+  const tab = page.id;
   const library = use_data((api) => api.get_workout_library());
   const settings = use_settings();
 
   return (
     <>
-      <PageHeading title="Workouts">
-        <Tabs label="Workouts" items={tabs.map((item) => ({ ...item, href: `#/workouts/${item.id}` }))} active={tab} />
-      </PageHeading>
+      <PageHeading title={page.label} subtitle="Workouts" />
       <Loaded resource={library}>
         {(data) => (
           <Loaded resource={settings}>

@@ -8,11 +8,11 @@ import { CommitInput, NumberField } from "@x-tech-laboratories/x-libs/web/react/
 import { Toolbar } from "@x-tech-laboratories/x-libs/web/react/layout";
 import { use_pref } from "@x-tech-laboratories/x-libs/web/react/prefs";
 import { DataTable, type TableColumn } from "@x-tech-laboratories/x-libs/web/react/table";
+import { ComboField } from "@x-tech-laboratories/x-libs/web/react/suggestions";
 
 import { by_id, food_units, normalize_names, type Food, type GroceryItem } from "../../shared/diet/model.ts";
 import type { DietData, GroceryChanges } from "../../shared/diet/store.ts";
 import { calls } from "../api.ts";
-import { ComboInput } from "./controls.tsx";
 import { attempt } from "./format.ts";
 import { GroupToggle, ItemSelect, category_groups, type ListRow } from "./widgets.tsx";
 
@@ -29,7 +29,7 @@ function LineCombo({ label, value, suggestions, on_save }: { label: string; valu
   const save = (next: string) => {
     if (next !== value) on_save(next);
   };
-  return <ComboInput label={label} value={draft} suggestions={suggestions} on_change={set_draft} on_pick={(picked) => { set_draft(picked); save(picked); }} on_enter={() => save(draft)} on_blur={() => save(draft)} />;
+  return <ComboField label={label} value={draft} options={suggestions} on_change={set_draft} on_take={(picked) => { set_draft(picked); save(picked); }} on_enter={() => save(draft)} on_blur={() => save(draft)} />;
 }
 
 function update(id: string, changes: GroceryChanges): void {
@@ -76,8 +76,8 @@ function AddLine({ data, foods, prefill_comment }: { data: DietData; foods: Reco
     >
       <ItemSelect label="Food" items={data.foods} categories={data.categories} value={food_id} placeholder="Select food…" empty_label="Every food is already listed" exclude={on_list} on_change={choose} />
       <NumberField label="Amount" bare min={0.01} value={amount} on_change={set_amount} />
-      <ComboInput label="Unit" placeholder="Unit" value={unit} suggestions={units_for(food, data.units)} on_change={set_unit} on_enter={() => void add()} />
-      <ComboInput label="Brand" placeholder="Brand" value={brand} suggestions={data.brands} on_change={set_brand} on_enter={() => void add()} />
+      <ComboField label="Unit" placeholder="Unit" value={unit} options={units_for(food, data.units)} on_change={set_unit} on_enter={() => void add()} />
+      <ComboField label="Brand" placeholder="Brand" value={brand} options={data.brands} on_change={set_brand} on_enter={() => void add()} />
       <input type="text" aria-label="Comment" placeholder="Comment (optional)" value={comment} onChange={(event) => set_comment(event.currentTarget.value)} />
       <button type="submit" className="accent solid" disabled={!food_id}>Add</button>
     </form>

@@ -5,7 +5,7 @@
 
 import { useState } from "react";
 import { format_local } from "@x-tech-laboratories/x-libs/dates";
-import { CommitInput, DateTimeField, NumberField } from "@x-tech-laboratories/x-libs/web/react/controls";
+import { CommitInput, NumberField, PeriodStepper, Select } from "@x-tech-laboratories/x-libs/web/react/controls";
 import { confirm_dialog } from "@x-tech-laboratories/x-libs/web/react/dialog";
 import { Section, Stack, Toolbar } from "@x-tech-laboratories/x-libs/web/react/layout";
 import { Empty, Loaded } from "@x-tech-laboratories/x-libs/web/react/states";
@@ -13,9 +13,8 @@ import { Badge } from "@x-tech-laboratories/x-libs/web/react/badges";
 
 import { measurement_of, workout_totals, type Exercise, type WorkoutEntry } from "../../shared/workouts/model.ts";
 import type { LoggedWorkout, ProgressionReport, WorkoutLibrary } from "../../shared/workouts/store.ts";
-import { shift_day } from "../../shared/workouts/reports.ts";
 import { calls, use_data } from "../api.ts";
-import { ExerciseSelect, GroupedSelect } from "./controls.tsx";
+import { ExerciseSelect } from "./controls.tsx";
 import { RestTimerBar, use_rest_timer } from "./rest_timer.tsx";
 import { field_labels, field_to_shown, field_to_stored, field_unit, format_number, format_rest, format_weight, type ShownUnits } from "./units.ts";
 
@@ -223,20 +222,9 @@ export function LogTab({ library, units, default_rest, rest_sound, initial_day }
   return (
     <>
       <Toolbar>
+        <PeriodStepper label="Day" period="day" value={day} on_change={set_day} />
         <span className="workouts-inline">
-          <button type="button" aria-label="Previous day" onClick={() => set_day(shift_day(day, -1))}>
-            ‹
-          </button>
-          <DateTimeField label="Day" allow_time={false} value={day} on_change={(value) => set_day(value ?? today())} />
-          <button type="button" aria-label="Next day" onClick={() => set_day(shift_day(day, 1))}>
-            ›
-          </button>
-          <button type="button" onClick={() => set_day(today())}>
-            Today
-          </button>
-        </span>
-        <span className="workouts-inline">
-          <GroupedSelect label="Session" groups={session_groups} value={session_id} placeholder="Start from a session…" empty_label="No sessions yet" on_change={set_session_id} />
+          <Select label="Session" bare options={[["", session_groups.some((group) => group.options.length) ? "Start from a session…" : "No sessions yet"]]} groups={session_groups} value={session_id} on_change={set_session_id} />
           <button type="button" className="accent solid" disabled={!session_id} onClick={() => void start(session_id)}>
             Start
           </button>

@@ -5,6 +5,7 @@
 
 import { Fragment, useState } from "react";
 import { format_local } from "@x-tech-laboratories/x-libs/dates";
+import { ChipField, with_draft } from "@x-tech-laboratories/x-libs/web/react/chip_field";
 import { NumberField, Select } from "@x-tech-laboratories/x-libs/web/react/controls";
 import { confirm_dialog, Dialog } from "@x-tech-laboratories/x-libs/web/react/dialog";
 import { Card, Cards, FormRow, RowActions, Section, Stack } from "@x-tech-laboratories/x-libs/web/react/layout";
@@ -27,7 +28,7 @@ import {
 } from "../../shared/workouts/model.ts";
 import type { WorkoutLibrary } from "../../shared/workouts/store.ts";
 import { calls } from "../api.ts";
-import { ChipField, ExerciseSelect, with_draft } from "./controls.tsx";
+import { ExerciseSelect } from "./controls.tsx";
 import { field_labels, field_to_shown, field_to_stored, field_unit, format_field, format_number, type ShownUnits } from "./units.ts";
 
 // ── Progression ──────────────────────────────────────────────────────────────
@@ -146,15 +147,18 @@ export function SessionDialog({ program, initial, library, units, default_rest, 
         <FormRow label="Name" id="session-name">
           <input id="session-name" type="text" value={session.name} onChange={(event) => set_session({ ...session, name: event.currentTarget.value })} />
         </FormRow>
-        <ChipField
-          label="Categories"
-          placeholder="Add a category…"
-          values={session.categories}
-          draft={category_draft}
-          suggestions={library.categories}
-          on_change={(categories) => set_session({ ...session, categories })}
-          on_draft={set_category_draft}
-        />
+        <FormRow label="Categories" id="session-categories">
+          <ChipField
+            id="session-categories"
+            label="Categories"
+            placeholder="Add a category…"
+            values={session.categories}
+            draft={category_draft}
+            suggestions={library.categories}
+            on_change={(categories) => set_session({ ...session, categories })}
+            on_draft={set_category_draft}
+          />
+        </FormRow>
         <FormRow label="Notes" id="session-notes">
           <textarea id="session-notes" rows={2} value={session.notes} onChange={(event) => set_session({ ...session, notes: event.currentTarget.value })} />
         </FormRow>

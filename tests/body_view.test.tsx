@@ -43,7 +43,7 @@ describe("body log", () => {
     store.set_body_reading("weight", "2026-11-08", 80);
     show([]);
 
-    expect(screen.getByRole("link", { name: "Log" }).getAttribute("aria-current")).toBe("page");
+    expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("Log");
     const weight = await screen.findByRole("textbox", { name: "Weight" });
     expect(screen.getByRole("row", { name: /Weight/ }).textContent).toContain("80 kg on 2026-11-08");
     fireEvent.change(weight, { target: { value: "81.5" } });
@@ -106,6 +106,25 @@ describe("body reports", () => {
     show(["reports"]);
     fireEvent.change(await screen.findByLabelText("Metric"), { target: { value: "waist" } });
     expect(await screen.findByText("No Waist readings in this range.")).toBeTruthy();
+  });
+
+  it("cards every metric read in range, reports on one when picked, and compares their change in percent", async () => {
+    const store = fake_page();
+    store.set_body_reading("weight", "2026-11-01", 80);
+    store.set_body_reading("weight", "2026-11-10", 76);
+    store.set_body_reading("waist", "2026-11-01", 90);
+    store.set_body_reading("waist", "2026-11-10", 99);
+    show(["reports"]);
+
+    const waist_card = await screen.findByRole("button", { name: /^Waist/ });
+    expect(waist_card.textContent).toContain("99 cm");
+    expect(waist_card.textContent).toContain("+9 cm");
+    fireEvent.click(waist_card);
+    expect(await screen.findByRole("img", { name: "Waist (cm)" })).toBeTruthy();
+
+    const compare = screen.getByRole("img", { name: "Change since the start of the range (%)" });
+    expect(compare.querySelectorAll("path")).toHaveLength(2);
+    expect([...compare.querySelectorAll("path > title")].map((title) => title.textContent)).toEqual(["Weight", "Waist"]);
   });
 });
 

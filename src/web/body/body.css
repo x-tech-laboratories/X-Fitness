@@ -1,16 +1,5 @@
 /* Layout only; the Body section's look comes from Halon's tokens and stylesheet. */
 
-/* The day stepper stays one row, the date between its arrows, even where a phone's toolbar stretches its parts. */
-.body-day {
-  display: flex;
-  gap: var(--space-2);
-  align-items: end;
-}
-
-.body-day > .field {
-  flex: 1 1 auto;
-}
-
 .body-note {
   display: flex;
   max-width: var(--measure);

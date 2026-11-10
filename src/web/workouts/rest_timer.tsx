@@ -3,8 +3,8 @@
 
 // ── Imports ──────────────────────────────────────────────────────────────────
 
-import { useEffect, useMemo, useState } from "react";
 import { ProgressBar } from "@x-tech-laboratories/x-libs/web/react/progress";
+import { use_countdown, type CountdownControls } from "@x-tech-laboratories/x-libs/web/react/time";
 import { toast } from "@x-tech-laboratories/x-libs/web/react/toasts";
 
 import { format_rest } from "./units.ts";
@@ -31,59 +31,6 @@ export function chime(): void {
   } catch {
     // A page that may not play sound still shows the message.
   }
-}
-
-// ── Countdown ────────────────────────────────────────────────────────────────
-
-export interface Countdown {
-  // Seconds in all and left; ends_at is null while paused.
-  total: number;
-  remaining: number;
-  ends_at: number | null;
-}
-
-export interface CountdownControls {
-  countdown: Countdown | null;
-  start: (seconds: number) => void;
-  stop: () => void;
-  pause: () => void;
-  resume: () => void;
-  extend: (seconds: number) => void;
-}
-
-// A countdown read again five times a second; on_done runs once when it reaches zero.
-export function use_countdown(on_done: () => void): CountdownControls {
-  const [countdown, set_countdown] = useState<Countdown | null>(null);
-
-  useEffect(() => {
-    if (!countdown?.ends_at) return;
-    const timer = setInterval(() => {
-      set_countdown((current) => (current?.ends_at ? { ...current, remaining: Math.max(0, Math.ceil((current.ends_at - Date.now()) / 1000)) } : current));
-    }, 200);
-    return () => clearInterval(timer);
-  }, [countdown?.ends_at]);
-
-  const done = Boolean(countdown?.ends_at) && countdown?.remaining === 0;
-  useEffect(() => {
-    if (!done) return;
-    set_countdown(null);
-    on_done();
-  }, [done]);
-
-  const controls = useMemo(
-    () => ({
-      start: (seconds: number) => {
-        if (seconds > 0) set_countdown({ total: seconds, remaining: seconds, ends_at: Date.now() + seconds * 1000 });
-      },
-      stop: () => set_countdown(null),
-      pause: () => set_countdown((current) => (current?.ends_at ? { ...current, ends_at: null } : current)),
-      resume: () => set_countdown((current) => (current && !current.ends_at ? { ...current, ends_at: Date.now() + current.remaining * 1000 } : current)),
-      extend: (seconds: number) =>
-        set_countdown((current) => (current ? { total: current.total + seconds, remaining: current.remaining + seconds, ends_at: current.ends_at ? current.ends_at + seconds * 1000 : null } : current)),
-    }),
-    [],
-  );
-  return { countdown, ...controls };
 }
 
 // The rest timer of one workout: at zero it shows "Rest over." and chimes when the setting allows.

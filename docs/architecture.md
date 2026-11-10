@@ -34,8 +34,12 @@ A feature is two folders:
     as `/api/openapi.json`, and lets `/api/call/<method>` take the arguments by name (X-Libs `api_spec` and
     `server/mcp`).
   - Settings keys are namespaced, such as `workouts.default_rest`, with their defaults in `setting_defaults`.
-- `src/web/<feature>/index.tsx` exports its view, which gets the route's parts after `#/<feature>`, and a function
-  giving its sections for the Settings page.
+- `src/web/<feature>/index.tsx` exports its view, which gets the route's parts after `#/<feature>`, its pages, which the
+  sidebar lists under the feature and the view picks by `#/<feature>/<page>`, and a function giving its sections for the
+  Settings page.
+
+The sidebar (`src/web/Sidebar.tsx`) is an X-Libs `Tree`: Overview, then each feature folding open onto its pages, then
+Settings at the foot. The Overview (`src/web/overview/`) draws from the features' own read calls.
 
 `src/shared/store.ts` and `src/web/features.tsx` list the features; nothing else knows them.
 
