@@ -166,6 +166,23 @@ describe("workouts store", () => {
     expect(store.list_workouts("2026-11-12")[0]!.finished_at).toBe("2026-11-12T10:00:00.000Z");
   });
 
+  it("carries a logged workout with its plan to another device through sync", () => {
+    const phone = open_methods();
+    const desktop = open_methods();
+    const { session, bench } = plan(phone.store);
+    const workout = phone.store.start_workout("2026-11-10", session, started);
+    const entry = phone.store.list_workouts("2026-11-10")[0]!.entries[0]!;
+    phone.store.update_workout_set(entry.sets[0]!.id, { reps: 6, rpe: 9 });
+    phone.store.finish_workout(workout, "2026-11-10T10:00:00.000Z");
+    const outgoing = sync_engine.collect_unpushed_changes(phone.database);
+    sync_engine.apply_changes(desktop.database, outgoing.changes);
+
+    expect(desktop.store.list_workouts("2026-11-10")).toEqual(phone.store.list_workouts("2026-11-10"));
+    expect(desktop.store.list_workouts("2026-11-10")[0]).toMatchObject({ id: workout, has_session: true, finished_at: "2026-11-10T10:00:00.000Z" });
+    expect(desktop.store.get_workout_library()).toEqual(phone.store.get_workout_library());
+    expect(desktop.store.get_exercise_report(bench)?.history).toHaveLength(1);
+  });
+
   it("evaluates linear, double and sum progressions as Liftosaur does", () => {
     const linear = normalize_progression({ type: "linear", increment: 5, increment_percent: true, decrement: 10, decrement_percent: true, failures: 2 });
     const missed = evaluate_progression(linear, target(3, 5, 100), sets([5, 100], [4, 100], [5, 100]));

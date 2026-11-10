@@ -3,10 +3,12 @@
 
 // ── Imports ──────────────────────────────────────────────────────────────────
 
-import { in_transaction, type SqlDatabase, type SqlValue } from "@x-tech-laboratories/x-libs/sql";
+import { asc, eq, inArray, max, sql, synced_tables, type SQLiteTable } from "@x-tech-laboratories/x-libs/drizzle";
+import { in_transaction, type SqlDatabase } from "@x-tech-laboratories/x-libs/sql";
 
-import { define_feature, new_id } from "../feature.ts";
+import { define_feature, drizzle_of, new_id } from "../feature.ts";
 import { read_liftosaur_export, type LiftosaurSummary } from "./liftosaur.ts";
+import { migrations } from "./migrations/index.ts";
 import {
   category_ancestors,
   category_depth,
@@ -36,179 +38,20 @@ import {
 } from "./model.ts";
 import { evaluate_progression, type Outcome } from "./progression.ts";
 import { exercise_history, exercise_stats, exercise_trend, leaderboard, leaderboards, weekly_totals, type ExerciseStats, type HistoryRecord, type TrendPoint, type WeekTotals } from "./reports.ts";
+import { exercises, program_sessions, programs, session_exercises, workout_categories, workout_exercises, workout_sets, workout_tables, workouts } from "./schema.ts";
+import { workout_setting_defaults } from "./settings.ts";
 import { read_trilium_database, write_trilium_database, type FileUnits } from "./trilium.ts";
 import { search_wger, type WgerResult } from "./wger.ts";
 
-// ── Schema ───────────────────────────────────────────────────────────────────
-
-// Exercise ids are kept without a foreign key, so deleting an exercise leaves the sessions and log that used it alone.
-const schema = `
-  CREATE TABLE workout_categories (name TEXT PRIMARY KEY);
-  CREATE TABLE exercises (
-    id TEXT PRIMARY KEY,
-    name TEXT NOT NULL DEFAULT '',
-    measurement TEXT NOT NULL DEFAULT 'weight',
-    equipment TEXT NOT NULL DEFAULT '',
-    muscles TEXT NOT NULL DEFAULT '[]',
-    categories TEXT NOT NULL DEFAULT '[]',
-    notes TEXT NOT NULL DEFAULT ''
-  );
-  CREATE TABLE programs (
-    id TEXT PRIMARY KEY,
-    name TEXT NOT NULL DEFAULT '',
-    notes TEXT NOT NULL DEFAULT ''
-  );
-  CREATE TABLE program_sessions (
-    id TEXT PRIMARY KEY,
-    program_id TEXT NOT NULL REFERENCES programs (id) ON DELETE CASCADE,
-    position INTEGER NOT NULL DEFAULT 0,
-    name TEXT NOT NULL DEFAULT '',
-    notes TEXT NOT NULL DEFAULT '',
-    categories TEXT NOT NULL DEFAULT '[]'
-  );
-  CREATE INDEX program_sessions_by_program ON program_sessions (program_id);
-  CREATE TABLE session_exercises (
-    id TEXT PRIMARY KEY,
-    session_id TEXT NOT NULL REFERENCES program_sessions (id) ON DELETE CASCADE,
-    exercise_id TEXT NOT NULL DEFAULT '',
-    position INTEGER NOT NULL DEFAULT 0,
-    sets REAL NOT NULL DEFAULT 3,
-    reps REAL NOT NULL DEFAULT 0,
-    weight_kg REAL NOT NULL DEFAULT 0,
-    duration_s REAL NOT NULL DEFAULT 0,
-    distance_km REAL NOT NULL DEFAULT 0,
-    rest_s REAL NOT NULL DEFAULT 0,
-    notes TEXT NOT NULL DEFAULT '',
-    progression_type TEXT NOT NULL DEFAULT 'none',
-    increment REAL NOT NULL DEFAULT 0,
-    increment_percent INTEGER NOT NULL DEFAULT 0,
-    successes REAL NOT NULL DEFAULT 1,
-    success_counter REAL NOT NULL DEFAULT 0,
-    decrement REAL NOT NULL DEFAULT 0,
-    decrement_percent INTEGER NOT NULL DEFAULT 0,
-    failures REAL NOT NULL DEFAULT 1,
-    failure_counter REAL NOT NULL DEFAULT 0,
-    min_reps REAL NOT NULL DEFAULT 0,
-    max_reps REAL NOT NULL DEFAULT 0,
-    reps_threshold REAL NOT NULL DEFAULT 0
-  );
-  CREATE INDEX session_exercises_by_session ON session_exercises (session_id);
-  CREATE TABLE workouts (
-    id TEXT PRIMARY KEY,
-    date TEXT NOT NULL,
-    name TEXT NOT NULL DEFAULT 'Workout',
-    session_id TEXT NOT NULL DEFAULT '',
-    started_at TEXT NOT NULL DEFAULT '',
-    finished_at TEXT NOT NULL DEFAULT '',
-    notes TEXT NOT NULL DEFAULT ''
-  );
-  CREATE INDEX workouts_by_date ON workouts (date);
-  CREATE TABLE workout_exercises (
-    id TEXT PRIMARY KEY,
-    workout_id TEXT NOT NULL REFERENCES workouts (id) ON DELETE CASCADE,
-    exercise_id TEXT NOT NULL DEFAULT '',
-    session_entry_id TEXT NOT NULL DEFAULT '',
-    position INTEGER NOT NULL DEFAULT 0,
-    notes TEXT NOT NULL DEFAULT '',
-    target_sets REAL NOT NULL DEFAULT 0,
-    target_reps REAL NOT NULL DEFAULT 0,
-    target_weight_kg REAL NOT NULL DEFAULT 0,
-    target_duration_s REAL NOT NULL DEFAULT 0,
-    target_distance_km REAL NOT NULL DEFAULT 0,
-    target_rest_s REAL NOT NULL DEFAULT 0
-  );
-  CREATE INDEX workout_exercises_by_workout ON workout_exercises (workout_id);
-  CREATE TABLE workout_sets (
-    id TEXT PRIMARY KEY,
-    workout_exercise_id TEXT NOT NULL REFERENCES workout_exercises (id) ON DELETE CASCADE,
-    position INTEGER NOT NULL DEFAULT 0,
-    reps REAL NOT NULL DEFAULT 0,
-    weight_kg REAL NOT NULL DEFAULT 0,
-    duration_s REAL NOT NULL DEFAULT 0,
-    distance_km REAL NOT NULL DEFAULT 0,
-    rpe REAL NOT NULL DEFAULT 0
-  );
-  CREATE INDEX workout_sets_by_entry ON workout_sets (workout_exercise_id);
-`;
-
 // ── Rows ─────────────────────────────────────────────────────────────────────
 
-interface ExerciseRow {
-  id: string;
-  name: string;
-  measurement: string;
-  equipment: string;
-  muscles: string;
-  categories: string;
-  notes: string;
-}
+type ExerciseRow = typeof exercises.$inferSelect;
+type SessionExerciseRow = typeof session_exercises.$inferSelect;
+type SetRow = typeof workout_sets.$inferSelect;
+type Condition = ReturnType<typeof eq>;
 
-interface SessionRow {
-  id: string;
-  program_id: string;
-  name: string;
-  notes: string;
-  categories: string;
-}
-
-interface SessionExerciseRow {
-  id: string;
-  session_id: string;
-  exercise_id: string;
-  sets: number;
-  reps: number;
-  weight_kg: number;
-  duration_s: number;
-  distance_km: number;
-  rest_s: number;
-  notes: string;
-  progression_type: string;
-  increment: number;
-  increment_percent: number;
-  successes: number;
-  success_counter: number;
-  decrement: number;
-  decrement_percent: number;
-  failures: number;
-  failure_counter: number;
-  min_reps: number;
-  max_reps: number;
-  reps_threshold: number;
-}
-
-interface WorkoutRow {
-  id: string;
-  date: string;
-  name: string;
-  session_id: string;
-  started_at: string;
-  finished_at: string;
-  notes: string;
-}
-
-interface WorkoutExerciseRow {
-  id: string;
-  workout_id: string;
-  exercise_id: string;
-  session_entry_id: string;
-  notes: string;
-  target_sets: number;
-  target_reps: number;
-  target_weight_kg: number;
-  target_duration_s: number;
-  target_distance_km: number;
-  target_rest_s: number;
-}
-
-interface SetRow {
-  id: string;
-  workout_exercise_id: string;
-  reps: number;
-  weight_kg: number;
-  duration_s: number;
-  distance_km: number;
-  rpe: number;
-}
+// The order rows were added in, which breaks ties in position.
+const rowid = sql`rowid`;
 
 function parse_list(json: string): string[] {
   try {
@@ -266,20 +109,28 @@ function to_set(row: SetRow): LoggedSet {
 // ── Loading ──────────────────────────────────────────────────────────────────
 
 function load_exercises(database: SqlDatabase): Exercise[] {
-  const rows = database.prepare("SELECT * FROM exercises ORDER BY name COLLATE NOCASE").all() as ExerciseRow[];
-  return rows.map(to_exercise);
+  return drizzle_of(database).select().from(exercises).orderBy(sql`${exercises.name} COLLATE NOCASE`).all().map(to_exercise);
+}
+
+function find_exercise(database: SqlDatabase, id: string): Exercise | null {
+  const row = drizzle_of(database).select().from(exercises).where(eq(exercises.id, id)).get();
+  return row ? to_exercise(row) : null;
 }
 
 function measurement_map(exercises: Exercise[]): Map<string, Measurement> {
   return new Map(exercises.map((exercise) => [exercise.id, exercise.measurement]));
 }
 
-function load_sessions(database: SqlDatabase, where = "1", ...params: SqlValue[]): Session[] {
-  const sessions = database.prepare(`SELECT * FROM program_sessions WHERE ${where} ORDER BY position, rowid`).all(...params) as SessionRow[];
+function load_sessions(database: SqlDatabase, where?: Condition): Session[] {
+  const db = drizzle_of(database);
+  const sessions = db.select().from(program_sessions).where(where).orderBy(asc(program_sessions.position), rowid).all();
   if (sessions.length === 0) return [];
-  const entries = database
-    .prepare(`SELECT * FROM session_exercises WHERE session_id IN (SELECT id FROM program_sessions WHERE ${where}) ORDER BY position, rowid`)
-    .all(...params) as SessionExerciseRow[];
+  const entries = db
+    .select()
+    .from(session_exercises)
+    .where(inArray(session_exercises.session_id, db.select({ id: program_sessions.id }).from(program_sessions).where(where)))
+    .orderBy(asc(session_exercises.position), rowid)
+    .all();
   return sessions.map((row) => ({
     id: row.id,
     program_id: row.program_id,
@@ -291,27 +142,31 @@ function load_sessions(database: SqlDatabase, where = "1", ...params: SqlValue[]
 }
 
 function load_programs(database: SqlDatabase): Program[] {
-  const programs = database.prepare("SELECT * FROM programs ORDER BY name COLLATE NOCASE").all() as { id: string; name: string; notes: string }[];
+  const rows = drizzle_of(database).select().from(programs).orderBy(sql`${programs.name} COLLATE NOCASE`).all();
   const sessions = load_sessions(database);
-  return programs.map((program) => ({ ...program, sessions: sessions.filter((session) => session.program_id === program.id) }));
+  return rows.map((program) => ({ ...program, sessions: sessions.filter((session) => session.program_id === program.id) }));
 }
 
 function find_session(database: SqlDatabase, session_id: string): Session | null {
   if (!session_id) return null;
-  return load_sessions(database, "id = ?", session_id)[0] ?? null;
+  return load_sessions(database, eq(program_sessions.id, session_id))[0] ?? null;
 }
 
-function load_workouts(database: SqlDatabase, where = "1", ...params: SqlValue[]): Workout[] {
-  const workouts = database.prepare(`SELECT * FROM workouts WHERE ${where} ORDER BY date, started_at, rowid`).all(...params) as WorkoutRow[];
-  if (workouts.length === 0) return [];
-  const in_workouts = `SELECT id FROM workouts WHERE ${where}`;
-  const entries = database.prepare(`SELECT * FROM workout_exercises WHERE workout_id IN (${in_workouts}) ORDER BY position, rowid`).all(...params) as WorkoutExerciseRow[];
-  const sets = database
-    .prepare(`SELECT * FROM workout_sets WHERE workout_exercise_id IN (SELECT id FROM workout_exercises WHERE workout_id IN (${in_workouts})) ORDER BY position, rowid`)
-    .all(...params) as SetRow[];
+function load_workouts(database: SqlDatabase, where?: Condition): Workout[] {
+  const db = drizzle_of(database);
+  const rows = db.select().from(workouts).where(where).orderBy(asc(workouts.date), asc(workouts.started_at), rowid).all();
+  if (rows.length === 0) return [];
+  const in_workouts = inArray(workout_exercises.workout_id, db.select({ id: workouts.id }).from(workouts).where(where));
+  const entries = db.select().from(workout_exercises).where(in_workouts).orderBy(asc(workout_exercises.position), rowid).all();
+  const sets = db
+    .select()
+    .from(workout_sets)
+    .where(inArray(workout_sets.workout_exercise_id, db.select({ id: workout_exercises.id }).from(workout_exercises).where(in_workouts)))
+    .orderBy(asc(workout_sets.position), rowid)
+    .all();
   const sets_by_entry = Map.groupBy(sets, (set) => set.workout_exercise_id);
   const entries_by_workout = Map.groupBy(entries, (entry) => entry.workout_id);
-  return workouts.map((row) => ({
+  return rows.map((row) => ({
     ...row,
     entries: (entries_by_workout.get(row.id) ?? []).map(
       (entry): WorkoutEntry => ({
@@ -333,92 +188,136 @@ function load_workouts(database: SqlDatabase, where = "1", ...params: SqlValue[]
   }));
 }
 
+function managed_categories(database: SqlDatabase): string[] {
+  return drizzle_of(database)
+    .select({ name: workout_categories.name })
+    .from(workout_categories)
+    .all()
+    .map((row) => row.name);
+}
+
 // The managed categories, every one in use, and every parent their paths imply.
 function all_categories(database: SqlDatabase, exercises: Exercise[], sessions: Session[]): string[] {
-  const managed = (database.prepare("SELECT name FROM workout_categories").all() as { name: string }[]).map((row) => row.name);
-  const used = [...managed, ...exercises.flatMap((item) => item.categories), ...sessions.flatMap((item) => item.categories)];
+  const used = [...managed_categories(database), ...exercises.flatMap((item) => item.categories), ...sessions.flatMap((item) => item.categories)];
   return normalize_categories(used.flatMap((name) => [name, ...category_ancestors(name)]));
+}
+
+function has_row(database: SqlDatabase, table: SQLiteTable, where: Condition): boolean {
+  return drizzle_of(database).select({ found: sql`1` }).from(table).where(where).get() !== undefined;
 }
 
 // ── Writing ──────────────────────────────────────────────────────────────────
 
-function next_position(database: SqlDatabase, table: string, parent_column: string, parent_id: string): number {
-  const row = database.prepare(`SELECT coalesce(max(position), -1) + 1 AS position FROM ${table} WHERE ${parent_column} = ?`).get(parent_id) as { position: number };
-  return row.position;
+type PositionColumn = typeof program_sessions.position | typeof workout_exercises.position | typeof workout_sets.position;
+
+// The position after every row under the same parent.
+function next_position(database: SqlDatabase, table: SQLiteTable, position: PositionColumn, under: Condition): number {
+  return drizzle_of(database)
+    .select({ position: sql<number>`coalesce(max(${position}), -1) + 1` })
+    .from(table)
+    .where(under)
+    .get()!.position;
+}
+
+function add_category(database: SqlDatabase, name: string): void {
+  drizzle_of(database).insert(workout_categories).values({ name }).onConflictDoNothing().run();
 }
 
 function write_exercise(database: SqlDatabase, exercise: Exercise): void {
-  database
-    .prepare(
-      `INSERT INTO exercises (id, name, measurement, equipment, muscles, categories, notes) VALUES (?, ?, ?, ?, ?, ?, ?)
-       ON CONFLICT (id) DO UPDATE SET name = excluded.name, measurement = excluded.measurement, equipment = excluded.equipment,
-         muscles = excluded.muscles, categories = excluded.categories, notes = excluded.notes`,
-    )
-    .run(exercise.id, exercise.name, exercise.measurement, exercise.equipment, JSON.stringify(exercise.muscles), JSON.stringify(exercise.categories), exercise.notes);
+  const fields = {
+    name: exercise.name,
+    measurement: exercise.measurement,
+    equipment: exercise.equipment,
+    muscles: JSON.stringify(exercise.muscles),
+    categories: JSON.stringify(exercise.categories),
+    notes: exercise.notes,
+  };
+  drizzle_of(database)
+    .insert(exercises)
+    .values({ id: exercise.id, ...fields })
+    .onConflictDoUpdate({ target: exercises.id, set: fields })
+    .run();
 }
 
 function write_session_entry(database: SqlDatabase, session_id: string, position: number, entry: SessionEntry): void {
   const progression = entry.progression;
-  database
-    .prepare(
-      `INSERT INTO session_exercises (id, session_id, exercise_id, position, sets, reps, weight_kg, duration_s, distance_km, rest_s, notes,
-         progression_type, increment, increment_percent, successes, success_counter, decrement, decrement_percent, failures, failure_counter,
-         min_reps, max_reps, reps_threshold)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-       ON CONFLICT (id) DO UPDATE SET exercise_id = excluded.exercise_id, position = excluded.position, sets = excluded.sets, reps = excluded.reps,
-         weight_kg = excluded.weight_kg, duration_s = excluded.duration_s, distance_km = excluded.distance_km, rest_s = excluded.rest_s,
-         notes = excluded.notes, progression_type = excluded.progression_type, increment = excluded.increment,
-         increment_percent = excluded.increment_percent, successes = excluded.successes, success_counter = excluded.success_counter,
-         decrement = excluded.decrement, decrement_percent = excluded.decrement_percent, failures = excluded.failures,
-         failure_counter = excluded.failure_counter, min_reps = excluded.min_reps, max_reps = excluded.max_reps, reps_threshold = excluded.reps_threshold`,
-    )
-    .run(
-      entry.id,
-      session_id,
-      entry.exercise_id,
-      position,
-      entry.sets,
-      entry.reps,
-      entry.weight,
-      entry.duration,
-      entry.distance,
-      entry.rest,
-      entry.notes,
-      progression.type,
-      progression.increment,
-      progression.increment_percent ? 1 : 0,
-      progression.successes,
-      progression.success_counter,
-      progression.decrement,
-      progression.decrement_percent ? 1 : 0,
-      progression.failures,
-      progression.failure_counter,
-      progression.min_reps,
-      progression.max_reps,
-      progression.reps_threshold,
-    );
+  const fields = {
+    exercise_id: entry.exercise_id,
+    position,
+    sets: entry.sets,
+    reps: entry.reps,
+    weight_kg: entry.weight,
+    duration_s: entry.duration,
+    distance_km: entry.distance,
+    rest_s: entry.rest,
+    notes: entry.notes,
+    progression_type: progression.type,
+    increment: progression.increment,
+    increment_percent: progression.increment_percent ? 1 : 0,
+    successes: progression.successes,
+    success_counter: progression.success_counter,
+    decrement: progression.decrement,
+    decrement_percent: progression.decrement_percent ? 1 : 0,
+    failures: progression.failures,
+    failure_counter: progression.failure_counter,
+    min_reps: progression.min_reps,
+    max_reps: progression.max_reps,
+    reps_threshold: progression.reps_threshold,
+  };
+  drizzle_of(database)
+    .insert(session_exercises)
+    .values({ id: entry.id, session_id, ...fields })
+    .onConflictDoUpdate({ target: session_exercises.id, set: fields })
+    .run();
+}
+
+// A new session goes after the program's others.
+function insert_session(database: SqlDatabase, program_id: string, session: { id: string; name: string; notes: string; categories: string[] }): void {
+  drizzle_of(database)
+    .insert(program_sessions)
+    .values({
+      id: session.id,
+      program_id,
+      position: next_position(database, program_sessions, program_sessions.position, eq(program_sessions.program_id, program_id)),
+      name: session.name,
+      notes: session.notes,
+      categories: JSON.stringify(session.categories),
+    })
+    .run();
 }
 
 function insert_workout_entry(database: SqlDatabase, workout_id: string, position: number, entry: Omit<WorkoutEntry, "sets">): void {
-  database
-    .prepare(
-      `INSERT INTO workout_exercises (id, workout_id, exercise_id, session_entry_id, position, notes,
-         target_sets, target_reps, target_weight_kg, target_duration_s, target_distance_km, target_rest_s)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    )
-    .run(entry.id, workout_id, entry.exercise_id, entry.session_entry_id, position, entry.notes, entry.target.sets, entry.target.reps, entry.target.weight, entry.target.duration, entry.target.distance, entry.target.rest);
+  drizzle_of(database)
+    .insert(workout_exercises)
+    .values({
+      id: entry.id,
+      workout_id,
+      exercise_id: entry.exercise_id,
+      session_entry_id: entry.session_entry_id,
+      position,
+      notes: entry.notes,
+      target_sets: entry.target.sets,
+      target_reps: entry.target.reps,
+      target_weight_kg: entry.target.weight,
+      target_duration_s: entry.target.duration,
+      target_distance_km: entry.target.distance,
+      target_rest_s: entry.target.rest,
+    })
+    .run();
 }
 
 function insert_set(database: SqlDatabase, entry_id: string, position: number, set: LoggedSet): void {
-  database
-    .prepare("INSERT INTO workout_sets (id, workout_exercise_id, position, reps, weight_kg, duration_s, distance_km, rpe) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
-    .run(set.id, entry_id, position, set.reps, set.weight, set.duration, set.distance, set.rpe);
+  drizzle_of(database)
+    .insert(workout_sets)
+    .values({ id: set.id, workout_exercise_id: entry_id, position, reps: set.reps, weight_kg: set.weight, duration_s: set.duration, distance_km: set.distance, rpe: set.rpe })
+    .run();
 }
 
 function insert_workout(database: SqlDatabase, workout: Workout): void {
-  database
-    .prepare("INSERT INTO workouts (id, date, name, session_id, started_at, finished_at, notes) VALUES (?, ?, ?, ?, ?, ?, ?)")
-    .run(workout.id, workout.date, workout.name, workout.session_id, workout.started_at, workout.finished_at, workout.notes);
+  drizzle_of(database)
+    .insert(workouts)
+    .values({ id: workout.id, date: workout.date, name: workout.name, session_id: workout.session_id, started_at: workout.started_at, finished_at: workout.finished_at, notes: workout.notes })
+    .run();
   workout.entries.forEach((entry, position) => {
     insert_workout_entry(database, workout.id, position, entry);
     entry.sets.forEach((set, set_position) => insert_set(database, entry.id, set_position, set));
@@ -427,13 +326,18 @@ function insert_workout(database: SqlDatabase, workout: Workout): void {
 
 // Every tag on every exercise and session rewritten by the same rule.
 function retag(database: SqlDatabase, change: (tags: string[]) => string[]): void {
-  for (const table of ["exercises", "program_sessions"]) {
-    const rows = database.prepare(`SELECT id, categories FROM ${table}`).all() as { id: string; categories: string }[];
+  const db = drizzle_of(database);
+  for (const table of [exercises, program_sessions]) {
+    const rows = db.select({ id: table.id, categories: table.categories }).from(table).all();
     for (const row of rows) {
       const next = JSON.stringify(normalize_categories(change(parse_list(row.categories))));
-      if (next !== row.categories) database.prepare(`UPDATE ${table} SET categories = ? WHERE id = ?`).run(next, row.id);
+      if (next !== row.categories) db.update(table).set({ categories: next }).where(eq(table.id, row.id)).run();
     }
   }
+}
+
+function delete_managed(database: SqlDatabase, names: string[]): void {
+  for (const name of names) drizzle_of(database).delete(workout_categories).where(eq(workout_categories.name, name)).run();
 }
 
 // ── Inputs ───────────────────────────────────────────────────────────────────
@@ -546,29 +450,28 @@ export interface TriliumImportSummary {
 // Adds by id: exercises are added or updated, a program present gains the sessions it lacks, and a workout present is skipped.
 function merge_document(database: SqlDatabase, document: WorkoutsDocument): TriliumImportSummary {
   const summary: TriliumImportSummary = { exercises: 0, programs: 0, sessions: 0, workouts: 0, skipped_workouts: 0 };
-  const exists = (table: string, id: string) => database.prepare(`SELECT 1 FROM ${table} WHERE id = ?`).get(id) !== undefined;
   in_transaction(database, () => {
-    for (const name of document.categories) database.prepare("INSERT OR IGNORE INTO workout_categories (name) VALUES (?)").run(name);
+    for (const name of document.categories) add_category(database, name);
     for (const exercise of document.exercises) {
       write_exercise(database, exercise);
       summary.exercises += 1;
     }
     for (const program of document.programs) {
-      if (!exists("programs", program.id)) {
-        database.prepare("INSERT INTO programs (id, name, notes) VALUES (?, ?, ?)").run(program.id, program.name, program.notes);
+      if (!has_row(database, programs, eq(programs.id, program.id))) {
+        drizzle_of(database).insert(programs).values({ id: program.id, name: program.name, notes: program.notes }).run();
         summary.programs += 1;
       }
       for (const session of program.sessions) {
-        if (exists("program_sessions", session.id)) continue;
-        database
-          .prepare("INSERT INTO program_sessions (id, program_id, position, name, notes, categories) VALUES (?, ?, ?, ?, ?, ?)")
-          .run(session.id, program.id, next_position(database, "program_sessions", "program_id", program.id), session.name, session.notes, JSON.stringify(session.categories));
-        session.entries.forEach((entry, position) => write_session_entry(database, session.id, position, exists("session_exercises", entry.id) ? { ...entry, id: new_id() } : entry));
+        if (has_row(database, program_sessions, eq(program_sessions.id, session.id))) continue;
+        insert_session(database, program.id, session);
+        session.entries.forEach((entry, position) =>
+          write_session_entry(database, session.id, position, has_row(database, session_exercises, eq(session_exercises.id, entry.id)) ? { ...entry, id: new_id() } : entry),
+        );
         summary.sessions += 1;
       }
     }
     for (const workout of document.workouts) {
-      if (exists("workouts", workout.id)) {
+      if (has_row(database, workouts, eq(workouts.id, workout.id))) {
         summary.skipped_workouts += 1;
         continue;
       }
@@ -582,37 +485,23 @@ function merge_document(database: SqlDatabase, document: WorkoutsDocument): Tril
 
 // ── Store ────────────────────────────────────────────────────────────────────
 
-export const workout_setting_defaults = {
-  // Seconds of rest a new session exercise starts with, and the rest timer's for an exercise added mid-workout.
-  "workouts.default_rest": 90,
-  "workouts.rest_sound": true,
-  "workouts.weekly_target": 3,
-};
-
 export const workouts_feature = define_feature({
   id: "workouts",
-  migrations: [schema],
-  tables: [
-    { name: "workout_categories", key_columns: ["name"] },
-    { name: "exercises", key_columns: ["id"] },
-    { name: "programs", key_columns: ["id"] },
-    { name: "program_sessions", key_columns: ["id"] },
-    { name: "session_exercises", key_columns: ["id"] },
-    { name: "workouts", key_columns: ["id"] },
-    { name: "workout_exercises", key_columns: ["id"] },
-    { name: "workout_sets", key_columns: ["id"] },
-  ],
+  migrations: migrations.map((migration) => migration.statements),
+  tables: synced_tables(workout_tables),
   methods: {
     // ── Library ──
 
     get_workout_library: (database: SqlDatabase): WorkoutLibrary => {
       const exercises = load_exercises(database);
       const programs = load_programs(database);
-      const last_done = new Map(
-        (database.prepare("SELECT entry.exercise_id AS id, max(workout.date) AS date FROM workout_exercises AS entry JOIN workouts AS workout ON workout.id = entry.workout_id GROUP BY entry.exercise_id").all() as { id: string; date: string }[]).map(
-          (row) => [row.id, row.date],
-        ),
-      );
+      const done = drizzle_of(database)
+        .select({ id: workout_exercises.exercise_id, date: max(workouts.date) })
+        .from(workout_exercises)
+        .innerJoin(workouts, eq(workouts.id, workout_exercises.workout_id))
+        .groupBy(workout_exercises.exercise_id)
+        .all();
+      const last_done = new Map(done.map((row) => [row.id, row.date]));
       return {
         exercises: exercises.map((exercise) => ({ ...exercise, last_done: last_done.get(exercise.id) ?? null })),
         programs,
@@ -640,7 +529,7 @@ export const workouts_feature = define_feature({
 
     // Sessions and logged sets keep the id, and show it as a deleted exercise.
     delete_exercise: (database: SqlDatabase, id: string): void => {
-      database.prepare("DELETE FROM exercises WHERE id = ?").run(id);
+      drizzle_of(database).delete(exercises).where(eq(exercises.id, id)).run();
     },
 
     search_wger_exercises: (_database: SqlDatabase, term: string): Promise<WgerResult[]> => search_wger(term),
@@ -665,7 +554,7 @@ export const workouts_feature = define_feature({
 
     add_workout_category: (database: SqlDatabase, name: string): void => {
       const normalized = normalize_category_name(name);
-      if (normalized) database.prepare("INSERT OR IGNORE INTO workout_categories (name) VALUES (?)").run(normalized);
+      if (normalized) add_category(database, normalized);
     },
 
     // The subtree moves with it, and a name already in use merges the two.
@@ -675,10 +564,9 @@ export const workouts_feature = define_feature({
       const rename = (tags: string[]) => tags.map((tag) => (is_in_category(tag, from) ? target + tag.slice(from.length) : tag));
       in_transaction(database, () => {
         retag(database, rename);
-        const managed = (database.prepare("SELECT name FROM workout_categories").all() as { name: string }[]).map((row) => row.name);
-        const moved = managed.filter((name) => is_in_category(name, from));
-        for (const name of moved) database.prepare("DELETE FROM workout_categories WHERE name = ?").run(name);
-        for (const name of normalize_categories(rename(moved))) database.prepare("INSERT OR IGNORE INTO workout_categories (name) VALUES (?)").run(name);
+        const moved = managed_categories(database).filter((name) => is_in_category(name, from));
+        delete_managed(database, moved);
+        for (const name of normalize_categories(rename(moved))) add_category(database, name);
       });
     },
 
@@ -686,8 +574,7 @@ export const workouts_feature = define_feature({
     delete_workout_category: (database: SqlDatabase, name: string): void => {
       in_transaction(database, () => {
         retag(database, (tags) => tags.filter((tag) => !is_in_category(tag, name)));
-        const managed = (database.prepare("SELECT name FROM workout_categories").all() as { name: string }[]).map((row) => row.name);
-        for (const managed_name of managed.filter((item) => is_in_category(item, name))) database.prepare("DELETE FROM workout_categories WHERE name = ?").run(managed_name);
+        delete_managed(database, managed_categories(database).filter((item) => is_in_category(item, name)));
       });
     },
 
@@ -697,15 +584,18 @@ export const workouts_feature = define_feature({
       const name = trimmed(input.name);
       if (!name) throw new Error("A program needs a name.");
       const id = input.id || new_id();
-      database
-        .prepare("INSERT INTO programs (id, name, notes) VALUES (?, ?, ?) ON CONFLICT (id) DO UPDATE SET name = excluded.name, notes = excluded.notes")
-        .run(id, name, trimmed(input.notes));
+      const fields = { name, notes: trimmed(input.notes) };
+      drizzle_of(database)
+        .insert(programs)
+        .values({ id, ...fields })
+        .onConflictDoUpdate({ target: programs.id, set: fields })
+        .run();
       return id;
     },
 
     // Its sessions go with it; workouts logged from them stay.
     delete_program: (database: SqlDatabase, id: string): void => {
-      database.prepare("DELETE FROM programs WHERE id = ?").run(id);
+      drizzle_of(database).delete(programs).where(eq(programs.id, id)).run();
     },
 
     // Writes the session whole: its entries in the order given, dropping any no longer listed or naming no exercise.
@@ -714,45 +604,54 @@ export const workouts_feature = define_feature({
       if (!name) throw new Error("A session needs a name.");
       const id = input.id || new_id();
       const entries = input.entries.filter((entry) => entry.exercise_id).map(normalize_entry);
+      const fields = { name, notes: trimmed(input.notes), categories: normalize_categories(input.categories) };
       in_transaction(database, () => {
-        const existing = database.prepare("SELECT 1 FROM program_sessions WHERE id = ?").get(id) !== undefined;
-        if (existing) {
-          database.prepare("UPDATE program_sessions SET name = ?, notes = ?, categories = ? WHERE id = ?").run(name, trimmed(input.notes), JSON.stringify(normalize_categories(input.categories)), id);
+        const db = drizzle_of(database);
+        if (has_row(database, program_sessions, eq(program_sessions.id, id))) {
+          db.update(program_sessions)
+            .set({ ...fields, categories: JSON.stringify(fields.categories) })
+            .where(eq(program_sessions.id, id))
+            .run();
         } else {
-          database
-            .prepare("INSERT INTO program_sessions (id, program_id, position, name, notes, categories) VALUES (?, ?, ?, ?, ?, ?)")
-            .run(id, program_id, next_position(database, "program_sessions", "program_id", program_id), name, trimmed(input.notes), JSON.stringify(normalize_categories(input.categories)));
+          insert_session(database, program_id, { id, ...fields });
         }
         const kept = new Set(entries.map((entry) => entry.id));
-        const current = database.prepare("SELECT id FROM session_exercises WHERE session_id = ?").all(id) as { id: string }[];
-        for (const row of current) if (!kept.has(row.id)) database.prepare("DELETE FROM session_exercises WHERE id = ?").run(row.id);
+        const current = db.select({ id: session_exercises.id }).from(session_exercises).where(eq(session_exercises.session_id, id)).all();
+        for (const row of current) if (!kept.has(row.id)) db.delete(session_exercises).where(eq(session_exercises.id, row.id)).run();
         entries.forEach((entry, position) => write_session_entry(database, id, position, entry));
       });
       return id;
     },
 
     delete_program_session: (database: SqlDatabase, id: string): void => {
-      database.prepare("DELETE FROM program_sessions WHERE id = ?").run(id);
+      drizzle_of(database).delete(program_sessions).where(eq(program_sessions.id, id)).run();
     },
 
     // Swaps with its neighbour; the order is the order the program runs in.
     move_program_session: (database: SqlDatabase, id: string, delta: -1 | 1): void => {
-      const row = database.prepare("SELECT program_id FROM program_sessions WHERE id = ?").get(id) as { program_id: string } | undefined;
+      const db = drizzle_of(database);
+      const row = db.select({ program_id: program_sessions.program_id }).from(program_sessions).where(eq(program_sessions.id, id)).get();
       if (!row) return;
-      const ids = (database.prepare("SELECT id FROM program_sessions WHERE program_id = ? ORDER BY position, rowid").all(row.program_id) as { id: string }[]).map((item) => item.id);
+      const ids = db
+        .select({ id: program_sessions.id })
+        .from(program_sessions)
+        .where(eq(program_sessions.program_id, row.program_id))
+        .orderBy(asc(program_sessions.position), rowid)
+        .all()
+        .map((item) => item.id);
       const index = ids.indexOf(id);
       const target = index + delta;
       if (target < 0 || target >= ids.length) return;
       [ids[index], ids[target]] = [ids[target]!, ids[index]!];
-      in_transaction(database, () => ids.forEach((session_id, position) => database.prepare("UPDATE program_sessions SET position = ? WHERE id = ?").run(position, session_id)));
+      in_transaction(database, () => ids.forEach((session_id, position) => db.update(program_sessions).set({ position }).where(eq(program_sessions.id, session_id)).run()));
     },
 
     // ── Log ──
 
     list_workouts: (database: SqlDatabase, date: string): LoggedWorkout[] => {
-      return load_workouts(database, "date = ?", date).map((workout) => ({
+      return load_workouts(database, eq(workouts.date, date)).map((workout) => ({
         ...workout,
-        has_session: workout.session_id !== "" && database.prepare("SELECT 1 FROM program_sessions WHERE id = ?").get(workout.session_id) !== undefined,
+        has_session: workout.session_id !== "" && has_row(database, program_sessions, eq(program_sessions.id, workout.session_id)),
       }));
     },
 
@@ -760,7 +659,7 @@ export const workouts_feature = define_feature({
     start_workout: (database: SqlDatabase, date: string, session_id: string | null, started_at: string): string => {
       const session = session_id ? find_session(database, session_id) : null;
       if (session_id && !session) throw new Error("That session no longer exists.");
-      const program = session ? (database.prepare("SELECT name FROM programs WHERE id = ?").get(session.program_id) as { name: string } | undefined) : undefined;
+      const program = session ? drizzle_of(database).select({ name: programs.name }).from(programs).where(eq(programs.id, session.program_id)).get() : undefined;
       const workout: Workout = {
         id: new_id(),
         date,
@@ -783,20 +682,22 @@ export const workouts_feature = define_feature({
     },
 
     update_workout: (database: SqlDatabase, id: string, changes: { name?: string; notes?: string; date?: string }): void => {
-      if (changes.name !== undefined) database.prepare("UPDATE workouts SET name = ? WHERE id = ?").run(changes.name, id);
-      if (changes.notes !== undefined) database.prepare("UPDATE workouts SET notes = ? WHERE id = ?").run(changes.notes, id);
-      if (changes.date) database.prepare("UPDATE workouts SET date = ? WHERE id = ?").run(changes.date, id);
+      const fields: Partial<typeof workouts.$inferInsert> = {};
+      if (changes.name !== undefined) fields.name = changes.name;
+      if (changes.notes !== undefined) fields.notes = changes.notes;
+      if (changes.date) fields.date = changes.date;
+      if (Object.keys(fields).length > 0) drizzle_of(database).update(workouts).set(fields).where(eq(workouts.id, id)).run();
     },
 
     delete_workout: (database: SqlDatabase, id: string): void => {
-      database.prepare("DELETE FROM workouts WHERE id = ?").run(id);
+      drizzle_of(database).delete(workouts).where(eq(workouts.id, id)).run();
     },
 
     // Added mid-workout with one empty set and no target.
     add_workout_exercise: (database: SqlDatabase, workout_id: string, exercise_id: string): string => {
       const id = new_id();
       in_transaction(database, () => {
-        insert_workout_entry(database, workout_id, next_position(database, "workout_exercises", "workout_id", workout_id), {
+        insert_workout_entry(database, workout_id, next_position(database, workout_exercises, workout_exercises.position, eq(workout_exercises.workout_id, workout_id)), {
           id,
           exercise_id,
           session_entry_id: "",
@@ -809,40 +710,48 @@ export const workouts_feature = define_feature({
     },
 
     update_workout_exercise: (database: SqlDatabase, id: string, changes: { notes: string }): void => {
-      database.prepare("UPDATE workout_exercises SET notes = ? WHERE id = ?").run(changes.notes, id);
+      drizzle_of(database).update(workout_exercises).set({ notes: changes.notes }).where(eq(workout_exercises.id, id)).run();
     },
 
     delete_workout_exercise: (database: SqlDatabase, id: string): void => {
-      database.prepare("DELETE FROM workout_exercises WHERE id = ?").run(id);
+      drizzle_of(database).delete(workout_exercises).where(eq(workout_exercises.id, id)).run();
     },
 
     // A new set copies the last one, since sets usually repeat the load.
     add_workout_set: (database: SqlDatabase, workout_exercise_id: string): string => {
-      const last = database.prepare("SELECT * FROM workout_sets WHERE workout_exercise_id = ? ORDER BY position DESC, rowid DESC LIMIT 1").get(workout_exercise_id) as SetRow | undefined;
+      const last = drizzle_of(database)
+        .select()
+        .from(workout_sets)
+        .where(eq(workout_sets.workout_exercise_id, workout_exercise_id))
+        .orderBy(sql`${workout_sets.position} DESC, rowid DESC`)
+        .limit(1)
+        .get();
       const id = new_id();
       const values = last ? to_set(last) : { reps: 0, weight: 0, duration: 0, distance: 0, rpe: 0 };
-      insert_set(database, workout_exercise_id, next_position(database, "workout_sets", "workout_exercise_id", workout_exercise_id), { ...values, id });
+      insert_set(database, workout_exercise_id, next_position(database, workout_sets, workout_sets.position, eq(workout_sets.workout_exercise_id, workout_exercise_id)), { ...values, id });
       return id;
     },
 
     update_workout_set: (database: SqlDatabase, id: string, changes: Partial<SetValues & { rpe: number }>): void => {
       const columns = { reps: "reps", weight: "weight_kg", duration: "duration_s", distance: "distance_km", rpe: "rpe" } as const;
+      const fields: Partial<typeof workout_sets.$inferInsert> = {};
       for (const [key, column] of Object.entries(columns)) {
         const value = changes[key as keyof typeof columns];
-        if (value !== undefined) database.prepare(`UPDATE workout_sets SET ${column} = ? WHERE id = ?`).run(non_negative(value), id);
+        if (value !== undefined) fields[column] = non_negative(value);
       }
+      if (Object.keys(fields).length > 0) drizzle_of(database).update(workout_sets).set(fields).where(eq(workout_sets.id, id)).run();
     },
 
     delete_workout_set: (database: SqlDatabase, id: string): void => {
-      database.prepare("DELETE FROM workout_sets WHERE id = ?").run(id);
+      drizzle_of(database).delete(workout_sets).where(eq(workout_sets.id, id)).run();
     },
 
     // Runs the session's progressions against the targets the workout started with, rewrites the session's targets, and marks it finished; once only.
     finish_workout: (database: SqlDatabase, id: string, finished_at: string): ProgressionReport[] => {
-      const workout = load_workouts(database, "id = ?", id)[0];
+      const workout = load_workouts(database, eq(workouts.id, id))[0];
       if (!workout || workout.finished_at) return [];
       return in_transaction(database, () => {
-        database.prepare("UPDATE workouts SET finished_at = ? WHERE id = ?").run(finished_at, id);
+        drizzle_of(database).update(workouts).set({ finished_at }).where(eq(workouts.id, id)).run();
         const session = find_session(database, workout.session_id);
         if (!session) return [];
         const exercises = new Map(load_exercises(database).map((exercise) => [exercise.id, exercise]));
@@ -888,10 +797,10 @@ export const workouts_feature = define_feature({
     },
 
     get_exercise_report: (database: SqlDatabase, exercise_id: string): ExerciseReport | null => {
-      const row = database.prepare("SELECT * FROM exercises WHERE id = ?").get(exercise_id) as ExerciseRow | undefined;
-      if (!row) return null;
-      const exercise = to_exercise(row);
-      const history = exercise_history(load_workouts(database, "id IN (SELECT workout_id FROM workout_exercises WHERE exercise_id = ?)", exercise_id), exercise_id);
+      const exercise = find_exercise(database, exercise_id);
+      if (!exercise) return null;
+      const logged_in = drizzle_of(database).select({ id: workout_exercises.workout_id }).from(workout_exercises).where(eq(workout_exercises.exercise_id, exercise_id));
+      const history = exercise_history(load_workouts(database, inArray(workouts.id, logged_in)), exercise_id);
       return { exercise, stats: exercise_stats(history, exercise.measurement), trend: exercise_trend(history, exercise.measurement), history };
     },
 
@@ -901,7 +810,12 @@ export const workouts_feature = define_feature({
     export_workouts: (database: SqlDatabase): string => {
       const exercises = load_exercises(database);
       const programs = load_programs(database);
-      const categories = (database.prepare("SELECT name FROM workout_categories ORDER BY name").all() as { name: string }[]).map((row) => row.name);
+      const categories = drizzle_of(database)
+        .select({ name: workout_categories.name })
+        .from(workout_categories)
+        .orderBy(asc(workout_categories.name))
+        .all()
+        .map((row) => row.name);
       return write_trilium_database({ categories, exercises, programs, workouts: load_workouts(database) });
     },
 

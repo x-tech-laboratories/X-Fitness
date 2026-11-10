@@ -10,7 +10,8 @@ import { PageHeading, SettingRow, Stack, Tabs } from "@x-tech-laboratories/x-lib
 import { Loaded } from "@x-tech-laboratories/x-libs/web/react/states";
 import { toast } from "@x-tech-laboratories/x-libs/web/react/toasts";
 
-import { workout_setting_defaults, type WorkoutLibrary } from "../../shared/workouts/store.ts";
+import { workout_setting_defaults } from "../../shared/workouts/settings.ts";
+import type { WorkoutLibrary } from "../../shared/workouts/store.ts";
 import { calls, use_data, use_settings } from "../api.ts";
 import type { FeatureSettingsProps } from "../features.tsx";
 import { CategoriesTab } from "./CategoriesTab.tsx";

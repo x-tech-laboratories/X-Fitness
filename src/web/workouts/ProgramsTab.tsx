@@ -11,7 +11,6 @@ import { Card, Cards, FormRow, RowActions, Section, Stack } from "@x-tech-labora
 import { Empty } from "@x-tech-laboratories/x-libs/web/react/states";
 import { toast } from "@x-tech-laboratories/x-libs/web/react/toasts";
 
-import { new_id } from "../../shared/feature.ts";
 import {
   is_progressable,
   measurement_of,
@@ -88,8 +87,9 @@ function ProgressionEditor({ progression, exercise, units, on_change }: { progre
 
 // ── Session form ─────────────────────────────────────────────────────────────
 
+// Its id made here as the store makes one, since feature.ts would bring X-Libs drizzle into the page.
 function blank_entry(rest: number): SessionEntry {
-  return { id: new_id(), exercise_id: "", sets: 3, reps: 0, weight: 0, duration: 0, distance: 0, rest, notes: "", progression: normalize_progression(undefined) };
+  return { id: crypto.randomUUID(), exercise_id: "", sets: 3, reps: 0, weight: 0, duration: 0, distance: 0, rest, notes: "", progression: normalize_progression(undefined) };
 }
 
 interface SessionDialogProps {
