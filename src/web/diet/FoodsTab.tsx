@@ -8,6 +8,7 @@ import type { EnergyUnit } from "@x-tech-laboratories/x-libs/units";
 import { NumberField, SearchBox, Select } from "@x-tech-laboratories/x-libs/web/react/controls";
 import { confirm_dialog } from "@x-tech-laboratories/x-libs/web/react/dialog";
 import { FormRow, PageHeading, Toolbar } from "@x-tech-laboratories/x-libs/web/react/layout";
+import { use_pref } from "@x-tech-laboratories/x-libs/web/react/prefs";
 import { DataTable, type TableColumn } from "@x-tech-laboratories/x-libs/web/react/table";
 
 import { food_label, food_unit_problems, normalize_food, nutrients, serving_unit, type Food, type Portion } from "../../shared/diet/model.ts";
@@ -173,17 +174,20 @@ export function FoodForm({ initial, data, energy, has_usda_key, on_done }: FoodF
 
 // ── Tab ──────────────────────────────────────────────────────────────────────
 
+// Fixed widths for the short columns leave the rest of the fitted table to the text, so the actions always stay in view.
+const number_width = 90;
+
 function food_columns(energy: EnergyUnit, on_edit: (food: Food) => void, on_delete: (food: Food) => void): TableColumn<ListRow<Food>>[] {
   const nutrient = (index: number): TableColumn<ListRow<Food>> => {
     const info = nutrients[index]!;
-    return { label: info.label, id: info.key, class: "number", cell: (row) => format_nutrient(info, row.item.nutrients[info.key], energy), sort: (row) => row.item.nutrients[info.key] };
+    return { label: info.label, id: info.key, class: "number", width: number_width, cell: (row) => format_nutrient(info, row.item.nutrients[info.key], energy), sort: (row) => row.item.nutrients[info.key] };
   };
   return [
-    { label: "Name", id: "name", cell: (row) => row.item.name, sort: (row) => row.item.name.toLowerCase() },
+    { label: "Name", id: "name", hideable: false, cell: (row) => row.item.name, sort: (row) => row.item.name.toLowerCase() },
     { label: "Brand", id: "brand", cell: (row) => row.item.brand, sort: (row) => row.item.brand.toLowerCase() },
     { label: "Comment", id: "comment", cell: (row) => row.item.comment, sort: (row) => row.item.comment.toLowerCase() },
     { label: "Categories", id: "categories", cell: (row) => row.item.categories.join(", "), sort: (row) => row.item.categories.join(", ").toLowerCase() },
-    { label: "Serving", id: "serving", cell: (row) => `${format_amount(row.item.serving_size)} ${row.item.serving_unit}`, sort: (row) => row.item.serving_size },
+    { label: "Serving", id: "serving", width: number_width, cell: (row) => `${format_amount(row.item.serving_size)} ${row.item.serving_unit}`, sort: (row) => row.item.serving_size },
     nutrient(0),
     nutrient(1),
     nutrient(2),
@@ -194,6 +198,7 @@ function food_columns(energy: EnergyUnit, on_edit: (food: Food) => void, on_dele
       header: <span className="visually-hidden">Actions</span>,
       class: "actions-cell",
       width: 150,
+      hideable: false,
       cell: (row) => (
         <div className="row-actions">
           <button type="button" aria-label={`Edit ${food_label(row.item)}`} onClick={() => on_edit(row.item)}>Edit</button>
@@ -207,6 +212,7 @@ function food_columns(energy: EnergyUnit, on_edit: (food: Food) => void, on_dele
 export function FoodsTab({ data, energy, has_usda_key }: { data: DietData; energy: EnergyUnit; has_usda_key: boolean }) {
   const [editing, set_editing] = useState<Food | "new" | null>(null);
   const view = use_category_view(data.foods, data.categories, "x-fitness-diet-group-foods");
+  const [hidden, set_hidden] = use_pref("x-fitness-diet-food-hidden-columns", ["comment"], (value): value is string[] => Array.isArray(value) && value.every((id) => typeof id === "string"));
 
   const columns = useMemo(
     () =>
@@ -234,7 +240,18 @@ export function FoodsTab({ data, energy, has_usda_key }: { data: DietData; energ
       {view.rows.length === 0 ? (
         <p className="muted">{view.filter ? "No foods in this category." : "No foods yet."}</p>
       ) : (
-        <DataTable caption="Foods" columns={columns} rows={view.rows} groups={view.groups} row_key={(row) => row.key} sorting={view.sorting} on_sort={view.set_sorting} />
+        <DataTable
+          caption="Foods"
+          columns={columns}
+          rows={view.rows}
+          groups={view.groups}
+          row_key={(row) => row.key}
+          sorting={view.sorting}
+          on_sort={view.set_sorting}
+          hidden_columns={hidden}
+          on_hidden_columns_change={set_hidden}
+          wrap_class="fit"
+        />
       )}
     </div>
   );

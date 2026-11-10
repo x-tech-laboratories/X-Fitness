@@ -91,6 +91,7 @@ export function GroceryTab({ data, settings }: { data: DietData; settings: Recor
   const foods = useMemo(() => by_id(data.foods), [data.foods]);
   const done_count = data.grocery.filter((item) => item.done).length;
 
+  // Every column but the food's name has a fixed width that holds its field, so the fitted table keeps Remove in view.
   const columns = useMemo((): TableColumn<ListRow<GroceryItem>>[] => {
     const name_of = (item: GroceryItem) => foods[item.food_id]?.name ?? "(deleted food)";
     return [
@@ -101,16 +102,16 @@ export function GroceryTab({ data, settings }: { data: DietData; settings: Recor
         cell: ({ item }) => <input type="checkbox" aria-label={`Bought ${name_of(item)}`} checked={item.done} onChange={(event) => update(item.id, { done: event.currentTarget.checked })} />,
       },
       { label: "Food", id: "food", cell: ({ item }) => (item.done ? <s className="muted">{name_of(item)}</s> : name_of(item)) },
-      { label: "Brand", id: "brand", width: 150, cell: ({ item }) => <LineCombo key={item.brand} label={`Brand of ${name_of(item)}`} value={item.brand} suggestions={data.brands} on_save={(brand) => update(item.id, { brand })} /> },
-      { label: "Amount", id: "amount", width: 150, cell: ({ item }) => <NumberField label={`Amount of ${name_of(item)}`} bare min={0.01} value={item.amount} on_change={(amount) => amount && update(item.id, { amount })} /> },
-      { label: "Unit", id: "unit", width: 110, cell: ({ item }) => <LineCombo key={item.unit} label={`Unit of ${name_of(item)}`} value={item.unit} suggestions={units_for(foods[item.food_id], data.units)} on_save={(unit) => update(item.id, { unit })} /> },
-      { label: "Comment", id: "comment", cell: ({ item }) => <CommitInput type="text" aria-label={`Comment on ${name_of(item)}`} placeholder="Comment" value={item.comment} on_commit={(event) => event.currentTarget.value !== item.comment && update(item.id, { comment: event.currentTarget.value })} /> },
+      { label: "Brand", id: "brand", width: 140, cell: ({ item }) => <LineCombo key={item.brand} label={`Brand of ${name_of(item)}`} value={item.brand} suggestions={data.brands} on_save={(brand) => update(item.id, { brand })} /> },
+      { label: "Amount", id: "amount", width: 180, cell: ({ item }) => <NumberField label={`Amount of ${name_of(item)}`} bare min={0.01} value={item.amount} on_change={(amount) => amount && update(item.id, { amount })} /> },
+      { label: "Unit", id: "unit", width: 100, cell: ({ item }) => <LineCombo key={item.unit} label={`Unit of ${name_of(item)}`} value={item.unit} suggestions={units_for(foods[item.food_id], data.units)} on_save={(unit) => update(item.id, { unit })} /> },
+      { label: "Comment", id: "comment", width: 220, cell: ({ item }) => <CommitInput type="text" aria-label={`Comment on ${name_of(item)}`} placeholder="Comment" value={item.comment} on_commit={(event) => event.currentTarget.value !== item.comment && update(item.id, { comment: event.currentTarget.value })} /> },
       {
         label: "Actions",
         id: "actions",
         header: <span className="visually-hidden">Actions</span>,
         class: "actions-cell",
-        width: 110,
+        width: 100,
         cell: ({ item }) => (
           <div className="row-actions">
             <button type="button" className="danger" aria-label={`Remove ${name_of(item)}`} onClick={() => void attempt(() => calls().remove_grocery_item(item.id))}>Remove</button>
@@ -133,7 +134,7 @@ export function GroceryTab({ data, settings }: { data: DietData; settings: Recor
         <GroupToggle checked={grouped} on_change={set_grouped} />
         <button type="button" disabled={done_count === 0} onClick={() => void attempt(() => calls().clear_bought_groceries())}>Clear checked ({done_count})</button>
       </Toolbar>
-      {data.grocery.length === 0 ? <p className="muted">Nothing on the list.</p> : <DataTable caption="Grocery list" columns={columns} rows={rows} groups={groups} row_key={(row) => row.key} />}
+      {data.grocery.length === 0 ? <p className="muted">Nothing on the list.</p> : <DataTable caption="Grocery list" columns={columns} rows={rows} groups={groups} row_key={(row) => row.key} wrap_class="fit" />}
     </div>
   );
 }

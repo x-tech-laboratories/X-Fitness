@@ -207,6 +207,29 @@ describe("diet grocery, categories and units", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Delete g" }));
     expect(await screen.findByText(/"g" is still used by 1 food\(s\)/)).toBeTruthy();
   });
+
+  it("fits the food and grocery tables to the page with each row's actions in their own fixed column", async () => {
+    const { methods } = start();
+    const id = methods.save_food({ ...oats, comment: "https://fdc.nal.usda.gov/fdc-app.html#/food-details/2345678/nutrients" });
+    methods.add_grocery_item({ food_id: id, amount: 1 });
+
+    show(["foods"]);
+    const row = (await screen.findByRole("cell", { name: "Oats" })).closest("tr")!;
+    expect(within(row).getByRole("button", { name: "Edit Oats (Quaker)" })).toBeTruthy();
+    expect(within(row).getByRole("button", { name: "Delete Oats (Quaker)" })).toBeTruthy();
+    expect(screen.queryByRole("columnheader", { name: "Comment" })).toBeNull();
+    const foods = screen.getByRole("table");
+    expect(foods.parentElement!.classList.contains("fit")).toBe(true);
+    expect(within(foods).getAllByRole("columnheader").at(-1)!.style.width).toBe("150px");
+
+    cleanup();
+    show(["grocery"]);
+    const line = (await screen.findByRole("checkbox", { name: "Bought Oats" })).closest("tr")!;
+    expect(within(line).getByRole("button", { name: "Remove Oats" })).toBeTruthy();
+    const grocery = screen.getByRole("table");
+    expect(grocery.parentElement!.classList.contains("fit")).toBe(true);
+    expect(within(grocery).getAllByRole("columnheader").at(-1)!.style.width).toBe("100px");
+  });
 });
 
 describe("diet settings", () => {
