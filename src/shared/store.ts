@@ -23,10 +23,16 @@ export const setting_defaults = Object.assign({}, ...features.map((feature) => f
 
 // ── Opening ──────────────────────────────────────────────────────────────────
 
+// Whether the versions table still names its key column feature, as databases made before X-Libs kept the versions do.
+function has_old_versions(database: SqlDatabase): boolean {
+  return database.prepare("SELECT 1 FROM pragma_table_info('schema_versions') WHERE name = 'feature'").get() !== undefined;
+}
+
 // Whether opening would change the schema of a database that already holds data, so it can be backed up first.
 export function needs_upgrade(database: SqlDatabase): boolean {
   const has_versions = database.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'schema_versions'").get() !== undefined;
   if (!has_versions) return false;
+  if (has_old_versions(database)) return true;
   const version_of = database.prepare("SELECT version FROM schema_versions WHERE owner = ?");
   return features.some((feature) => ((version_of.get(feature.id) as { version: number } | undefined)?.version ?? 0) < feature.migrations.length);
 }
@@ -34,6 +40,7 @@ export function needs_upgrade(database: SqlDatabase): boolean {
 // Brings an open connection up to date and sets sync to stamp every change; run once each time the database opens.
 export function open_store(database: SqlDatabase): void {
   database.exec("PRAGMA foreign_keys = ON");
+  if (has_old_versions(database)) database.exec("ALTER TABLE schema_versions RENAME COLUMN feature TO owner");
   // Each feature keeps its own schema version, so features grow apart without renumbering each other's steps.
   for (const feature of features) migrate(database, feature.migrations, { owner: feature.id });
   sync_engine.install(database);

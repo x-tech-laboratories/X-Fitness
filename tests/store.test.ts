@@ -26,6 +26,18 @@ describe("store", () => {
     expect(needs_upgrade(database)).toBe(true);
   });
 
+  it("opens a database whose versions table still names its key column feature, keeping its data", () => {
+    const database = open_database();
+    database.prepare("INSERT INTO settings (key, value) VALUES ('mass_unit', '\"lb\"')").run();
+    database.exec("ALTER TABLE schema_versions RENAME COLUMN owner TO feature");
+
+    expect(needs_upgrade(database)).toBe(true);
+    open_store(database);
+
+    expect(needs_upgrade(database)).toBe(false);
+    expect(database.prepare("SELECT value FROM settings WHERE key = 'mass_unit'").get()).toEqual({ value: '"lb"' });
+  });
+
   it("keeps settings as JSON and gives every one, the ones never set at their defaults", () => {
     const fresh = bind_methods(() => open_database(), () => undefined);
     expect(fresh.get_settings()).toEqual(setting_defaults);
