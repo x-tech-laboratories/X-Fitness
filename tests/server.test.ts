@@ -49,6 +49,8 @@ describe("server", () => {
     await start();
     const snapshot = await app.inject({ method: "GET", url: "/api/sync/snapshot" });
     expect(snapshot.statusCode).toBe(200);
-    expect(snapshot.json()).toMatchObject({ changes: [] });
+    const { generation, changes } = snapshot.json() as { generation: string; changes: { table: string; key: string }[] };
+    expect(generation).not.toBe("");
+    expect(changes).toContainEqual(expect.objectContaining({ table: "body_metrics", key: "weight" }));
   });
 });
