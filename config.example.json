@@ -1,0 +1,4 @@
+{
+  "database": "dev-data/fitness.db",
+  "backups_folder": "dev-data/backups"
+}

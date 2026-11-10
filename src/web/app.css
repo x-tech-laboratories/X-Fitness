@@ -1,0 +1,6 @@
+/* Layout only; every colour, size and widget look comes from Halon's tokens and stylesheet. */
+
+.placeholder {
+  max-width: 48rem;
+  color: var(--text-secondary);
+}

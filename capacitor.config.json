@@ -1,0 +1,13 @@
+{
+  "appId": "com.xtechlaboratories.xfitness",
+  "appName": "X-Fitness",
+  "webDir": "out/android",
+  "android": {
+    "allowMixedContent": true
+  },
+  "plugins": {
+    "CapacitorHttp": {
+      "enabled": true
+    }
+  }
+}

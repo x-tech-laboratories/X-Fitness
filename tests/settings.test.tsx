@@ -1,0 +1,56 @@
+// @vitest-environment jsdom
+import "@x-tech-laboratories/x-libs/web/react/test_stubs";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
+
+import type { Client } from "@x-tech-laboratories/x-libs/electron/bridge";
+
+import type { DeviceMethods } from "../src/shared/bridge.ts";
+import type { FitnessMethods } from "../src/shared/store.ts";
+import { set_page_api } from "../src/web/api.ts";
+import { SettingsView } from "../src/web/settings/SettingsView.tsx";
+
+afterEach(cleanup);
+
+function fake_calls(saved: Record<string, unknown>): Client<FitnessMethods> {
+  return {
+    get_settings: vi.fn(async () => ({ ...saved })),
+    set_setting: vi.fn(async (key: string, value: unknown) => {
+      saved[key] = value;
+    }),
+  } as unknown as Client<FitnessMethods>;
+}
+
+const off = { state: "off", server_url: "", last_synced_at: "", pending_changes: 0, error: "" } as const;
+
+describe("settings", () => {
+  it("shows the units with their defaults and saves a change", async () => {
+    const calls = fake_calls({ length_unit: "in" });
+    set_page_api({ host: "web", calls, device: null, on_change: () => () => undefined });
+    render(<SettingsView />);
+
+    const weight = await screen.findByRole("radiogroup", { name: "Weight" });
+    expect(weight.querySelector("[aria-checked=true]")?.textContent).toBe("kg");
+    expect(screen.getByRole("radiogroup", { name: "Length" }).querySelector("[aria-checked=true]")?.textContent).toBe("in");
+
+    fireEvent.click(screen.getByRole("radio", { name: "lb" }));
+    await waitFor(() => expect(calls.set_setting).toHaveBeenCalledWith("mass_unit", "lb"));
+    expect(screen.queryByText("Sync")).toBeNull();
+  });
+
+  it("offers sync on a device and connects with the choice of copy", async () => {
+    const device = {
+      get_sync_status: vi.fn(async () => off),
+      connect_sync: vi.fn(async () => ({ ...off, state: "idle", server_url: "https://fitness.example.org/" })),
+      disconnect_sync: vi.fn(),
+      sync_now: vi.fn(),
+    } as unknown as Client<DeviceMethods>;
+    set_page_api({ host: "desktop", calls: fake_calls({}), device, on_change: () => () => undefined });
+    render(<SettingsView />);
+
+    fireEvent.change(await screen.findByLabelText("Server address"), { target: { value: "https://fitness.example.org" } });
+    fireEvent.change(screen.getByLabelText("Access token"), { target: { value: "secret" } });
+    fireEvent.click(screen.getByRole("button", { name: "Use the server's data" }));
+    await waitFor(() => expect(device.connect_sync).toHaveBeenCalledWith("https://fitness.example.org", "secret", "download"));
+  });
+});
