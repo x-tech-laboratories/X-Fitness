@@ -35,7 +35,8 @@
     "@x-tech-laboratories/x-libs": "^0.28.0",
     "fastify": "^5.12.8",
     "react": "^19.3.1",
-    "react-dom": "^19.3.1"
+    "react-dom": "^19.3.1",
+    "three": "^0.185.1"
   },
   "devDependencies": {
     "@capacitor/android": "^8.5.3",
@@ -45,6 +46,7 @@
     "@types/node": "^24.19.2",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
+    "@types/three": "^0.185.4",
     "@vitejs/plugin-react": "^6.2.1",
     "drizzle-kit": "1.0.0-rc.5",
     "electron": "^43.0.0",

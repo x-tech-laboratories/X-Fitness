@@ -50,3 +50,10 @@ offline. On first connecting, the user chooses whether the server's copy or the 
 
 Every measure is stored in metric (kg, cm, km, kcal) and shown in the units set under Settings, converted with X-Libs
 `units`.
+
+## The 3D body
+
+`src/shared/body/shape.ts` morphs MakeHuman's CC0 body mesh with its sex, muscle, weight and height targets and its girth
+targets. `fit_shape` halves each slider in turn until the model's height, mass (its volume times a density from body
+fat) and girths, measured round the same vertices as MakeHuman's tape, match the readings. Each metric's `role` says which
+reading it is. The Body page's 3D tab loads the model and three.js only when opened, and fits in a Web Worker.

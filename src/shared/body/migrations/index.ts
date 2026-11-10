@@ -17,5 +17,17 @@ export const migrations: DrizzleMigration[] = [
     "statements": [
       "-- The add-on's starting metrics, with fixed ids so two devices that start fresh hold the same ones.\nINSERT INTO `body_metrics` (`id`, `name`, `kind`, `unit`, `position`) VALUES\n\t('weight', 'Weight', 'weight', '', 0),\n\t('bodyfat', 'Body Fat', 'percent', '', 1),\n\t('waist', 'Waist', 'length', '', 2),\n\t('chest', 'Chest', 'length', '', 3),\n\t('hips', 'Hips', 'length', '', 4),\n\t('arm', 'Arm', 'length', '', 5),\n\t('thigh', 'Thigh', 'length', '', 6),\n\t('neck', 'Neck', 'length', '', 7),\n\t('restinghr', 'Resting Heart Rate', 'custom', 'bpm', 8);"
     ]
+  },
+  {
+    "name": "20261110220848_metric_role",
+    "statements": [
+      "ALTER TABLE `body_metrics` ADD `role` text DEFAULT '' NOT NULL;"
+    ]
+  },
+  {
+    "name": "20261110220849_seed_metric_roles",
+    "statements": [
+      "-- The starting metrics shape the 3D body as their names say.\nUPDATE `body_metrics` SET `role` = CASE `id`\n\tWHEN 'bodyfat' THEN 'body_fat'\n\tWHEN 'waist' THEN 'waist'\n\tWHEN 'chest' THEN 'chest'\n\tWHEN 'hips' THEN 'hips'\n\tWHEN 'arm' THEN 'upper_arm'\n\tWHEN 'thigh' THEN 'thigh'\n\tWHEN 'neck' THEN 'neck'\nEND\nWHERE `role` = '' AND `id` IN ('bodyfat', 'waist', 'chest', 'hips', 'arm', 'thigh', 'neck');"
+    ]
   }
 ];

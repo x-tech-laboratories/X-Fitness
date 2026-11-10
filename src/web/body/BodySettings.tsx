@@ -1,9 +1,9 @@
-// The Body settings: the height BMI is worked out from, and moving the whole log in and out as JSON.
+// The Body settings: the height BMI is worked out from, the sex the 3D body is built on, and moving the whole log in and out as JSON.
 
 // ── Imports ──────────────────────────────────────────────────────────────────
 
 import { useRef, useState } from "react";
-import { NumberField } from "@x-tech-laboratories/x-libs/web/react/controls";
+import { NumberField, Select } from "@x-tech-laboratories/x-libs/web/react/controls";
 import { SettingRow } from "@x-tech-laboratories/x-libs/web/react/layout";
 import { toast } from "@x-tech-laboratories/x-libs/web/react/toasts";
 
@@ -29,6 +29,18 @@ export function HeightSetting({ height, units, set_setting }: { height: number; 
           if (value !== shown) void set_setting("body.height", value ? to_stored_value(height_measure, value, units) : 0);
         }}
       />
+    </SettingRow>
+  );
+}
+
+// ── Sex ──────────────────────────────────────────────────────────────────────
+
+const sex_options: [string, string][] = [["", "Not set"], ["female", "Female"], ["male", "Male"]];
+
+export function SexSetting({ sex, set_setting }: { sex: string; set_setting: (key: string, value: unknown) => Promise<void> }) {
+  return (
+    <SettingRow label="Sex" hint="The body the 3D tab starts from; not set mixes the two.">
+      <Select bare label="Sex" options={sex_options} value={sex} on_change={(value) => void set_setting("body.sex", value)} />
     </SettingRow>
   );
 }

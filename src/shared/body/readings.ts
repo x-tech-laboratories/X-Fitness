@@ -5,6 +5,8 @@
 
 import { add_days, format_local, parse_local } from "@x-tech-laboratories/x-libs/dates";
 
+import { role_of, type ShapeRole } from "./shape.ts";
+
 // ── Metrics ──────────────────────────────────────────────────────────────────
 
 // What a metric is measured in: weights in kg and lengths in cm, shown in the units from settings; percent and a custom
@@ -28,6 +30,7 @@ export interface BodyMetric {
   goal: number;
   comment: string;
   position: number;
+  role: ShapeRole;
 }
 
 export type MetricInput = Partial<Omit<BodyMetric, "position">>;
@@ -45,7 +48,7 @@ export function trimmed_text(raw: unknown): string {
   return typeof raw === "string" ? raw.trim() : "";
 }
 
-// A metric as saved: a name, a known kind, and a goal that is a positive number or 0.
+// A metric as saved: a name, a known kind and role, and a goal that is a positive number or 0.
 export function normalize_metric(input: MetricInput): Omit<BodyMetric, "id" | "position"> {
   const kind = kind_of(input.kind);
   return {
@@ -54,6 +57,7 @@ export function normalize_metric(input: MetricInput): Omit<BodyMetric, "id" | "p
     unit: kind === "custom" ? trimmed_text(input.unit) : "",
     goal: positive_number(input.goal),
     comment: trimmed_text(input.comment),
+    role: role_of(input.role),
   };
 }
 

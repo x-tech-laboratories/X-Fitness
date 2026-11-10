@@ -6,7 +6,8 @@ whenever it can be reached.
 
 - **Workouts:** exercises, routines, logged sessions with their sets, rest timer, and progress per exercise.
 - **Diet:** foods and meals, what was eaten each day, and the day's calories and nutrients against targets.
-- **Body:** weight, body fat, girths and any measure of your own, with goals and trends.
+- **Body:** weight, body fat, girths and any measure of your own, with goals and trends, and a 3D body shaped to
+  your readings and to your goals.
 
 ## Running it
 
@@ -91,3 +92,7 @@ nix/         package.nix, desktop-package.nix, module.nix
 ## License
 
 GPL-3.0-or-later.
+
+The 3D body (`src/web/body/body_model.bin`) is built from the [MakeHuman](https://github.com/makehumancommunity/makehuman)
+body mesh and targets, released under CC0 1.0. `node scripts/build_body_model.ts <makehuman/data>` rebuilds it from a
+MakeHuman 1.x checkout.

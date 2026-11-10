@@ -5,6 +5,7 @@
 import type { MethodSpec } from "@x-tech-laboratories/x-libs/api_spec";
 
 import { day, id_of, json_file, number, step, text } from "../api_schemas.ts";
+import { shape_roles } from "./shape.ts";
 
 // ── Calls ────────────────────────────────────────────────────────────────────
 
@@ -29,6 +30,11 @@ export const body_api = {
             unit: text("The unit's label for a custom metric, such as bpm."),
             goal: number("The goal in the stored unit; 0 for none."),
             comment: text("A note on the metric."),
+            role: {
+              type: "string",
+              enum: shape_roles.map((role) => role.key),
+              description: "What the metric shapes in the 3D body: body_fat for a percent metric, or a girth for a length metric; empty for nothing.",
+            },
           },
           required: ["name"],
         },
@@ -53,6 +59,11 @@ export const body_api = {
   get_body_report: {
     description: "One metric's readings over a range, with a moving average, statistics, how far is left to the goal, and BMI for the weight metric.",
     params: [{ name: "metric_id", schema: id_of("metric") }, { name: "days", schema: days_back }, { name: "today", schema: day }],
+  },
+  get_body_shape: {
+    description:
+      "What the 3D body is drawn from on a day: the sex and height from Settings, the latest weight, body fat and girths by role on or before the day in kg, percent and cm, the same at the goals, and every day with such a reading.",
+    params: [{ name: "date", schema: day }],
   },
   list_body_history: {
     description: "Every day with a reading or note in a range, newest first, its values by metric id.",

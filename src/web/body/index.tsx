@@ -2,13 +2,14 @@
 
 // ── Imports ──────────────────────────────────────────────────────────────────
 
+import { lazy, Suspense } from "react";
 import type { SettingsSection } from "@x-tech-laboratories/x-libs/web/react/layout";
 import { PageHeading, Tabs } from "@x-tech-laboratories/x-libs/web/react/layout";
 import { Loaded } from "@x-tech-laboratories/x-libs/web/react/states";
 
 import type { FeatureSettingsProps } from "../features.tsx";
 import { use_settings } from "../api.ts";
-import { BodyData, HeightSetting } from "./BodySettings.tsx";
+import { BodyData, HeightSetting, SexSetting } from "./BodySettings.tsx";
 import { shown_units } from "./format.ts";
 import { LogTab } from "./LogTab.tsx";
 import { MetricsTab } from "./MetricsTab.tsx";
@@ -17,11 +18,15 @@ import "./body.css";
 
 // ── View ─────────────────────────────────────────────────────────────────────
 
-type BodyTab = "log" | "reports" | "metrics";
+// The 3D tab brings three.js with it, so it loads only when opened.
+const ShapeTab = lazy(() => import("./ShapeTab.tsx").then((module) => ({ default: module.ShapeTab })));
+
+type BodyTab = "log" | "reports" | "shape" | "metrics";
 
 const tabs: { id: BodyTab; label: string; href: string }[] = [
   { id: "log", label: "Log", href: "#/body/log" },
   { id: "reports", label: "Reports", href: "#/body/reports" },
+  { id: "shape", label: "3D", href: "#/body/shape" },
   { id: "metrics", label: "Metrics", href: "#/body/metrics" },
 ];
 
@@ -39,6 +44,7 @@ export function BodyView({ parts }: { parts: string[] }) {
           {(values) => {
             const units = shown_units(values);
             if (tab === "reports") return <ReportsTab units={units} />;
+            if (tab === "shape") return <Suspense fallback={<p className="muted">Loading…</p>}><ShapeTab units={units} /></Suspense>;
             if (tab === "metrics") return <MetricsTab units={units} />;
             return <LogTab units={units} />;
           }}
@@ -57,7 +63,12 @@ export function body_settings({ settings, set_setting }: FeatureSettingsProps): 
       id: "body",
       heading: "Body",
       hint: "Weights and lengths follow the units under General.",
-      content: <HeightSetting height={Number(settings["body.height"]) || 0} units={units} set_setting={set_setting} />,
+      content: (
+        <>
+          <HeightSetting height={Number(settings["body.height"]) || 0} units={units} set_setting={set_setting} />
+          <SexSetting sex={String(settings["body.sex"] ?? "")} set_setting={set_setting} />
+        </>
+      ),
     },
     {
       id: "body-data",

@@ -2,7 +2,7 @@
 
 // ── Imports ──────────────────────────────────────────────────────────────────
 
-import { and, asc, count, desc, eq, gte, lte, max, ne, sql, synced_tables } from "@x-tech-laboratories/x-libs/drizzle";
+import { and, asc, count, desc, eq, gte, inArray, lte, max, ne, sql, synced_tables } from "@x-tech-laboratories/x-libs/drizzle";
 import { in_transaction, type SqlDatabase } from "@x-tech-laboratories/x-libs/sql";
 
 import { define_feature, drizzle_of, new_id } from "../feature.ts";
@@ -26,6 +26,7 @@ import {
 } from "./readings.ts";
 import { body_days, body_metrics, body_readings, body_tables } from "./schema.ts";
 import { body_setting_defaults } from "./settings.ts";
+import { girths, role_of, type BodyMeasures, type Girth } from "./shape.ts";
 
 // ── Shapes ───────────────────────────────────────────────────────────────────
 
@@ -66,6 +67,16 @@ export interface BodyReport {
   bmi: number | null;
 }
 
+export interface BodyShape {
+  date: string;
+  // The latest reading of each metric with a role on or before the day.
+  measures: BodyMeasures;
+  // The goals, falling back to the measures where a metric has none.
+  goal: BodyMeasures;
+  // Every day with a reading that shapes the body, oldest first.
+  days: string[];
+}
+
 export interface HistoryDay {
   date: string;
   values: Record<string, number>;
@@ -82,17 +93,18 @@ const metric_fields = {
   goal: body_metrics.goal,
   comment: body_metrics.comment,
   position: body_metrics.position,
+  role: body_metrics.role,
 };
 
 function list_metrics(database: SqlDatabase): BodyMetric[] {
   const rows = drizzle_of(database).select(metric_fields).from(body_metrics).orderBy(asc(body_metrics.position), asc(body_metrics.name)).all();
-  return rows.map((row) => ({ ...row, kind: kind_of(row.kind) }));
+  return rows.map((row) => ({ ...row, kind: kind_of(row.kind), role: role_of(row.role) }));
 }
 
 function find_metric(database: SqlDatabase, id: string): BodyMetric {
   const row = drizzle_of(database).select(metric_fields).from(body_metrics).where(eq(body_metrics.id, id)).get();
   if (!row) throw new Error(`No metric ${id}`);
-  return { ...row, kind: kind_of(row.kind) };
+  return { ...row, kind: kind_of(row.kind), role: role_of(row.role) };
 }
 
 const point_fields = { date: body_readings.date, value: body_readings.value };
@@ -113,9 +125,13 @@ function latest_on_or_before(database: SqlDatabase, metric_id: string, date: str
   return row ?? null;
 }
 
+function setting_of(database: SqlDatabase, key: keyof typeof body_setting_defaults): unknown {
+  const row = database.prepare("SELECT value FROM settings WHERE key = ?").get(key) as { value: string } | undefined;
+  return row ? JSON.parse(row.value) : body_setting_defaults[key];
+}
+
 function height_of(database: SqlDatabase): number {
-  const row = database.prepare("SELECT value FROM settings WHERE key = 'body.height'").get() as { value: string } | undefined;
-  const height = Number(row ? JSON.parse(row.value) : body_setting_defaults["body.height"]);
+  const height = Number(setting_of(database, "body.height"));
   return Number.isFinite(height) ? height : 0;
 }
 
@@ -140,6 +156,33 @@ function list_history(database: SqlDatabase, from: string): HistoryDay[] {
   return [...history.values()].sort((first, second) => second.date.localeCompare(first.date));
 }
 
+// The readings that shape the 3D body on a day, and the body the goals would give.
+function body_shape(database: SqlDatabase, date: string): BodyShape {
+  const metrics = list_metrics(database);
+  const sex_setting = setting_of(database, "body.sex");
+  const sex = sex_setting === "female" || sex_setting === "male" ? sex_setting : "";
+  const height = height_of(database);
+  const measures: BodyMeasures = { sex, height, mass: 0, body_fat: 0, girths: {} };
+  const goal: BodyMeasures = { sex, height, mass: 0, body_fat: 0, girths: {} };
+  const shaping: string[] = [];
+  const take = (metric: BodyMetric | undefined, put: (into: BodyMeasures, value: number) => void) => {
+    if (!metric) return;
+    shaping.push(metric.id);
+    const latest = latest_on_or_before(database, metric.id, date)?.value ?? 0;
+    put(measures, latest);
+    put(goal, metric.goal > 0 ? metric.goal : latest);
+  };
+  take(weight_metric(metrics), (into, value) => (into.mass = value));
+  take(metrics.find((metric) => metric.role === "body_fat"), (into, value) => (into.body_fat = value));
+  for (const girth of girths) {
+    take(metrics.find((metric) => metric.role === girth && metric.kind === "length"), (into, value) => (into.girths[girth as Girth] = value));
+  }
+  const days = shaping.length
+    ? drizzle_of(database).selectDistinct({ date: body_readings.date }).from(body_readings).where(inArray(body_readings.metric_id, shaping)).orderBy(asc(body_readings.date)).all()
+    : [];
+  return { date, measures, goal, days: days.map((row) => row.date) };
+}
+
 // The position after every metric's.
 export function next_metric_position(database: SqlDatabase): number {
   return drizzle_of(database).select({ next: sql<number>`coalesce(max(${body_metrics.position}) + 1, 0)` }).from(body_metrics).get()!.next;
@@ -150,7 +193,7 @@ export function next_metric_position(database: SqlDatabase): number {
 function save_metric(database: SqlDatabase, input: MetricInput): string {
   const db = drizzle_of(database);
   const metric = normalize_metric(input);
-  const fields = { name: metric.name, kind: metric.kind, unit: metric.unit, goal: metric.goal, comment: metric.comment };
+  const fields = { name: metric.name, kind: metric.kind, unit: metric.unit, goal: metric.goal, comment: metric.comment, role: metric.role };
   const existing = input.id ? db.select({ id: body_metrics.id }).from(body_metrics).where(eq(body_metrics.id, input.id)).get() : undefined;
   if (existing && input.id) {
     db.update(body_metrics).set(fields).where(eq(body_metrics.id, input.id)).run();
@@ -256,12 +299,15 @@ export const body_feature = define_feature({
       return { metric, series, average, stats, to_go: stats && metric.goal > 0 ? metric.goal - stats.latest.value : null, bmi: bmi > 0 ? bmi : null };
     },
 
+    // What the 3D body is drawn from on a day: sex, height, weight, body fat and girths, now and at the goals.
+    get_body_shape: (database: SqlDatabase, date: string): BodyShape => body_shape(database, check_day(date)),
+
     // Every day with anything logged in the range, newest first.
     list_body_history: (database: SqlDatabase, days: number, today: string): HistoryDay[] => list_history(database, range_start(check_day(today), days)),
 
-    // The whole log in the Trilium add-on's database.json shape, its numbers in kg and cm as the units field says.
+    // The whole log in the Trilium add-on's database.json shape, its numbers in kg and cm as the units field says, with each metric's role besides.
     export_body: (database: SqlDatabase): string => {
-      const metrics = list_metrics(database).map(({ id, name, kind, unit, goal, comment }) => ({ id, name, kind, unit, goal, comment }));
+      const metrics = list_metrics(database).map(({ id, name, kind, unit, goal, comment, role }) => ({ id, name, kind, unit, goal, comment, role }));
       const log: Record<string, { values: Record<string, number>; comment: string }> = {};
       for (const day of list_history(database, "").reverse()) log[day.date] = { values: day.values, comment: day.comment };
       return JSON.stringify({ metrics, log, units: { weight: "kg", length: "cm" } }, null, 4);

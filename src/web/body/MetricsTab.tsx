@@ -11,6 +11,7 @@ import { DataTable, type TableColumn } from "@x-tech-laboratories/x-libs/web/rea
 import { toast } from "@x-tech-laboratories/x-libs/web/react/toasts";
 
 import { metric_kinds, type BodyMetric, type MetricKind } from "../../shared/body/readings.ts";
+import { shape_roles, type ShapeRole } from "../../shared/body/shape.ts";
 import type { MetricSummary } from "../../shared/body/store.ts";
 import { calls, use_data } from "../api.ts";
 import { format_value, to_shown_value, to_stored_value, unit_of, type ShownUnits } from "./format.ts";
@@ -24,6 +25,14 @@ interface Draft {
   // In the unit shown.
   goal: number | null;
   comment: string;
+  role: ShapeRole;
+}
+
+// Body fat comes as a percent and girths as lengths, so each kind offers only the roles it can fill.
+function roles_for(kind: MetricKind): [ShapeRole, string][] {
+  return shape_roles
+    .filter((role) => role.key === "" || (kind === "percent" ? role.key === "body_fat" : kind === "length" && role.key !== "body_fat"))
+    .map((role) => [role.key, role.label]);
 }
 
 function MetricDialog({ metric, units, on_close }: { metric: BodyMetric | null; units: ShownUnits; on_close: () => void }) {
@@ -33,16 +42,19 @@ function MetricDialog({ metric, units, on_close }: { metric: BodyMetric | null; 
     unit: metric?.unit ?? "",
     goal: metric && metric.goal > 0 ? to_shown_value(metric, metric.goal, units) : null,
     comment: metric?.comment ?? "",
+    role: metric?.role ?? "",
   }));
   const update = (changes: Partial<Draft>) => set_draft((current) => ({ ...current, ...changes }));
   const unit = unit_of(draft, units);
+  const roles = roles_for(draft.kind);
+  const role = roles.some(([key]) => key === draft.role) ? draft.role : "";
 
   async function save(): Promise<void> {
     // A goal kept as it was is not converted back, so switching units never nudges it.
     const kept = metric && metric.kind === draft.kind && draft.goal === (metric.goal > 0 ? to_shown_value(metric, metric.goal, units) : null);
     const goal = kept ? metric.goal : draft.goal ? to_stored_value(draft, draft.goal, units) : 0;
     try {
-      await calls().save_body_metric({ id: metric?.id, name: draft.name, kind: draft.kind, unit: draft.unit, goal, comment: draft.comment });
+      await calls().save_body_metric({ id: metric?.id, name: draft.name, kind: draft.kind, unit: draft.unit, goal, comment: draft.comment, role });
       on_close();
     } catch (error) {
       toast(error instanceof Error ? error.message : String(error), { tone: "bad" });
@@ -66,6 +78,9 @@ function MetricDialog({ metric, units, on_close }: { metric: BodyMetric | null; 
       </FormRow>
       <FormRow label="Goal" id="body-metric-goal" hint="Leave empty for none.">
         <NumberField bare label="Goal" value={draft.goal} min={0} step={0.1} unit={unit || undefined} on_change={(goal) => update({ goal: goal || null })} />
+      </FormRow>
+      <FormRow label="Shapes the 3D body as" id="body-metric-role" hidden={roles.length < 2} hint="The 3D tab shapes the body to this metric's latest reading; weight always shapes it.">
+        <Select label="Shapes the 3D body as" bare options={roles} value={role} on_change={(value) => update({ role: value })} />
       </FormRow>
       <FormRow label="Note" id="body-metric-note">
         <textarea id="body-metric-note" rows={2} value={draft.comment} onChange={(event) => update({ comment: event.currentTarget.value })} />
@@ -107,6 +122,7 @@ const columns: TableColumn<MetricRow>[] = [
     },
   },
   { label: "Goal", cell: (row) => (row.goal > 0 ? format_value(row, row.goal, row.units) : "—") },
+  { label: "3D body", cell: (row) => (row.role ? (shape_roles.find((role) => role.key === row.role)?.label ?? "") : "—") },
   { label: "Readings", cell: (row) => row.readings },
   { label: "Last taken", cell: (row) => row.last_date || "—" },
   {

@@ -142,6 +142,32 @@ describe("body metrics rules", () => {
   });
 });
 
+describe("the 3D body's readings", () => {
+  it("gives the starting metrics their roles and keeps a role saved on a metric", () => {
+    const { body } = open_body();
+    expect(Object.fromEntries(body.list_body_metrics().map((metric) => [metric.id, metric.role]))).toMatchObject({ weight: "", bodyfat: "body_fat", arm: "upper_arm", restinghr: "" });
+    const id = body.save_body_metric({ name: "Calf", kind: "length", role: "calf" });
+    body.save_body_metric({ id, name: "Calf", kind: "length", role: "elbow" as never });
+    expect(body.list_body_metrics().at(-1)).toMatchObject({ id, role: "" });
+  });
+
+  it("takes the latest readings on or before the day, the goals, and the days that shape it", () => {
+    const { body } = open_body();
+    body.set_setting("body.height", 180);
+    body.set_setting("body.sex", "male");
+    body.save_body_metric({ id: "waist", name: "Waist", kind: "length", role: "waist", goal: 84 });
+    body.set_body_reading("weight", "2026-11-01", 85);
+    body.set_body_reading("waist", "2026-11-01", 92);
+    body.set_body_reading("waist", "2026-11-05", 90);
+    body.set_body_reading("restinghr", "2026-11-03", 60);
+
+    const shape = body.get_body_shape("2026-11-04");
+    expect(shape.measures).toEqual({ sex: "male", height: 180, mass: 85, body_fat: 0, girths: { neck: 0, chest: 0, waist: 92, hips: 0, upper_arm: 0, thigh: 0 } });
+    expect(shape.goal).toMatchObject({ mass: 85, girths: { waist: 84 } });
+    expect(shape.days).toEqual(["2026-11-01", "2026-11-05"]);
+  });
+});
+
 describe("importing the Trilium add-on", () => {
   const add_on_file = JSON.stringify({
     metrics: [
@@ -201,6 +227,7 @@ describe("importing the Trilium add-on", () => {
     expect(second.list_body_history(0, "2026-11-10")).toEqual([{ date: "2026-11-01", values: { weight: 80.25 }, comment: "note" }]);
     expect(second.list_body_metrics().map((metric) => metric.id)).toContain("neck");
     expect(second.list_body_metrics().at(-1)).toMatchObject({ id: "steps", goal: 10 });
+    expect(second.list_body_metrics().find((metric) => metric.id === "neck")?.role).toBe("neck");
   });
 
   it("refuses what is not a database and leaves the data alone", () => {

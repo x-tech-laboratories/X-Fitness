@@ -9,6 +9,7 @@ import { to_stored, type LengthUnit, type MassUnit } from "@x-tech-laboratories/
 
 import { drizzle_of } from "../feature.ts";
 import { is_day, kind_of, normalize_metric, positive_number, trimmed_text, type MetricKind } from "./readings.ts";
+import type { ShapeRole } from "./shape.ts";
 import { body_days, body_metrics, body_readings } from "./schema.ts";
 
 // ── Shapes ───────────────────────────────────────────────────────────────────
@@ -35,6 +36,7 @@ interface FileMetric {
   unit: string;
   goal: number;
   comment: string;
+  role: ShapeRole;
 }
 
 interface FileDay {
@@ -107,7 +109,7 @@ export function import_trilium_body(database: SqlDatabase, json_text: string, un
       known.set(metric.id, metric.kind);
       const unit = metric.kind === "custom" ? metric.unit : "";
       db.insert(body_metrics)
-        .values({ id: metric.id, name: metric.name, kind: metric.kind, unit, goal: stored(metric.kind, metric.goal), comment: metric.comment, position: next + added_metrics })
+        .values({ id: metric.id, name: metric.name, kind: metric.kind, unit, goal: stored(metric.kind, metric.goal), comment: metric.comment, role: metric.role, position: next + added_metrics })
         .run();
       added_metrics++;
     }
