@@ -19,10 +19,12 @@ export function is_desktop(): boolean {
 export function desktop_api(): PageApi {
   const desktop = window as unknown as DesktopWindow;
   const events = desktop[events_api_name] as EventsClient<FitnessEvents>;
+  const device = desktop[device_api_name] as Client<DeviceMethods>;
   return {
     host: "desktop",
     calls: desktop[fitness_api_name] as Client<FitnessMethods>,
-    device: desktop[device_api_name] as Client<DeviceMethods>,
+    device,
+    backups: device,
     on_change: (listener) => events.on("changed", listener),
   };
 }

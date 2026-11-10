@@ -56,4 +56,25 @@ describe("settings", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Use the server's" }));
     await waitFor(() => expect(device.connect_sync).toHaveBeenCalledWith("https://fitness.example.org", { name: "ada", password: "secret" }, "download"));
   });
+
+  it("shows the server's backups in a browser and takes one by hand", async () => {
+    const taken = { name: "fitness-2026-11-10T09-30-00Z.db", taken_at: "2026-11-10T09:30:00Z", is_automatic: false, size_bytes: 4096 };
+    const backups = {
+      list_backups: vi.fn(async () => [taken]),
+      create_backup: vi.fn(async () => taken),
+      restore_backup: vi.fn(),
+      remove_backup: vi.fn(),
+      get_backup_schedule: vi.fn(async () => ({ automatic: true, to_keep: 14 })),
+      set_backup_schedule: vi.fn(),
+    };
+    set_page_api({ host: "web", calls: fake_calls({}), device: null, backups, on_change: () => () => undefined });
+    render(<><SettingsView /><Dialogs /></>);
+
+    expect((await screen.findAllByText("Server")).length).toBeGreaterThan(0);
+    expect((await screen.findAllByText("Backups")).length).toBeGreaterThan(0);
+    expect(screen.queryByText("Sync")).toBeNull();
+    await waitFor(() => expect(backups.list_backups).toHaveBeenCalled());
+    fireEvent.click(await screen.findByRole("button", { name: "Back up" }));
+    await waitFor(() => expect(backups.create_backup).toHaveBeenCalled());
+  });
 });

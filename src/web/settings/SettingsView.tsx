@@ -1,11 +1,12 @@
-// Settings: the units every section shows, each feature's own settings, and on a device, sync with a server.
+// Settings: the units every section shows, each feature's own settings, sync with a server on a device, and backups.
 
 // ── Imports ──────────────────────────────────────────────────────────────────
 
 import { Segmented, Select } from "@x-tech-laboratories/x-libs/web/react/controls";
-import { PageHeading, SettingRow, SettingsPage, type SettingsSection } from "@x-tech-laboratories/x-libs/web/react/layout";
+import { BackupSettings } from "@x-tech-laboratories/x-libs/web/react/backup_settings";
+import { PageHeading, SettingRow, SettingsPage, type SettingsCategory, type SettingsSection } from "@x-tech-laboratories/x-libs/web/react/layout";
 import { Loaded } from "@x-tech-laboratories/x-libs/web/react/states";
-import { SyncSettings as SharedSyncSettings } from "@x-tech-laboratories/x-libs/web/react/sync_settings";
+import { SyncSettings } from "@x-tech-laboratories/x-libs/web/react/sync_settings";
 
 import { calls, data_watch, page, use_settings } from "../api.ts";
 import { page_features } from "../features.tsx";
@@ -42,19 +43,23 @@ function units_section(settings: Record<string, unknown>, set_setting: (key: str
   };
 }
 
-// ── Sync ─────────────────────────────────────────────────────────────────────
-
-function SyncSettings() {
-  const device = page().device!;
-  return <SharedSyncSettings device={device} subscribe={data_watch.subscribe} data_name="fitness data" placeholder="https://fitness.example.org/" />;
-}
-
 // ── Page ─────────────────────────────────────────────────────────────────────
+
+// Sync on a device with its own database, and backups of whichever database the page works on.
+function data_category(): SettingsCategory[] {
+  const { device, backups } = page();
+  const sections: SettingsSection[] = [
+    ...(device ? [{ id: "sync", heading: "Sync", hint: "Keep this device's data alike with your X-Fitness server.", content: <SyncSettings device={device} subscribe={data_watch.subscribe} data_name="fitness data" placeholder="https://fitness.example.org/" /> }] : []),
+    ...(backups
+      ? [{ id: "backups", heading: "Backups", hint: device ? "Copies of this device's data, kept beside it." : "Copies of the server's data, kept in its data folder.", content: <BackupSettings device={backups} data_name="fitness data" on_restored={() => data_watch.bump()} /> }]
+      : []),
+  ];
+  return sections.length ? [{ heading: device ? "This device" : "Server", sections }] : [];
+}
 
 export function SettingsView() {
   const settings = use_settings();
   const set_setting = (key: string, value: unknown) => calls().set_setting(key, value);
-  const has_device = page().device !== null;
 
   return (
     <>
@@ -67,7 +72,7 @@ export function SettingsView() {
               ...page_features
                 .map((feature) => ({ heading: feature.label, sections: feature.settings({ settings: values, set_setting }) }))
                 .filter((category) => category.sections.length > 0),
-              ...(has_device ? [{ heading: "This device", sections: [{ id: "sync", heading: "Sync", hint: "Keep this device's data alike with your X-Fitness server.", content: <SyncSettings /> }] }] : []),
+              ...data_category(),
             ]}
           />
         )}

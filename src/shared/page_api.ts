@@ -4,6 +4,7 @@
 // ── Imports ──────────────────────────────────────────────────────────────────
 
 import type { Client } from "@x-tech-laboratories/x-libs/electron/bridge";
+import { backup_method_names, type BackupClient, type BackupMethods } from "@x-tech-laboratories/x-libs/backup_protocol";
 import { sync_device_method_names, type SyncDeviceMethods, type SyncStatus } from "@x-tech-laboratories/x-libs/sync_protocol";
 
 import type { FitnessMethods } from "./store.ts";
@@ -16,10 +17,10 @@ export const events_api_name = "x_fitness_events";
 
 // ── Device calls ─────────────────────────────────────────────────────────────
 
-// Sync with a server, which only a device with its own database does; a browser is already on the server.
-export type DeviceMethods = SyncDeviceMethods;
+// Sync with a server and backups of the device's own database; a browser is already on the server.
+export type DeviceMethods = SyncDeviceMethods & BackupMethods;
 
-export const device_method_names = sync_device_method_names;
+export const device_method_names = [...sync_device_method_names, ...backup_method_names] as const;
 
 // What the main process tells the page on its own: the data changed elsewhere, or sync's status moved.
 export type FitnessEvents = { changed: null; sync_status: SyncStatus };
@@ -33,6 +34,9 @@ export interface PageApi {
   calls: Client<FitnessMethods>;
   // Null in a browser, which syncs nothing itself.
   device: Client<DeviceMethods> | null;
+  // The backups of whichever database the page works on: the device's own, or the server's for a browser; left out where
+  // none are offered, and Settings then shows no Backups section.
+  backups?: BackupClient;
   // Runs whenever the data changed somewhere else; returns the function that stops listening.
   on_change: (listener: () => void) => () => void;
 }

@@ -32,7 +32,7 @@ The server reads a JSON file named by `X_FITNESS_CONFIG`; `config.example.json` 
 | Field            | Means                                                     |
 | ---------------- | --------------------------------------------------------- |
 | `database`       | the SQLite file, made if missing                          |
-| `backups_folder` | where a copy goes before a device's data replaces it      |
+| `backups_folder` | where the server's backups are kept                       |
 
 The address and port come from `X_FITNESS_HOST` and `X_FITNESS_PORT` (or `--host` and `--port`), 127.0.0.1:7730 unless
 set. The admins are read from the accounts file `X_FITNESS_PASSWORD_HASH_FILE` names, one `name:hash` line each;
@@ -51,6 +51,20 @@ In the desktop or Android app, open **Settings → This device → Sync**, enter
 password, and choose whether this device starts from the server's data or the server from this device's. The copy that
 loses is backed up first. After that, changes go both ways within seconds, and a device that is offline catches up once
 it is back. The device gets a token of its own, listed on **Your account**, which Stop syncing gives back.
+
+## Backups
+
+Every copy of the data backs itself up: daily by default, keeping the last 14, and always before a restore, before a
+sync takes the other copy, and before an upgrade changes the database. **Settings → Backups** takes one by hand, sets
+the schedule and lists every backup to restore or delete; backups taken by hand are kept until deleted. The schedule
+belongs to that device or server and is never synced.
+
+- **Desktop:** in `backups/` beside the database in the profile folder. A restore backs up the current data first and
+  stops sync, so you choose again which copy wins.
+- **Android:** inside the app's own storage, apart from the database, rather than in a folder you pick; the app has no
+  file-picking permission to ask for.
+- **Server:** in `backups_folder`. Only an admin sees them. The page cannot restore one while the server runs on the
+  same database; stop X-Fitness and copy the backup over the database file.
 
 ## Other programs: the API and MCP
 

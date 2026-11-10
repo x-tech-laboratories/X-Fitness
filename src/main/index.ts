@@ -1,9 +1,9 @@
-// The desktop app: its own database in the profile folder, the page's calls answered on it, and sync with a server when
-// one is set, so it works offline and catches up once the server answers.
+// The desktop app: its own database in the profile folder, the page's calls answered on it, daily backups beside it,
+// and sync with a server when one is set, so it works offline and catches up once the server answers.
 
 // ── Imports ──────────────────────────────────────────────────────────────────
 
-import { chmodSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { hostname } from "node:os";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
@@ -12,10 +12,14 @@ import { app, BrowserWindow, ipcMain, nativeTheme, screen, shell } from "electro
 import { bring_to_front, hold_single_instance } from "@x-tech-laboratories/x-libs/electron/app";
 import type { IpcMainEventLike } from "@x-tech-laboratories/x-libs/electron/bridge";
 import { create_window, is_app_page } from "@x-tech-laboratories/x-libs/electron/window";
-import { create_sync_client, type SyncConfig, type SyncStorage } from "@x-tech-laboratories/x-libs/sync_client";
+import { keep_backing_up, type BackupSchedule } from "@x-tech-laboratories/x-libs/backups";
+import { sqlite_backups } from "@x-tech-laboratories/x-libs/server/sqlite_backups";
+import { create_sync_client, sync_device_methods } from "@x-tech-laboratories/x-libs/sync_client";
+import { file_sync_storage } from "@x-tech-laboratories/x-libs/sync_file_storage";
 
+import { fitness_backup_naming, read_schedule } from "../shared/backups.ts";
 import { device_bridge, fitness_bridge, fitness_events } from "../shared/bridge.ts";
-import { bind_methods, open_store, sync_engine } from "../shared/store.ts";
+import { bind_methods, needs_upgrade, open_store, sync_engine } from "../shared/store.ts";
 
 // ── Profile ──────────────────────────────────────────────────────────────────
 
@@ -27,16 +31,41 @@ const backups_folder = join(profile, "backups");
 
 // ── Database ─────────────────────────────────────────────────────────────────
 
+const database_path = join(profile, "fitness.db");
 mkdirSync(profile, { recursive: true });
-const database = new DatabaseSync(join(profile, "fitness.db"));
+let database = new DatabaseSync(database_path);
 database.exec("PRAGMA journal_mode = WAL");
+
+// ── Backups ──────────────────────────────────────────────────────────────────
+
+const kept = sqlite_backups({
+  folder: () => {
+    mkdirSync(backups_folder, { recursive: true });
+    return backups_folder;
+  },
+  naming: fitness_backup_naming,
+  database: () => database,
+  database_path: () => database_path,
+  close: () => database.close(),
+  open: () => {
+    database = new DatabaseSync(database_path);
+    database.exec("PRAGMA journal_mode = WAL");
+    open_store(database);
+  },
+  after_restore: (restored) => sync_engine.forget_history(restored),
+});
+
+if (needs_upgrade(database)) await kept.create();
 open_store(database);
 
-function back_up(): void {
-  mkdirSync(backups_folder, { recursive: true });
-  const stamp = new Date().toISOString().replaceAll(":", "-");
-  database.prepare("VACUUM INTO ?").run(join(backups_folder, `fitness-${stamp}.db`));
+// The schedule belongs to this device, so it is kept beside the database rather than in the synced settings.
+const schedule_file = join(profile, "backup-schedule.json");
+
+function read_backup_schedule(): BackupSchedule {
+  return read_schedule(existsSync(schedule_file) ? JSON.parse(readFileSync(schedule_file, "utf8")) : null);
 }
+
+const backing_up = keep_backing_up(kept, read_backup_schedule);
 
 function announce_change(): void {
   fitness_events.emit(BrowserWindow.getAllWindows(), "changed", null);
@@ -44,23 +73,10 @@ function announce_change(): void {
 
 // ── Sync ─────────────────────────────────────────────────────────────────────
 
-const sync_file = join(profile, "sync.json");
-
-// Only this user can read the file, since it holds the token.
-const sync_storage: SyncStorage = {
-  read_config: () => (existsSync(sync_file) ? (JSON.parse(readFileSync(sync_file, "utf8")) as SyncConfig) : null),
-  write_config: (config) => {
-    writeFileSync(sync_file, JSON.stringify(config, null, 2), { mode: 0o600 });
-    chmodSync(sync_file, 0o600);
-  },
-  remove_config: () => rmSync(sync_file, { force: true }),
-  back_up_before_download: back_up,
-};
-
 const sync = create_sync_client({
   engine: sync_engine,
   database: () => database,
-  storage: sync_storage,
+  storage: file_sync_storage({ file: join(profile, "sync.json"), back_up_before_download: async () => void (await kept.create()) }),
   data_name: "fitness data",
   device_name: `X-Fitness on ${hostname()}`,
   on_remote_change: announce_change,
@@ -107,10 +123,21 @@ if (hold_single_instance(app, show_existing_window)) {
     device_bridge.handle(
       ipcMain,
       {
-        get_sync_status: sync.get_status,
-        connect_sync: sync.connect,
-        disconnect_sync: sync.disconnect,
-        sync_now: sync.sync_now,
+        ...sync_device_methods(sync),
+        list_backups: kept.list,
+        create_backup: () => kept.create(),
+        // The restored data no longer matches the server's, so sync waits until the user picks which copy wins.
+        restore_backup: async (name) => {
+          sync.disconnect();
+          await kept.restore(name);
+          announce_change();
+        },
+        remove_backup: kept.remove,
+        get_backup_schedule: read_backup_schedule,
+        set_backup_schedule: (schedule) => {
+          writeFileSync(schedule_file, JSON.stringify(read_schedule(schedule), null, 2));
+          void backing_up.check();
+        },
       },
       { trusted, envelopes: true },
     );
@@ -120,6 +147,7 @@ if (hold_single_instance(app, show_existing_window)) {
 
   app.on("window-all-closed", () => {
     sync.stop();
+    backing_up.stop();
     database.close();
     app.quit();
   });

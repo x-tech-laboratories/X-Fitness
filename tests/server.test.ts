@@ -32,10 +32,20 @@ async function mcp(method: string, params: unknown = {}): Promise<Record<string,
   return (JSON.parse(data) as { result: Record<string, unknown> }).result;
 }
 
+const taken = { name: "fitness-2026-11-10T09-30-00Z.db", taken_at: "2026-11-10T09:30:00Z", is_automatic: false, size_bytes: 4096 };
+const fake_backups = {
+  list_backups: vi.fn(async () => [taken]),
+  create_backup: vi.fn(async () => taken),
+  restore_backup: vi.fn(async () => undefined),
+  remove_backup: vi.fn(async () => undefined),
+  get_backup_schedule: vi.fn(() => ({ automatic: true, to_keep: 14 })),
+  set_backup_schedule: vi.fn(),
+};
+
 async function start(web_folder = "/nonexistent"): Promise<FastifyInstance> {
   const database = new DatabaseSync(":memory:");
   open_store(database);
-  app = await build_app({ database, declared: new Map([["root", hash_password(password)]]), web_folder, back_up: vi.fn() });
+  app = await build_app({ database, declared: new Map([["root", hash_password(password)]]), web_folder, backups: fake_backups });
   token = (await app.inject({ method: "POST", url: "/api/login", payload: { name: "root", password, device: "tests" } })).json().token;
   return app;
 }
@@ -127,5 +137,16 @@ describe("server", () => {
     const { generation, changes } = snapshot.json() as { generation: string; changes: { table: string; key: string }[] };
     expect(generation).not.toBe("");
     expect(changes).toContainEqual(expect.objectContaining({ table: "body_metrics", key: "weight" }));
+  });
+
+  it("lets an admin list and take the server's backups, and refuses unknown backup calls", async () => {
+    await start();
+
+    expect((await app.inject({ method: "POST", url: "/api/backup/list_backups", payload: [] })).statusCode).toBe(401);
+    const listed = await signed({ method: "POST", url: "/api/backup/list_backups", payload: [] });
+    expect(listed.json()).toEqual([taken]);
+    expect((await signed({ method: "POST", url: "/api/backup/create_backup", payload: [] })).json()).toEqual(taken);
+    expect(fake_backups.create_backup).toHaveBeenCalled();
+    expect((await signed({ method: "POST", url: "/api/backup/drop_everything", payload: [] })).statusCode).toBe(404);
   });
 });

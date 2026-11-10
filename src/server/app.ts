@@ -12,6 +12,7 @@ import { register_error_replies, register_lenient_json_body, send_text } from "@
 import { register_accounts } from "@x-tech-laboratories/x-libs/server/account_sign_in";
 import { AccountStore } from "@x-tech-laboratories/x-libs/server/account_store";
 import type { Accounts } from "@x-tech-laboratories/x-libs/server/passwords";
+import { backup_method_names, type BackupMethods } from "@x-tech-laboratories/x-libs/backup_protocol";
 import { register_sync_routes } from "@x-tech-laboratories/x-libs/server/sync_routes";
 import { register_web_folder } from "@x-tech-laboratories/x-libs/server/web_folder";
 import type { SqlDatabase } from "@x-tech-laboratories/x-libs/sql";
@@ -26,8 +27,8 @@ export interface AppOptions {
   // The users from the accounts file, who are admins; others are added on the Users page.
   declared: Accounts;
   web_folder: string;
-  // Saves a copy of the database before a device's data replaces it.
-  back_up: () => void;
+  // The database's backups, which an admin manages from the page; one is taken before a device's data replaces it.
+  backups: BackupMethods;
 }
 
 // ── Other programs ───────────────────────────────────────────────────────────
@@ -58,7 +59,8 @@ export async function build_app(options: AppOptions): Promise<FastifyInstance> {
   register_lenient_json_body(app);
   register_error_replies(app);
   const accounts = new AccountStore({ database: options.database, app_name: "X-Fitness", declared: options.declared, token_prefix: "xf" });
-  await register_accounts(app, { accounts, cookie_name: "x_fitness_session" });
+  // Backups reach the whole database, the accounts included, so only an admin may manage them.
+  await register_accounts(app, { accounts, cookie_name: "x_fitness_session", needed: (_method, path) => (path.startsWith("/api/backup/") ? { role: accounts.top_role } : "any") });
 
   const changes = new EventStream();
   const database = () => options.database;
@@ -103,10 +105,18 @@ export async function build_app(options: AppOptions): Promise<FastifyInstance> {
         },
       });
 
+      // Backup calls arrive as POST /api/backup/<method> with the arguments as a JSON list.
+      api.post<{ Params: { method: string } }>("/backup/:method", async (request, reply) => {
+        const method = request.params.method as keyof BackupMethods;
+        if (!(backup_method_names as readonly string[]).includes(method)) return send_text(reply, 404, `no backup call named ${method}`);
+        const args = Array.isArray(request.body) ? (request.body as unknown[]) : [];
+        const result: unknown = await (options.backups[method] as (...args: unknown[]) => unknown)(...args);
+        return result === undefined ? reply.code(204).send() : reply.header("cache-control", "no-store").send(result);
+      });
       register_sync_routes(api, {
         engine: sync_engine,
         database,
-        back_up: options.back_up,
+        back_up: async () => void (await options.backups.create_backup()),
         on_change: (request) => changes.announce_change(changes.client_id_of(request)),
       });
     },

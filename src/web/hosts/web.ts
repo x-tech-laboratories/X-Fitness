@@ -3,6 +3,7 @@
 
 // ── Imports ──────────────────────────────────────────────────────────────────
 
+import type { BackupClient } from "@x-tech-laboratories/x-libs/backup_protocol";
 import type { Client } from "@x-tech-laboratories/x-libs/electron/bridge";
 import { LoginNeeded } from "@x-tech-laboratories/x-libs/web/states";
 
@@ -13,6 +14,7 @@ import type { FitnessMethods } from "../../shared/store.ts";
 
 // Relative, so a server behind a proxy under a folder keeps it.
 const call_path = "api/call/";
+const backup_path = "api/backup/";
 const events_path = "api/events";
 const client_id_header = "x-client-id";
 
@@ -20,8 +22,8 @@ const client_id_header = "x-client-id";
 let client_id = "";
 
 // A signed-out page shows the sign-in form rather than stale data.
-async function call_server(method: string, args: unknown[]): Promise<unknown> {
-  const response = await fetch(call_path + method, {
+async function call_server(method: string, args: unknown[], path = call_path): Promise<unknown> {
+  const response = await fetch(path + method, {
     method: "POST",
     headers: { "content-type": "application/json", [client_id_header]: client_id },
     body: JSON.stringify(args),
@@ -64,6 +66,13 @@ function server_calls(): Client<FitnessMethods> {
   });
 }
 
+// The server's own backups, which only an admin may take, restore or delete.
+function server_backups(): BackupClient {
+  return new Proxy({} as BackupClient, {
+    get: (_target, name) => (typeof name === "string" ? (...args: unknown[]) => call_server(name, args, backup_path) : undefined),
+  });
+}
+
 export function web_api(): PageApi {
   const listeners = new Set<() => void>();
   follow_changes(() => {
@@ -72,6 +81,7 @@ export function web_api(): PageApi {
   return {
     host: "web",
     calls: server_calls(),
+    backups: server_backups(),
     device: null,
     on_change: (listener) => {
       listeners.add(listener);

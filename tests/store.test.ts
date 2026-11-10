@@ -2,7 +2,7 @@ import { DatabaseSync } from "node:sqlite";
 
 import { describe, expect, it, vi } from "vitest";
 
-import { bind_methods, is_read_only, open_store, setting_defaults } from "../src/shared/store.ts";
+import { bind_methods, is_read_only, needs_upgrade, open_store, setting_defaults } from "../src/shared/store.ts";
 
 function open_database(): DatabaseSync {
   const database = new DatabaseSync(":memory:");
@@ -16,6 +16,14 @@ describe("store", () => {
     open_store(database);
     const versions = database.prepare("SELECT owner, version FROM schema_versions WHERE owner = 'settings'").all().map((row) => ({ ...row }));
     expect(versions).toEqual([{ owner: "settings", version: 1 }]);
+  });
+
+  it("tells a database that is behind on a feature's schema, but not a new or current one, so it is backed up first", () => {
+    expect(needs_upgrade(new DatabaseSync(":memory:"))).toBe(false);
+    const database = open_database();
+    expect(needs_upgrade(database)).toBe(false);
+    database.prepare("UPDATE schema_versions SET version = version - 1 WHERE owner = 'body'").run();
+    expect(needs_upgrade(database)).toBe(true);
   });
 
   it("keeps settings as JSON and gives every one, the ones never set at their defaults", () => {
