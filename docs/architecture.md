@@ -21,7 +21,7 @@ A feature is two folders:
 
 - `src/shared/<feature>/store.ts` exports a `define_feature({ id, migrations, tables, methods, setting_defaults })`.
   - `migrations` run once each, in order, through X-Libs' `migrate` with the feature as owner, tracked in
-    `schema_versions`. A feature on Drizzle (Body so far) keeps its tables in `schema.ts`, and `npm run db:generate` writes
+    `schema_versions`. A feature on Drizzle (Body and Workouts so far) keeps its tables in `schema.ts`, and `npm run db:generate` writes
     each change as a migration under `migrations/` and bundles them into `migrations/index.ts`; a migration that only
     moves data is made with `npx drizzle-kit generate --config src/shared/<feature>/drizzle.config.ts --custom`.
   - `tables` lists the tables that sync, parents first, with the columns that name a row on every device; on Drizzle,
