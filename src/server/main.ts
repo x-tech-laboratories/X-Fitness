@@ -7,6 +7,7 @@ import { dirname, join, resolve } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 
 import { read_server_config } from "@x-tech-laboratories/x-libs/server/config";
+import { load_accounts } from "@x-tech-laboratories/x-libs/server/passwords";
 
 import { open_store } from "../shared/store.ts";
 import { build_app } from "./app.ts";
@@ -23,6 +24,7 @@ const server_config = read_server_config({
   summary: "Serves X-Fitness as a web app and syncs its devices.",
   env_prefix: "X_FITNESS",
   default_port: 7730,
+  secret: false,
   web_folder_default: join(import.meta.dirname, "../../out/web"),
   options: { config: { variable: "X_FITNESS_CONFIG", help: "the JSON config naming the database and the backups folder", placeholder: "<file>", required: true } },
 });
@@ -47,7 +49,7 @@ function back_up(): void {
 
 // ── Server ───────────────────────────────────────────────────────────────────
 
-const app = await build_app({ database, secret: server_config.secret, web_folder: server_config.web_folder, back_up });
+const app = await build_app({ database, declared: load_accounts("X_FITNESS_PASSWORD_HASH_FILE"), web_folder: server_config.web_folder, back_up });
 await app.listen({ host: server_config.host, port: server_config.port });
 console.info(`X-Fitness is serving http://${server_config.host}:${server_config.port}/`);
 

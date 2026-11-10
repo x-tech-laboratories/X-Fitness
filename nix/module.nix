@@ -51,13 +51,12 @@ in
       description = "Open the port in the firewall.";
     };
 
-    tokenFile = mkOption {
-      type = types.nullOr types.str;
-      default = null;
-      example = "/etc/x-fitness/token";
+    passwordHashFile = mkOption {
+      type = types.str;
+      example = "/etc/x-fitness/password-hash";
       description = ''
-        File holding the token browsers sign in with and devices sync with. Without one the server only listens on
-        this machine.
+        The accounts file: one `name:hash` line per admin, from `npm run hash-password`. Admins add other users on the
+        Users page.
       '';
     };
   };
@@ -72,9 +71,7 @@ in
         X_FITNESS_CONFIG = toString config_file;
         X_FITNESS_HOST = cfg.host;
         X_FITNESS_PORT = toString cfg.port;
-      }
-      // lib.optionalAttrs (cfg.tokenFile != null) {
-        X_FITNESS_TOKEN_FILE = "%d/token";
+        X_FITNESS_PASSWORD_HASH_FILE = "%d/password-hash";
       };
 
       serviceConfig = {
@@ -82,7 +79,7 @@ in
         DynamicUser = true;
         StateDirectory = "x-fitness";
         StateDirectoryMode = "0700";
-        LoadCredential = lib.optional (cfg.tokenFile != null) "token:${cfg.tokenFile}";
+        LoadCredential = [ "password-hash:${cfg.passwordHashFile}" ];
         Restart = "on-failure";
         RestartSec = "5s";
 

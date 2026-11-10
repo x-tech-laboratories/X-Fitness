@@ -15,6 +15,7 @@ whenever it can be reached.
 ```sh
 nix-shell                 # Node 24 and an Electron that runs on NixOS
 npm install
+npm run hash-password -- admin password.hash  # an admin in password.hash, which the dev server reads
 npm run dev:server        # the server on http://127.0.0.1:7730, with the data in dev-data/
 npm run dev:web           # the page with live reload, reaching that server
 npm run dev               # the desktop app, with its profile in dev-data/desktop
@@ -34,18 +35,26 @@ The server reads a JSON file named by `X_FITNESS_CONFIG`; `config.example.json` 
 | `backups_folder` | where a copy goes before a device's data replaces it      |
 
 The address and port come from `X_FITNESS_HOST` and `X_FITNESS_PORT` (or `--host` and `--port`), 127.0.0.1:7730 unless
-set. The token browsers sign in with and devices sync with is read from the file `X_FITNESS_TOKEN_FILE` names; without
-one the server only listens on this machine. `x-fitness --help` lists every option.
+set. The admins are read from the accounts file `X_FITNESS_PASSWORD_HASH_FILE` names, one `name:hash` line each;
+`npm run hash-password -- <name> <file>` adds one or changes their password. `x-fitness --help` lists every option.
+
+## Signing in
+
+A browser signs in with a name and password, the X-Libs accounts every X-app shares. Unless "Keep me signed in" is
+ticked, the session ends when the browser closes; ticked, it lasts until it is signed out from **Your account**. There
+each user changes their password, turns on a second factor, sees where they are signed in and makes tokens; an admin
+adds users on **Users**.
 
 ## Sync
 
-In the desktop or Android app, open **Settings → This device → Sync**, enter the server's address and token, and choose
-whether this device starts from the server's data or the server from this device's. The copy that loses is backed up
-first. After that, changes go both ways within seconds, and a device that is offline catches up once it is back.
+In the desktop or Android app, open **Settings → This device → Sync**, enter the server's address, your name and
+password, and choose whether this device starts from the server's data or the server from this device's. The copy that
+loses is backed up first. After that, changes go both ways within seconds, and a device that is offline catches up once
+it is back. The device gets a token of its own, listed on **Your account**, which Stop syncing gives back.
 
 ## Other programs: the API and MCP
 
-Every call the page makes is open to other programs on the server, behind the same token sent as
+Every call the page makes is open to other programs on the server, behind a token made on **Your account** and sent as
 `Authorization: Bearer <token>`:
 
 - **API:** `POST /api/call/<method>` with the arguments as a JSON list in order, or by name as a JSON object.
@@ -69,7 +78,7 @@ inputs.x-fitness.url = "github:x-tech-laboratories/X-Fitness";
 imports = [ x-fitness.nixosModules.default ];
 services.x-fitness = {
   enable = true;
-  tokenFile = "/etc/x-fitness/token";
+  passwordHashFile = "/etc/x-fitness/password-hash";
 };
 ```
 

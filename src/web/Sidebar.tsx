@@ -68,10 +68,12 @@ export function Sidebar({ features, section, page }: SidebarProps) {
   );
 }
 
-export function SidebarFoot({ section }: { section: string }) {
-  return (
-    <a href="#/settings" className={section === "settings" ? "tree-row active" : "tree-row"} aria-current={section === "settings" ? "page" : undefined}>
-      <span className="tree-label">Settings</span>
+// Settings, and Users for an admin signed in on the server.
+export function SidebarFoot({ section, show_users = false }: { section: string; show_users?: boolean }) {
+  const row = (id: string, label: string) => (
+    <a href={`#/${id}`} className={section === id ? "tree-row active" : "tree-row"} aria-current={section === id ? "page" : undefined}>
+      <span className="tree-label">{label}</span>
     </a>
   );
+  return <>{show_users && row("users", "Users")}{row("settings", "Settings")}</>;
 }

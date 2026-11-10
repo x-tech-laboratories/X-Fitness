@@ -9,7 +9,9 @@ import { openapi_document, positional_args } from "@x-tech-laboratories/x-libs/a
 import { EventStream } from "@x-tech-laboratories/x-libs/server/events";
 import { register_mcp_route } from "@x-tech-laboratories/x-libs/server/mcp";
 import { register_error_replies, register_lenient_json_body, send_text } from "@x-tech-laboratories/x-libs/server/replies";
-import { register_token_sign_in } from "@x-tech-laboratories/x-libs/server/sign_in";
+import { register_accounts } from "@x-tech-laboratories/x-libs/server/account_sign_in";
+import { AccountStore } from "@x-tech-laboratories/x-libs/server/account_store";
+import type { Accounts } from "@x-tech-laboratories/x-libs/server/passwords";
 import { register_sync_routes } from "@x-tech-laboratories/x-libs/server/sync_routes";
 import { register_web_folder } from "@x-tech-laboratories/x-libs/server/web_folder";
 import type { SqlDatabase } from "@x-tech-laboratories/x-libs/sql";
@@ -21,8 +23,8 @@ import { bind_methods, fitness_api, is_read_only, sync_engine, type FitnessMetho
 
 export interface AppOptions {
   database: SqlDatabase;
-  // The secret browsers sign in with and devices sync with; empty leaves the server open, which is only allowed on this machine.
-  secret: string;
+  // The users from the accounts file, who are admins; others are added on the Users page.
+  declared: Accounts;
   web_folder: string;
   // Saves a copy of the database before a device's data replaces it.
   back_up: () => void;
@@ -55,7 +57,8 @@ export async function build_app(options: AppOptions): Promise<FastifyInstance> {
   const app = fastify({ forceCloseConnections: true });
   register_lenient_json_body(app);
   register_error_replies(app);
-  await register_token_sign_in(app, { secret: options.secret, title: "X-Fitness" });
+  const accounts = new AccountStore({ database: options.database, app_name: "X-Fitness", declared: options.declared, token_prefix: "xf" });
+  await register_accounts(app, { accounts, cookie_name: "x_fitness_session" });
 
   const changes = new EventStream();
   const database = () => options.database;

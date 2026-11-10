@@ -4,7 +4,7 @@
 // ── Imports ──────────────────────────────────────────────────────────────────
 
 import type { Client } from "@x-tech-laboratories/x-libs/electron/bridge";
-import type { SyncDirection, SyncStatus } from "@x-tech-laboratories/x-libs/sync_protocol";
+import type { SyncCredentials, SyncDirection, SyncStatus } from "@x-tech-laboratories/x-libs/sync_protocol";
 
 import type { FitnessMethods } from "./store.ts";
 
@@ -19,7 +19,8 @@ export const events_api_name = "x_fitness_events";
 // Sync with a server, which only a device with its own database does; a browser is already on the server.
 export interface DeviceMethods {
   get_sync_status: () => SyncStatus;
-  connect_sync: (server_url: string, token: string, direction: SyncDirection) => Promise<SyncStatus>;
+  // Signs this device in with a name and password, or keeps its sign-in when given null.
+  connect_sync: (server_url: string, credentials: SyncCredentials | null, direction: SyncDirection) => Promise<SyncStatus>;
   disconnect_sync: () => SyncStatus;
   sync_now: () => Promise<SyncStatus>;
 }

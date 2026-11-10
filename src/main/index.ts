@@ -4,6 +4,7 @@
 // ── Imports ──────────────────────────────────────────────────────────────────
 
 import { chmodSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { hostname } from "node:os";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 
@@ -61,6 +62,7 @@ const sync = create_sync_client({
   database: () => database,
   storage: sync_storage,
   data_name: "fitness data",
+  device_name: `X-Fitness on ${hostname()}`,
   on_remote_change: announce_change,
   on_status: (status) => fitness_events.emit(BrowserWindow.getAllWindows(), "sync_status", status),
 });

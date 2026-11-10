@@ -45,7 +45,7 @@ export async function android_api(): Promise<PageApi> {
     remove_config: () => localStorage.removeItem(sync_config_key),
     back_up_before_download: () => files.write(before_sync_file, database.export_bytes()),
   };
-  const sync = create_sync_client({ engine: sync_engine, database: () => database.connection, storage, data_name: "fitness data", on_remote_change: announce });
+  const sync = create_sync_client({ engine: sync_engine, database: () => database.connection, storage, data_name: "fitness data", device_name: "X-Fitness on Android", on_remote_change: announce });
 
   // A phone may close the app at any moment once it is in the background, so the database is saved straight away.
   void App.addListener("pause", () => void database.save_now());
