@@ -7,6 +7,7 @@ import { asc, eq, inArray, max, sql, synced_tables, type SQLiteTable } from "@x-
 import { in_transaction, type SqlDatabase } from "@x-tech-laboratories/x-libs/sql";
 
 import { define_feature, drizzle_of, new_id } from "../feature.ts";
+import { workouts_api } from "./api.ts";
 import { read_liftosaur_export, type LiftosaurSummary } from "./liftosaur.ts";
 import { migrations } from "./migrations/index.ts";
 import {
@@ -831,5 +832,6 @@ export const workouts_feature = define_feature({
       return summary;
     },
   },
+  api: workouts_api,
   setting_defaults: workout_setting_defaults,
 });

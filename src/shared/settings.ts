@@ -4,6 +4,7 @@
 
 import type { SqlDatabase } from "@x-tech-laboratories/x-libs/sql";
 
+import { text } from "./api_schemas.ts";
 import { define_feature } from "./feature.ts";
 
 // ── Settings ─────────────────────────────────────────────────────────────────
@@ -33,6 +34,16 @@ export const settings_feature = define_feature({
     },
     set_setting: (database: SqlDatabase, key: string, value: unknown): void => {
       database.prepare("INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT (key) DO UPDATE SET value = excluded.value").run(key, JSON.stringify(value));
+    },
+  },
+  api: {
+    get_settings: {
+      description: "The settings stored, by key, such as mass_unit, workouts.default_rest or diet.target_calories; a key missing here has its default.",
+      params: [],
+    },
+    set_setting: {
+      description: "Sets one setting by key to any JSON value.",
+      params: [{ name: "key", schema: text("The setting's key, such as mass_unit.") }, { name: "value", schema: { description: "The new value." } }],
     },
   },
   setting_defaults: common_setting_defaults,

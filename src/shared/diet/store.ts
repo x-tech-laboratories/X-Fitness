@@ -7,6 +7,7 @@ import { add_days, format_local, parse_local } from "@x-tech-laboratories/x-libs
 import { in_transaction, type SqlDatabase, type SqlValue } from "@x-tech-laboratories/x-libs/sql";
 
 import { define_feature, new_id } from "../feature.ts";
+import { diet_api } from "./api.ts";
 import { search_foods, type LookupReply } from "./lookup.ts";
 import {
   all_categories,
@@ -361,6 +362,7 @@ export const diet_feature = define_feature({
     { name: "diet_grocery", key_columns: ["id"] },
   ],
   setting_defaults: diet_setting_defaults,
+  api: diet_api,
   methods: {
     get_diet,
 

@@ -6,6 +6,7 @@ import { and, asc, count, desc, eq, gte, lte, max, ne, sql, synced_tables } from
 import { in_transaction, type SqlDatabase } from "@x-tech-laboratories/x-libs/sql";
 
 import { define_feature, drizzle_of, new_id } from "../feature.ts";
+import { body_api } from "./api.ts";
 import { import_trilium_body } from "./importer.ts";
 import { migrations } from "./migrations/index.ts";
 import {
@@ -268,5 +269,6 @@ export const body_feature = define_feature({
 
     import_trilium_body,
   },
+  api: body_api,
   setting_defaults: body_setting_defaults,
 });

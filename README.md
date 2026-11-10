@@ -41,6 +41,24 @@ In the desktop or Android app, open **Settings → This device → Sync**, enter
 whether this device starts from the server's data or the server from this device's. The copy that loses is backed up
 first. After that, changes go both ways within seconds, and a device that is offline catches up once it is back.
 
+## Other programs: the API and MCP
+
+Every call the page makes is open to other programs on the server, behind the same token sent as
+`Authorization: Bearer <token>`:
+
+- **API:** `POST /api/call/<method>` with the arguments as a JSON list in order, or by name as a JSON object.
+  `GET /api/openapi.json` describes every call.
+- **MCP:** `/api/mcp` serves every call as a tool over streamable HTTP, the calls that only read marked read-only. To
+  add it to Claude Code:
+
+  ```sh
+  claude mcp add --transport http x-fitness https://<server>/api/mcp --header "Authorization: Bearer <token>"
+  ```
+
+Both work in stored units (kg, cm, km, seconds, kcal) and local days such as `2026-11-10`. A change made through
+either reaches every open page and device as if made there. Keys for other services, such as the USDA key, are left out
+of what MCP reads.
+
 ## NixOS
 
 ```nix

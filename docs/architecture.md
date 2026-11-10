@@ -29,6 +29,10 @@ A feature is two folders:
     ids every device can make alone, such as `new_id()`; never an autoincrement key.
   - `methods` take the database first, then the page's arguments, and run synchronously or return a promise. A method
     that only reads is named `list_`, `get_`, `search_`, `lookup_` or `export_`.
+  - `api` describes every method for other programs, in `src/shared/<feature>/api.ts`: what it does and a JSON Schema
+    per argument, in order. A method without one fails to compile. The server serves them as MCP tools at `/api/mcp`,
+    as `/api/openapi.json`, and lets `/api/call/<method>` take the arguments by name (X-Libs `api_spec` and
+    `server/mcp`).
   - Settings keys are namespaced, such as `workouts.default_rest`, with their defaults in `setting_defaults`.
 - `src/web/<feature>/index.tsx` exports its view, which gets the route's parts after `#/<feature>`, and a function
   giving its sections for the Settings page.

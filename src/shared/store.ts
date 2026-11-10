@@ -3,6 +3,7 @@
 
 // ── Imports ──────────────────────────────────────────────────────────────────
 
+import type { ApiSpec } from "@x-tech-laboratories/x-libs/api_spec";
 import { migrate, type SqlDatabase } from "@x-tech-laboratories/x-libs/sql";
 import { create_sync_engine } from "@x-tech-laboratories/x-libs/sync_engine";
 
@@ -51,6 +52,9 @@ export type FitnessMethods = Bound<typeof all_methods>;
 export const method_names = Object.keys(all_methods) as (keyof FitnessMethods & string)[];
 
 export { is_read_only };
+
+// What every call does and takes, for programs other than the page.
+export const fitness_api = Object.assign({}, ...features.map((feature) => feature.api)) as ApiSpec<FitnessMethods>;
 
 // The calls run on the database given, telling on_change after each write so the other pages and devices hear of it.
 export function bind_methods(database: () => SqlDatabase, on_change: () => void): FitnessMethods {
