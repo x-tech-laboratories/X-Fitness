@@ -1,0 +1,65 @@
+/* The Diet section's layout only; every colour and widget look comes from Halon. */
+
+/* Controls side by side, wrapping onto new lines at phone width. */
+.diet-inline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.diet-grow {
+  flex: 1;
+  min-width: 8rem;
+}
+
+.diet-log {
+  align-items: center;
+}
+
+.diet-log > select {
+  max-width: 100%;
+  min-width: 0;
+}
+
+/* A category heading or row indented by its depth in the tree. */
+.diet-group {
+  padding-inline-start: calc(var(--space-5) * var(--depth, 0));
+}
+
+.diet-nutrient-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr));
+  gap: var(--space-4);
+}
+
+.diet-result {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
+.diet-results {
+  max-height: 16rem;
+  overflow-y: auto;
+}
+
+.diet-portion .suggest-wrap {
+  width: 8rem;
+}
+
+/* Inside a form row, controls side by side keep their own width instead of each filling the row. */
+.form-row .diet-inline .number-field-inputs > input:not([type="checkbox"]) {
+  width: 6em;
+}
+
+.form-row .diet-inline select {
+  width: auto;
+}
+
+.form-row .diet-inline .suggest-wrap {
+  flex: 1 1 8rem;
+  max-width: 14rem;
+}

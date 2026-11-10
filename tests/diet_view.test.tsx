@@ -1,0 +1,232 @@
+// @vitest-environment jsdom
+import "@x-tech-laboratories/x-libs/web/react/test_stubs";
+import { DatabaseSync } from "node:sqlite";
+
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
+
+import type { Client } from "@x-tech-laboratories/x-libs/electron/bridge";
+import { Dialogs } from "@x-tech-laboratories/x-libs/web/react/dialog";
+import { Toasts } from "@x-tech-laboratories/x-libs/web/react/toasts";
+
+import { bind_methods, open_store, type FitnessMethods } from "../src/shared/store.ts";
+import { set_page_api } from "../src/web/api.ts";
+import { today } from "../src/web/diet/DiaryTab.tsx";
+import { DietView } from "../src/web/diet/index.tsx";
+import { SettingsView } from "../src/web/settings/SettingsView.tsx";
+
+afterEach(() => {
+  cleanup();
+  sessionStorage.clear();
+  localStorage.clear();
+  vi.unstubAllGlobals();
+});
+
+// The page's calls answered by a real store on a throwaway database, as the phone's page does.
+function start(settings: Record<string, unknown> = {}) {
+  const database = new DatabaseSync(":memory:");
+  open_store(database);
+  const methods = bind_methods(() => database, () => undefined);
+  for (const [key, value] of Object.entries(settings)) methods.set_setting(key, value);
+  const calls = Object.fromEntries(
+    Object.entries(methods).map(([name, call]) => [name, vi.fn(async (...args: unknown[]) => (call as (...args: unknown[]) => unknown)(...args))]),
+  ) as unknown as Client<FitnessMethods>;
+  set_page_api({ host: "web", calls, device: null, on_change: () => () => undefined });
+  return { methods, calls };
+}
+
+function show(parts: string[]) {
+  return render(
+    <>
+      <DietView parts={parts} />
+      <Dialogs />
+      <Toasts />
+    </>,
+  );
+}
+
+const oats = { name: "Oats", brand: "Quaker", serving_size: 100, serving_unit: "g", comment: "Big bag", nutrients: { calories: 380, protein: 13, carbs: 60, fat: 7 } };
+
+function type_number(field: HTMLElement, value: string): void {
+  fireEvent.change(field, { target: { value } });
+  fireEvent.blur(field);
+}
+
+describe("diet diary", () => {
+  it("shows the day's totals against the targets and logs a food in one of its units", async () => {
+    const { methods, calls } = start({ "diet.target_calories": 300 });
+    const id = methods.save_food(oats);
+    methods.add_diary_entry({ date: today(), kind: "food", ref_id: id, amount: 50, unit: "g" });
+    show(["diary"]);
+
+    expect(await screen.findByText("190 kcal / 300 kcal")).toBeTruthy();
+    expect(screen.getByText("6.5 g / 100 g")).toBeTruthy();
+    expect(screen.getByRole("cell", { name: "Oats (Quaker)" })).toBeTruthy();
+
+    fireEvent.change(screen.getByRole("combobox", { name: "Food" }), { target: { value: id } });
+    type_number(screen.getByRole("textbox", { name: "Amount" }), "25");
+    fireEvent.change(screen.getByRole("combobox", { name: "Unit" }), { target: { value: "g" } });
+    fireEvent.click(screen.getByRole("button", { name: "Log" }));
+
+    expect(await screen.findByText("285 kcal / 300 kcal")).toBeTruthy();
+    expect(calls.add_diary_entry).toHaveBeenCalledWith({ date: today(), kind: "food", ref_id: id, amount: 25, unit: "g" });
+
+    methods.add_diary_entry({ date: today(), kind: "food", ref_id: id, amount: 1 });
+    fireEvent.click(screen.getByRole("button", { name: "Next day" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Today" }));
+    expect(await screen.findByText("665 kcal / 300 kcal · over")).toBeTruthy();
+  });
+
+  it("removes an entry with an Undo that puts it back", async () => {
+    const { methods } = start();
+    const id = methods.save_food(oats);
+    methods.add_diary_entry({ date: today(), kind: "food", ref_id: id, amount: 1 });
+    show([]);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Remove Oats (Quaker)" }));
+    expect(await screen.findByText("Nothing logged for this day.")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Undo" }));
+    expect(await screen.findByRole("cell", { name: "Oats (Quaker)" })).toBeTruthy();
+    expect(methods.get_diary_day(today()).entries).toHaveLength(1);
+  });
+
+  it("shows energy in kJ when Settings asks for it", async () => {
+    const { methods } = start({ energy_unit: "kJ", "diet.target_calories": 0 });
+    const id = methods.save_food(oats);
+    methods.add_diary_entry({ date: today(), kind: "food", ref_id: id, amount: 1 });
+    show(["diary"]);
+    // The day's meter and the entry's row.
+    expect(await screen.findAllByText("1,590 kJ")).toHaveLength(2);
+  });
+});
+
+describe("diet foods and recipes", () => {
+  it("adds a food from an Open Food Facts lookup and lists it", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response(JSON.stringify({ products: [{ code: "301", product_name: "Peanut Butter", brands: "Nutty", nutriments: { "energy-kcal_100g": 600, proteins_100g: 25, sodium_100g: 0.4 } }] }))),
+    );
+    const { methods } = start();
+    show(["foods"]);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Add food" }));
+    expect(screen.getByText("Set a USDA FoodData Central API key in Settings to also search USDA.")).toBeTruthy();
+    const search = screen.getByRole("searchbox", { name: "Search Open Food Facts" });
+    fireEvent.change(search, { target: { value: "peanut butter" } });
+    fireEvent.click(screen.getByRole("button", { name: "Search" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Use Peanut Butter" }));
+
+    expect((screen.getByRole("textbox", { name: "Name" }) as HTMLInputElement).value).toBe("Peanut Butter");
+    expect((screen.getByRole("textbox", { name: "Calories" }) as HTMLInputElement).value).toBe("600");
+    expect((screen.getByRole("textbox", { name: "Sodium" }) as HTMLInputElement).value).toBe("400");
+    fireEvent.change(screen.getByRole("combobox", { name: "Add a category" }), { target: { value: "Spreads" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    expect(await screen.findByRole("cell", { name: "Peanut Butter" })).toBeTruthy();
+    const [food] = methods.get_diet().foods;
+    expect(food).toMatchObject({ name: "Peanut Butter", categories: ["Spreads"], serving_size: 100, serving_unit: "g" });
+    expect(food!.nutrients.sodium).toBeCloseTo(0.4);
+  });
+
+  it("works out a recipe's nutrition per serving from its ingredients as they are added", async () => {
+    const { methods } = start();
+    const id = methods.save_food(oats);
+    show(["recipes"]);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Add recipe" }));
+    fireEvent.change(screen.getByRole("textbox", { name: "Name" }), { target: { value: "Porridge" } });
+    type_number(screen.getByRole("textbox", { name: "Servings" }), "2");
+    fireEvent.change(screen.getByRole("combobox", { name: "Ingredient to add" }), { target: { value: id } });
+    fireEvent.click(screen.getByRole("button", { name: "Add ingredient" }));
+    expect(screen.getByRole("status", { name: "Per serving" }).textContent).toBe("Per serving: 190 kcal, 6.5 g protein, 30 g carbs, 3.5 g fat");
+
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    expect(await screen.findByRole("cell", { name: "Porridge" })).toBeTruthy();
+    expect(screen.getByRole("cell", { name: "190 kcal" })).toBeTruthy();
+    expect(methods.get_diet().recipes[0]).toMatchObject({ name: "Porridge", servings: 2, ingredients: [{ food_id: id, amount: 100, unit: "g" }] });
+  });
+
+  it("filters and groups foods by nested category", async () => {
+    const { methods } = start();
+    methods.save_food({ ...oats, name: "Chicken", brand: "", categories: ["Protein/Meat"] });
+    methods.save_food({ ...oats, name: "Apple", brand: "", categories: [] });
+    show(["foods"]);
+
+    await screen.findByRole("cell", { name: "Apple" });
+    fireEvent.change(screen.getByRole("combobox", { name: "Filter by category" }), { target: { value: "Protein" } });
+    expect(screen.queryByRole("cell", { name: "Apple" })).toBeNull();
+    expect(screen.getByRole("cell", { name: "Chicken" })).toBeTruthy();
+
+    fireEvent.change(screen.getByRole("combobox", { name: "Filter by category" }), { target: { value: "" } });
+    fireEvent.click(screen.getByRole("checkbox", { name: "Group by category" }));
+    const table = screen.getByRole("table");
+    expect(within(table).getByText("Meat")).toBeTruthy();
+    expect(within(table).getByText("(uncategorized)")).toBeTruthy();
+  });
+
+  it("asks before deleting a food", async () => {
+    const { methods } = start();
+    methods.save_food(oats);
+    show(["foods"]);
+    fireEvent.click(await screen.findByRole("button", { name: "Delete Oats (Quaker)" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Delete" }));
+    expect(await screen.findByText("No foods yet.")).toBeTruthy();
+  });
+});
+
+describe("diet grocery, categories and units", () => {
+  it("adds a grocery line with the food's comment when Settings asks, and clears it once bought", async () => {
+    const { methods } = start({ "diet.prefill_grocery_comment": true });
+    const id = methods.save_food(oats);
+    show(["grocery"]);
+
+    fireEvent.change(await screen.findByRole("combobox", { name: "Food" }), { target: { value: id } });
+    expect((screen.getByRole("textbox", { name: "Comment" }) as HTMLInputElement).value).toBe("Big bag");
+    expect((screen.getByRole("combobox", { name: "Brand" }) as HTMLInputElement).value).toBe("Quaker");
+    fireEvent.click(screen.getByRole("button", { name: "Add" }));
+
+    fireEvent.click(await screen.findByRole("checkbox", { name: "Bought Oats" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Clear checked (1)" }));
+    expect(await screen.findByText("Nothing on the list.")).toBeTruthy();
+    expect(methods.get_diet().grocery).toEqual([]);
+  });
+
+  it("renames a category in place and refuses to delete a unit in use", async () => {
+    const { methods } = start();
+    methods.save_food({ ...oats, categories: ["Grains"] });
+    show(["categories"]);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Rename Grains" }));
+    const field = screen.getByRole("textbox", { name: "Rename Grains" });
+    fireEvent.change(field, { target: { value: "Carbs/Grains" } });
+    fireEvent.keyDown(field, { key: "Enter" });
+    await waitFor(() => expect(methods.get_diet().foods[0]!.categories).toEqual(["Carbs/Grains"]));
+
+    cleanup();
+    show(["units"]);
+    fireEvent.click(await screen.findByRole("button", { name: "Delete g" }));
+    expect(await screen.findByText(/"g" is still used by 1 food\(s\)/)).toBeTruthy();
+  });
+});
+
+describe("diet settings", () => {
+  it("saves targets in the stored units and imports the add-on's database from a file", async () => {
+    const { methods } = start();
+    render(
+      <>
+        <SettingsView />
+        <Toasts />
+      </>,
+    );
+
+    const sodium = await screen.findByRole("textbox", { name: "Sodium target" });
+    expect((sodium as HTMLInputElement).value).toBe("2300");
+    type_number(sodium, "1500");
+    await waitFor(() => expect(methods.get_settings()["diet.target_sodium"]).toBeCloseTo(1.5));
+
+    const file = new File([JSON.stringify({ foods: { a1: { name: "Rice", servingSize: 100, servingUnit: "g", nutrients: { calories: 130, sodium: 5 } } } })], "database.json");
+    fireEvent.change(screen.getByLabelText("Diet Manager database file"), { target: { files: [file] } });
+    expect(await screen.findByText("Imported 1 food(s), 0 recipe(s), 0 diary entries and 0 grocery line(s).")).toBeTruthy();
+    expect(methods.get_diet().foods[0]).toMatchObject({ id: "a1", name: "Rice" });
+  });
+});
