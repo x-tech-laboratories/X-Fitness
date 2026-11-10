@@ -2,7 +2,7 @@
 
 // ── Imports ──────────────────────────────────────────────────────────────────
 
-import { Segmented, Select } from "@x-tech-laboratories/x-libs/web/react/controls";
+import { NumberField, Segmented, Select } from "@x-tech-laboratories/x-libs/web/react/controls";
 import { BackupSettings } from "@x-tech-laboratories/x-libs/web/react/backup_settings";
 import { PageHeading, SettingRow, SettingsPage, type SettingsCategory, type SettingsSection } from "@x-tech-laboratories/x-libs/web/react/layout";
 import { Loaded } from "@x-tech-laboratories/x-libs/web/react/states";
@@ -43,6 +43,21 @@ function units_section(settings: Record<string, unknown>, set_setting: (key: str
   };
 }
 
+// ── History ──────────────────────────────────────────────────────────────────
+
+function history_section(settings: Record<string, unknown>, set_setting: (key: string, value: unknown) => Promise<void>): SettingsSection {
+  return {
+    id: "history",
+    heading: "History",
+    hint: "Every change to a workout, program, exercise, food, recipe, diary entry or body reading is kept, to look back on or restore under History.",
+    content: (
+      <SettingRow label="Keep changes for" hint="Older changes are pruned; each item always keeps its latest.">
+        <NumberField label="Keep changes for" bare unit="days" min={1} value={Number(settings["history.keep_days"])} on_change={(days) => void set_setting("history.keep_days", days ?? 180)} />
+      </SettingRow>
+    ),
+  };
+}
+
 // ── Page ─────────────────────────────────────────────────────────────────────
 
 // Sync on a device with its own database, and backups of whichever database the page works on.
@@ -68,7 +83,7 @@ export function SettingsView() {
         {(values) => (
           <SettingsPage
             categories={[
-              { heading: "General", sections: [units_section(values, set_setting)] },
+              { heading: "General", sections: [units_section(values, set_setting), history_section(values, set_setting)] },
               ...page_features
                 .map((feature) => ({ heading: feature.label, sections: feature.settings({ settings: values, set_setting }) }))
                 .filter((category) => category.sections.length > 0),

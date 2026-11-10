@@ -14,6 +14,7 @@ import { metric_kinds, type BodyMetric, type MetricKind } from "../../shared/bod
 import { shape_roles, type ShapeRole } from "../../shared/body/shape.ts";
 import type { MetricSummary } from "../../shared/body/store.ts";
 import { calls, use_data } from "../api.ts";
+import { HistoryButton } from "../history/HistoryView.tsx";
 import { format_value, to_shown_value, to_stored_value, unit_of, type ShownUnits } from "./format.ts";
 
 // ── Form ─────────────────────────────────────────────────────────────────────
@@ -131,6 +132,7 @@ const columns: TableColumn<MetricRow>[] = [
     cell: (row) => (
       <>
         <button type="button" className="icon" aria-label={`Edit ${row.name}`} onClick={() => edit_metric(row, row.units)}>✎</button>
+        <HistoryButton kind="metric" item_id={row.id} name={row.name} />
         <RowActions
           index={row.index}
           count={row.count}

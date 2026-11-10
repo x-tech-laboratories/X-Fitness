@@ -11,6 +11,7 @@ import { DataTable, type TableColumn } from "@x-tech-laboratories/x-libs/web/rea
 
 import type { DayRow } from "../../shared/body/store.ts";
 import { calls, use_data } from "../api.ts";
+import { HistoryButton } from "../history/HistoryView.tsx";
 import { format_change, format_number, format_value, to_shown_value, to_stored_value, unit_of, type ShownUnits } from "./format.ts";
 
 // ── Log ──────────────────────────────────────────────────────────────────────
@@ -70,6 +71,7 @@ export function LogTab({ units }: { units: ShownUnits }) {
     <div className="stack">
       <Toolbar>
         <PeriodStepper label="Day" period="day" value={date} on_change={set_date} />
+        <HistoryButton kind="body_day" item_id={date} name={`Body on ${date}`} />
       </Toolbar>
       <Loaded resource={day}>
         {(loaded) => (

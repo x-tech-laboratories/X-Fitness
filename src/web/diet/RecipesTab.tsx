@@ -14,6 +14,7 @@ import { ComboField } from "@x-tech-laboratories/x-libs/web/react/suggestions";
 import { by_id, food_label, normalize_recipe, nutrients, recipe_nutrients_per_serving, type FoodsById, type Ingredient, type Nutrients, type Recipe } from "../../shared/diet/model.ts";
 import type { DietData } from "../../shared/diet/store.ts";
 import { calls } from "../api.ts";
+import { HistoryButton } from "../history/HistoryView.tsx";
 import { attempt, format_amount, format_nutrient } from "./format.ts";
 import { CategoryEditor, CategoryFilter, FoodUnitSelect, GroupToggle, ItemSelect, use_category_view, with_draft, type ListRow } from "./widgets.tsx";
 
@@ -145,6 +146,7 @@ export function RecipesTab({ data, energy }: { data: DietData; energy: EnergyUni
         cell: (row) => (
           <div className="row-actions">
             <button type="button" aria-label={`Edit ${row.item.name}`} onClick={() => set_editing(row.item)}>Edit</button>
+            <HistoryButton kind="recipe" item_id={row.item.id} name={row.item.name} />
             <button
               type="button"
               className="danger"

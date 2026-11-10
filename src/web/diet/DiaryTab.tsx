@@ -16,6 +16,7 @@ import { toast } from "@x-tech-laboratories/x-libs/web/react/toasts";
 import { by_id, nutrients, serving_unit, target_key, target_progress, type EntryKind, type Nutrients } from "../../shared/diet/model.ts";
 import type { DayEntry, DietData } from "../../shared/diet/store.ts";
 import { calls, use_data } from "../api.ts";
+import { HistoryButton } from "../history/HistoryView.tsx";
 import { attempt, format_amount, format_nutrient, shown_unit, succeeds, to_shown_value } from "./format.ts";
 import { FoodUnitSelect, ItemSelect } from "./widgets.tsx";
 
@@ -138,9 +139,10 @@ export function DiaryTab({ data, settings, energy }: { data: DietData; settings:
         id: "actions",
         header: <span className="visually-hidden">Actions</span>,
         class: "actions-cell",
-        width: 110,
+        width: 200,
         cell: (entry) => (
           <div className="row-actions">
+            <HistoryButton kind="diary" item_id={entry.id} name={entry.label} />
             <button type="button" className="danger" aria-label={`Remove ${entry.label}`} onClick={() => void remove(entry)}>Remove</button>
           </div>
         ),

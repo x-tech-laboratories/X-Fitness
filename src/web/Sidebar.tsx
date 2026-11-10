@@ -1,4 +1,4 @@
-// The sidebar: Overview on top, each feature folding open onto its pages, and Settings at the foot.
+// The sidebar: Overview and History on top, each feature folding open onto its pages, and Settings at the foot.
 
 // ── Imports ──────────────────────────────────────────────────────────────────
 
@@ -50,6 +50,9 @@ export function Sidebar({ features, section, page }: SidebarProps) {
       <div className="sidebar-nav">
         <a href="#/overview" className={section === "overview" ? "tree-row active" : "tree-row"} aria-current={section === "overview" ? "page" : undefined}>
           <span className="tree-label">Overview</span>
+        </a>
+        <a href="#/history" className={section === "history" ? "tree-row active" : "tree-row"} aria-current={section === "history" ? "page" : undefined}>
+          <span className="tree-label">History</span>
         </a>
       </div>
       <Tree

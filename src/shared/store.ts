@@ -9,15 +9,16 @@ import { create_sync_engine } from "@x-tech-laboratories/x-libs/sync_engine";
 
 import { body_feature } from "./body/store.ts";
 import { diet_feature } from "./diet/store.ts";
+import { forget_synced_changes, history_feature, install_history, record_history } from "./history/store.ts";
 import { is_read_only } from "./page_api.ts";
 import { settings_feature } from "./settings.ts";
 import { workouts_feature } from "./workouts/store.ts";
 
 // ── Features ─────────────────────────────────────────────────────────────────
 
-export const features = [settings_feature, workouts_feature, diet_feature, body_feature];
+export const features = [settings_feature, workouts_feature, diet_feature, body_feature, history_feature];
 
-export const sync_engine = create_sync_engine({ tables: features.flatMap((feature) => feature.tables) });
+export const sync_engine = create_sync_engine({ tables: features.flatMap((feature) => feature.tables), after_apply: forget_synced_changes });
 
 export const setting_defaults = Object.assign({}, ...features.map((feature) => feature.setting_defaults ?? {})) as Record<string, unknown>;
 
@@ -43,6 +44,7 @@ export function open_store(database: SqlDatabase): void {
   if (has_old_versions(database)) database.exec("ALTER TABLE schema_versions RENAME COLUMN feature TO owner");
   // Each feature keeps its own schema version, so features grow apart without renumbering each other's steps.
   for (const feature of features) migrate(database, feature.migrations, { owner: feature.id });
+  install_history(database);
   sync_engine.install(database);
 }
 
@@ -52,7 +54,8 @@ const all_methods = {
   ...(Object.assign({}, ...features.map((feature) => feature.methods)) as typeof settings_feature.methods &
     typeof workouts_feature.methods &
     typeof diet_feature.methods &
-    typeof body_feature.methods),
+    typeof body_feature.methods &
+    typeof history_feature.methods),
   // Every setting, the ones never set at their defaults, so a page needs no list of defaults of its own.
   get_settings: (database: SqlDatabase): Record<string, unknown> => ({ ...setting_defaults, ...settings_feature.methods.get_settings(database) }),
 };
@@ -71,15 +74,20 @@ export { is_read_only };
 // What every call does and takes, for programs other than the page.
 export const fitness_api = Object.assign({}, ...features.map((feature) => feature.api)) as ApiSpec<FitnessMethods>;
 
-// The calls run on the database given, telling on_change after each write so the other pages and devices hear of it.
+// The calls run on the database given; after each write the history records what it touched and on_change tells the
+// other pages and devices.
 export function bind_methods(database: () => SqlDatabase, on_change: () => void): FitnessMethods {
   const bound = method_names.map((name) => {
     const method = all_methods[name] as (database: SqlDatabase, ...args: unknown[]) => unknown;
     const call = (...args: unknown[]): unknown => {
       const result = method(database(), ...args);
       if (is_read_only(name)) return result;
-      if (result instanceof Promise) return result.then((value: unknown) => (on_change(), value));
-      on_change();
+      const after_write = () => {
+        record_history(database());
+        on_change();
+      };
+      if (result instanceof Promise) return result.then((value: unknown) => (after_write(), value));
+      after_write();
       return result;
     };
     return [name, call];

@@ -43,6 +43,12 @@ Settings at the foot. The Overview (`src/web/overview/`) draws from the features
 
 `src/shared/store.ts` and `src/web/features.tsx` list the features; nothing else knows them.
 
+## History
+
+`src/shared/history/store.ts` keeps a version of every item a write touches through X-Libs `create_history`, one
+history per kind of item, each snapshot the item's rows across its tables. `bind_methods` records after every write, so
+the page, the API and MCP are all covered; writes that arrive by sync are left to the device that made them.
+
 ## Sync
 
 The server and every device run the same store. X-Libs `sync_engine` stamps every write to a synced table through

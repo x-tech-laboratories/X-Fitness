@@ -66,6 +66,18 @@ belongs to that device or server and is never synced.
 - **Server:** in `backups_folder`. Only an admin sees them. The page cannot restore one while the server runs on the
   same database; stop X-Fitness and copy the backup over the database file.
 
+## History
+
+Every change to a workout (its exercises and sets included), program, exercise, food, recipe, diary entry, body metric
+or day of body readings is kept as a version, whichever device, page, API call or MCP tool made it. **History** in the
+sidebar lists the latest changes, and **History** beside any of those items lists its versions: any version can be
+restored, and a deleted item brought back with what was deleted along with it. Versions sync, so every device sees the
+same history. Changes older than **Settings → General → History** (180 days unless set) are pruned, each item keeping
+its latest.
+
+Categories, units and the grocery list are left out: they are lists to pick from or tick off rather than things made
+and edited, and a deleted category or unit is typed again in a moment.
+
 ## Other programs: the API and MCP
 
 Every call the page makes is open to other programs on the server, behind a token made on **Your account** and sent as

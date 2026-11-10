@@ -11,6 +11,7 @@ import { theme_choice } from "@x-tech-laboratories/x-libs/web/theme";
 
 import { page } from "./api.ts";
 import { page_features } from "./features.tsx";
+import { HistoryView } from "./history/HistoryView.tsx";
 import { OverviewView } from "./overview/OverviewView.tsx";
 import { SettingsView } from "./settings/SettingsView.tsx";
 import { Sidebar, SidebarFoot } from "./Sidebar.tsx";
@@ -49,10 +50,10 @@ function Pages({ me, on_sign_out }: { me: Me | null; on_sign_out?: () => void })
   const route = use_route();
   const [named_section = "overview", ...rest] = route.parts;
   const feature = page_features.find((candidate) => candidate.id === named_section);
-  const is_own = named_section === "settings" || (me !== null && own_sections.includes(named_section));
+  const is_own = named_section === "settings" || named_section === "history" || (me !== null && own_sections.includes(named_section));
   const section = feature || is_own ? named_section : "overview";
   const page = feature?.pages.find((candidate) => candidate.id === rest[0]) ?? feature?.pages[0];
-  const own_labels: Record<string, string> = { settings: "Settings", account: "Your account", users: "Users" };
+  const own_labels: Record<string, string> = { settings: "Settings", history: "History", account: "Your account", users: "Users" };
   const label = feature ? `${page!.label} · ${feature.label}` : own_labels[section] ?? "Overview";
   const view_key = route.parts.join("/");
   const is_admin = me !== null && me.role === me.roles.at(-1);
@@ -65,6 +66,7 @@ function Pages({ me, on_sign_out }: { me: Me | null; on_sign_out?: () => void })
     if (feature) return feature.view(rest);
     if (me && section === "account") return <AccountView client={accounts} />;
     if (me && section === "users") return <UsersView client={accounts} me={me} />;
+    if (section === "history") return <HistoryView />;
     return section === "settings" ? <SettingsView /> : <OverviewView />;
   };
 

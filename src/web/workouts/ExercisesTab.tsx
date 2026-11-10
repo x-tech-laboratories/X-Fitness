@@ -17,6 +17,7 @@ import { category_depth, category_leaf, is_in_category, measurement_of, measurem
 import type { LibraryExercise, WorkoutLibrary } from "../../shared/workouts/store.ts";
 import type { WgerResult } from "../../shared/workouts/wger.ts";
 import { calls } from "../api.ts";
+import { HistoryButton } from "../history/HistoryView.tsx";
 
 // ── Form ─────────────────────────────────────────────────────────────────────
 
@@ -192,6 +193,7 @@ export function ExercisesTab({ library }: { library: WorkoutLibrary }) {
           <button type="button" onClick={() => set_editing(exercise)} aria-label={`Edit ${exercise.name}`}>
             Edit
           </button>
+          <HistoryButton kind="exercise" item_id={exercise.id} name={exercise.name} />
           <button type="button" className="danger" onClick={() => remove(exercise)} aria-label={`Delete ${exercise.name}`}>
             Delete
           </button>

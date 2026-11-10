@@ -14,6 +14,7 @@ import { Badge } from "@x-tech-laboratories/x-libs/web/react/badges";
 import { measurement_of, workout_totals, type Exercise, type WorkoutEntry } from "../../shared/workouts/model.ts";
 import type { LoggedWorkout, ProgressionReport, WorkoutLibrary } from "../../shared/workouts/store.ts";
 import { calls, use_data } from "../api.ts";
+import { HistoryButton } from "../history/HistoryView.tsx";
 import { ExerciseSelect } from "./controls.tsx";
 import { RestTimerBar, use_rest_timer } from "./rest_timer.tsx";
 import { field_labels, field_to_shown, field_to_stored, field_unit, format_number, format_rest, format_weight, type ShownUnits } from "./units.ts";
@@ -153,6 +154,7 @@ function WorkoutCard({ workout, library, units, default_rest, rest_sound }: Work
               Finish
             </button>
           )}
+          <HistoryButton kind="workout" item_id={workout.id} name={workout.name || "Workout"} />
           <button type="button" className="danger" onClick={remove} aria-label={`Delete ${workout.name}`}>
             Delete
           </button>

@@ -16,6 +16,7 @@ import { food_label, food_unit_problems, normalize_food, nutrients, serving_unit
 import type { LookupReply, LookupResult } from "../../shared/diet/lookup.ts";
 import type { DietData } from "../../shared/diet/store.ts";
 import { calls } from "../api.ts";
+import { HistoryButton } from "../history/HistoryView.tsx";
 import { attempt, error_text, format_amount, format_nutrient } from "./format.ts";
 import { CategoryEditor, CategoryFilter, GroupToggle, NutrientFields, serving_label, use_category_view, with_draft, type ListRow } from "./widgets.tsx";
 
@@ -202,6 +203,7 @@ function food_columns(energy: EnergyUnit, on_edit: (food: Food) => void, on_dele
       cell: (row) => (
         <div className="row-actions">
           <button type="button" aria-label={`Edit ${food_label(row.item)}`} onClick={() => on_edit(row.item)}>Edit</button>
+          <HistoryButton kind="food" item_id={row.item.id} name={food_label(row.item)} />
           <button type="button" className="danger" aria-label={`Delete ${food_label(row.item)}`} onClick={() => on_delete(row.item)}>Delete</button>
         </div>
       ),

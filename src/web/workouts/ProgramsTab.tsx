@@ -28,6 +28,7 @@ import {
 } from "../../shared/workouts/model.ts";
 import type { WorkoutLibrary } from "../../shared/workouts/store.ts";
 import { calls } from "../api.ts";
+import { HistoryButton } from "../history/HistoryView.tsx";
 import { ExerciseSelect } from "./controls.tsx";
 import { field_labels, field_to_shown, field_to_stored, field_unit, format_field, format_number, type ShownUnits } from "./units.ts";
 
@@ -291,6 +292,7 @@ export function ProgramsTab({ library, units, default_rest }: ProgramsTabProps) 
                 <button type="button" onClick={() => set_renaming({ program, name: program.name })} aria-label={`Rename ${program.name}`}>
                   Rename
                 </button>
+                <HistoryButton kind="program" item_id={program.id} name={program.name} />
                 <button type="button" className="danger" onClick={() => delete_program(program)} aria-label={`Delete ${program.name}`}>
                   Delete
                 </button>

@@ -2,7 +2,7 @@
 import "@x-tech-laboratories/x-libs/web/react/test_stubs";
 import { DatabaseSync } from "node:sqlite";
 
-import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { Client } from "@x-tech-laboratories/x-libs/electron/bridge";
@@ -80,5 +80,21 @@ describe("overview", () => {
     expect(screen.getByText("Nothing logged today.")).toBeTruthy();
     expect(await screen.findByText("80.5 kg")).toBeTruthy();
     expect(screen.getByText(/-1\.5 kg in 90 days/)).toBeTruthy();
+  });
+});
+
+describe("history page", () => {
+  it("lists the latest changes and brings a deleted food back", async () => {
+    const store = fake_page();
+    const oats = store.save_food({ name: "Oats", serving_size: 50, serving_unit: "g", nutrients: { calories: 190 } });
+    store.delete_food(oats);
+    render(<App />);
+    go("#/history");
+
+    const row = (await screen.findAllByRole("row")).find((each) => each.textContent?.includes("Deleted"))!;
+    expect(row.textContent).toContain("Oats");
+    fireEvent.click(within(row).getByRole("button", { name: "Bring back" }));
+    fireEvent.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "Bring back" }));
+    await waitFor(() => expect(store.get_diet().foods.map((food) => food.name)).toEqual(["Oats"]));
   });
 });
