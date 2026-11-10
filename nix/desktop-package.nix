@@ -29,7 +29,8 @@ buildNpmPackage {
 
     npm prune --omit=dev --no-save --ignore-scripts
     mkdir -p $out/lib/x-fitness-desktop
-    cp -r out package.json node_modules $out/lib/x-fitness-desktop/
+    cp -r out package.json node_modules resources $out/lib/x-fitness-desktop/
+    install -Dm644 resources/icon.png $out/share/icons/hicolor/512x512/apps/x-fitness.png
     makeWrapper ${lib.getExe electron_43} $out/bin/x-fitness-desktop \
       --add-flags $out/lib/x-fitness-desktop \
       --unset ELECTRON_RUN_AS_NODE
@@ -43,6 +44,7 @@ buildNpmPackage {
       desktopName = "X-Fitness";
       comment = "Workouts, diet and body measurements";
       exec = "x-fitness-desktop";
+      icon = "x-fitness";
       categories = [ "Utility" ];
     })
   ];

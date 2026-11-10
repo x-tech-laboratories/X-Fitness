@@ -94,6 +94,7 @@ function open_window(): BrowserWindow {
   return create_window(BrowserWindow, {
     ...page,
     title: "X-Fitness",
+    icon: join(import.meta.dirname, "../../resources/icon.png"),
     // electron-vite emits an ESM preload as .mjs; loading .js here silently yields no bridge.
     preload: join(import.meta.dirname, "../preload/index.mjs"),
     default_size: { width: 1100, height: 760 },
