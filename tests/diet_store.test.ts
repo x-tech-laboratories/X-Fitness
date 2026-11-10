@@ -3,7 +3,7 @@ import { DatabaseSync } from "node:sqlite";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { food_units, food_unit_problems, normalize_food, target_progress } from "../src/shared/diet/model.ts";
-import { bind_methods, open_store, setting_defaults } from "../src/shared/store.ts";
+import { bind_methods, open_store, setting_defaults, sync_engine } from "../src/shared/store.ts";
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -370,5 +370,20 @@ describe("food lookup", () => {
     const offline = await methods.search_online_foods("peanut butter");
     expect(offline.errors).toEqual(["Open Food Facts could not be reached.", "USDA FoodData Central could not be reached."]);
     expect(offline.errors.join(" ")).not.toContain("test-key");
+  });
+
+  it("carries a food and the diary entry that logs it to another device through sync", () => {
+    const phone = open_methods();
+    const desktop = open_methods();
+    const food_id = phone.methods.save_food(oats);
+    phone.methods.add_diary_entry({ date: "2026-11-10", kind: "food", ref_id: food_id, amount: 50, unit: "g" });
+
+    const outgoing = sync_engine.collect_unpushed_changes(phone.database);
+    sync_engine.apply_changes(desktop.database, outgoing.changes);
+
+    expect(desktop.methods.get_diet().foods).toEqual(phone.methods.get_diet().foods);
+    const day = desktop.methods.get_diary_day("2026-11-10");
+    expect(day.entries.map((entry) => [entry.ref_id, entry.label, entry.found, entry.amount])).toEqual([[food_id, "Oats (Quaker)", true, 50]]);
+    expect(day.totals.calories).toBeCloseTo(190);
   });
 });
