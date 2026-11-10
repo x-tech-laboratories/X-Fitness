@@ -18,15 +18,14 @@ describe("store", () => {
     expect(versions).toEqual([{ owner: "settings", version: 1 }]);
   });
 
-  it("keeps settings as JSON and lays the defaults under them on the page", () => {
-    const methods = bind_methods(() => open_database(), () => undefined);
-    expect(setting_defaults.mass_unit).toBe("kg");
+  it("keeps settings as JSON and gives every one, the ones never set at their defaults", () => {
+    const fresh = bind_methods(() => open_database(), () => undefined);
+    expect(fresh.get_settings()).toEqual(setting_defaults);
     const database = open_database();
     const bound = bind_methods(() => database, () => undefined);
     bound.set_setting("mass_unit", "lb");
     bound.set_setting("week_start", 0);
-    expect(bound.get_settings()).toEqual({ mass_unit: "lb", week_start: 0 });
-    expect(methods.get_settings()).toEqual({});
+    expect(bound.get_settings()).toEqual({ ...setting_defaults, mass_unit: "lb", week_start: 0 });
   });
 
   it("announces writes and not reads", () => {

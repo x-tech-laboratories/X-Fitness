@@ -5,8 +5,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { Client } from "@x-tech-laboratories/x-libs/electron/bridge";
 
-import type { DeviceMethods } from "../src/shared/bridge.ts";
-import type { FitnessMethods } from "../src/shared/store.ts";
+import type { DeviceMethods } from "../src/shared/page_api.ts";
+import { setting_defaults, type FitnessMethods } from "../src/shared/store.ts";
 import { set_page_api } from "../src/web/api.ts";
 import { SettingsView } from "../src/web/settings/SettingsView.tsx";
 
@@ -14,7 +14,7 @@ afterEach(cleanup);
 
 function fake_calls(saved: Record<string, unknown>): Client<FitnessMethods> {
   return {
-    get_settings: vi.fn(async () => ({ ...saved })),
+    get_settings: vi.fn(async () => ({ ...setting_defaults, ...saved })),
     set_setting: vi.fn(async (key: string, value: unknown) => {
       saved[key] = value;
     }),

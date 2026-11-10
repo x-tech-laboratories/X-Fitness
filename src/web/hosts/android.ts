@@ -7,7 +7,7 @@ import type { Client } from "@x-tech-laboratories/x-libs/electron/bridge";
 import { create_sync_client, type SyncConfig, type SyncStorage } from "@x-tech-laboratories/x-libs/sync_client";
 import { indexed_db_files, open_wasm_database } from "@x-tech-laboratories/x-libs/web/sqlite_wasm";
 
-import type { DeviceMethods, PageApi } from "../../shared/bridge.ts";
+import type { DeviceMethods, PageApi } from "../../shared/page_api.ts";
 import { bind_methods, open_store, sync_engine, type FitnessMethods } from "../../shared/store.ts";
 
 // ── Files ────────────────────────────────────────────────────────────────────

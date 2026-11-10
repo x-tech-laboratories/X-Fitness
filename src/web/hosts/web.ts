@@ -3,7 +3,10 @@
 
 // ── Imports ──────────────────────────────────────────────────────────────────
 
-import { fitness_bridge, type PageApi } from "../../shared/bridge.ts";
+import type { Client } from "@x-tech-laboratories/x-libs/electron/bridge";
+
+import type { PageApi } from "../../shared/page_api.ts";
+import type { FitnessMethods } from "../../shared/store.ts";
 
 // ── Server calls ─────────────────────────────────────────────────────────────
 
@@ -57,6 +60,13 @@ function follow_changes(on_change: () => void): void {
 
 // ── Api ──────────────────────────────────────────────────────────────────────
 
+// Any call by name goes to the server, which refuses names it does not know, so the page needs no list of them.
+function server_calls(): Client<FitnessMethods> {
+  return new Proxy({} as Client<FitnessMethods>, {
+    get: (_target, name) => (typeof name === "string" ? (...args: unknown[]) => call_server(name, args) : undefined),
+  });
+}
+
 export function web_api(): PageApi {
   const listeners = new Set<() => void>();
   follow_changes(() => {
@@ -64,7 +74,7 @@ export function web_api(): PageApi {
   });
   return {
     host: "web",
-    calls: fitness_bridge.web_rpc(call_server),
+    calls: server_calls(),
     device: null,
     on_change: (listener) => {
       listeners.add(listener);

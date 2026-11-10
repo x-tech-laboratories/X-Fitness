@@ -8,6 +8,7 @@ import { create_sync_engine } from "@x-tech-laboratories/x-libs/sync_engine";
 
 import { body_feature } from "./body/store.ts";
 import { diet_feature } from "./diet/store.ts";
+import { is_read_only } from "./page_api.ts";
 import { settings_feature } from "./settings.ts";
 import { workouts_feature } from "./workouts/store.ts";
 
@@ -31,10 +32,14 @@ export function open_store(database: SqlDatabase): void {
 
 // ── Calls ────────────────────────────────────────────────────────────────────
 
-const all_methods = Object.assign({}, ...features.map((feature) => feature.methods)) as typeof settings_feature.methods &
-  typeof workouts_feature.methods &
-  typeof diet_feature.methods &
-  typeof body_feature.methods;
+const all_methods = {
+  ...(Object.assign({}, ...features.map((feature) => feature.methods)) as typeof settings_feature.methods &
+    typeof workouts_feature.methods &
+    typeof diet_feature.methods &
+    typeof body_feature.methods),
+  // Every setting, the ones never set at their defaults, so a page needs no list of defaults of its own.
+  get_settings: (database: SqlDatabase): Record<string, unknown> => ({ ...setting_defaults, ...settings_feature.methods.get_settings(database) }),
+};
 
 type Bound<Methods> = {
   [Name in keyof Methods]: Methods[Name] extends (database: SqlDatabase, ...args: infer Args) => infer Result ? (...args: Args) => Result : never;
@@ -45,9 +50,7 @@ export type FitnessMethods = Bound<typeof all_methods>;
 
 export const method_names = Object.keys(all_methods) as (keyof FitnessMethods & string)[];
 
-export function is_read_only(method: string): boolean {
-  return /^(list|get|search|lookup|export)_/.test(method);
-}
+export { is_read_only };
 
 // The calls run on the database given, telling on_change after each write so the other pages and devices hear of it.
 export function bind_methods(database: () => SqlDatabase, on_change: () => void): FitnessMethods {

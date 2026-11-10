@@ -11,7 +11,7 @@ import { set_page_api } from "./api.ts";
 import { App } from "./App.tsx";
 import { desktop_api, is_desktop } from "./hosts/desktop.ts";
 import { web_api } from "./hosts/web.ts";
-import type { PageApi } from "../shared/bridge.ts";
+import type { PageApi } from "../shared/page_api.ts";
 
 // ── Start ────────────────────────────────────────────────────────────────────
 

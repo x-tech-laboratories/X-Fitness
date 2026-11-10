@@ -24,6 +24,7 @@ import {
   type SeriesStats,
 } from "./readings.ts";
 import { body_days, body_metrics, body_readings, body_tables } from "./schema.ts";
+import { body_setting_defaults } from "./settings.ts";
 
 // ── Shapes ───────────────────────────────────────────────────────────────────
 
@@ -69,13 +70,6 @@ export interface HistoryDay {
   values: Record<string, number>;
   comment: string;
 }
-
-// ── Defaults ─────────────────────────────────────────────────────────────────
-
-export const body_setting_defaults = {
-  // In cm; above 0 it turns on BMI.
-  "body.height": 0,
-};
 
 // ── Reading ──────────────────────────────────────────────────────────────────
 

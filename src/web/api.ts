@@ -7,8 +7,8 @@ import type { Client } from "@x-tech-laboratories/x-libs/electron/bridge";
 import { create_watch } from "@x-tech-laboratories/x-libs/web/watch";
 import { use_resource, type Resource } from "@x-tech-laboratories/x-libs/web/react/states";
 
-import type { PageApi } from "../shared/bridge.ts";
-import { is_read_only, setting_defaults, type FitnessMethods } from "../shared/store.ts";
+import { is_read_only, type PageApi } from "../shared/page_api.ts";
+import type { FitnessMethods } from "../shared/store.ts";
 
 // ── Api ──────────────────────────────────────────────────────────────────────
 
@@ -50,7 +50,7 @@ export function use_data<Data>(load: (api: Client<FitnessMethods>) => Promise<Da
   return use_resource(() => load(calls()), dependencies, { watch: data_watch });
 }
 
-// Every setting with the defaults filled in.
+// Every setting, with the defaults filled in by the host.
 export function use_settings(): Resource<Record<string, unknown>> {
-  return use_data(async (api) => ({ ...setting_defaults, ...(await api.get_settings()) }));
+  return use_data((api) => api.get_settings());
 }

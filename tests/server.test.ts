@@ -36,7 +36,14 @@ describe("server", () => {
     const write = await app.inject({ method: "POST", url: "/api/call/set_setting", payload: ["mass_unit", "lb"] });
     expect(write.statusCode).toBe(204);
     const read = await app.inject({ method: "POST", url: "/api/call/get_settings", payload: [] });
-    expect(read.json()).toEqual({ mass_unit: "lb" });
+    expect(read.json()).toMatchObject({ mass_unit: "lb", length_unit: "cm" });
+  });
+
+  it("takes a call whose argument is a large import file", async () => {
+    await start();
+    const big = JSON.stringify({ log: "x".repeat(3 * 1024 * 1024) });
+    const reply = await app.inject({ method: "POST", url: "/api/call/set_setting", payload: ["import.test", big] });
+    expect(reply.statusCode).toBe(204);
   });
 
   it("refuses arguments that are not a list and calls it does not know", async () => {
