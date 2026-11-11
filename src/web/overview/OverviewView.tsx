@@ -3,7 +3,7 @@
 // ── Imports ──────────────────────────────────────────────────────────────────
 
 import type { EnergyUnit } from "@x-tech-laboratories/x-libs/units";
-import { BarChart, Meters, Strip } from "@x-tech-laboratories/x-libs/web/react/charts";
+import { BarChart, Meters, Sparkline, Strip } from "@x-tech-laboratories/x-libs/web/react/charts";
 import { Card, Cards, PageHeading, Section, Stack, Tile, Tiles } from "@x-tech-laboratories/x-libs/web/react/layout";
 import { Empty, Loaded, type Resource } from "@x-tech-laboratories/x-libs/web/react/states";
 
@@ -12,7 +12,6 @@ import type { HistoryDay, MetricSummary } from "../../shared/body/store.ts";
 import type { DiaryDay } from "../../shared/diet/store.ts";
 import type { WorkoutReport } from "../../shared/workouts/store.ts";
 import { use_data, use_settings } from "../api.ts";
-import { FittedSparkline } from "../FittedSparkline.tsx";
 import { format_change, format_value, shown_units, to_shown_value, type ShownUnits } from "../body/format.ts";
 import { readings_of } from "../body/ReportsTab.tsx";
 import { target_meters, today } from "../diet/DiaryTab.tsx";
@@ -63,7 +62,7 @@ function MetricCard({ metric, history, units }: { metric: BodyMetric; history: H
     <Card title={metric.name} href="#/body/reports" badge={<span className="muted small">{last[0]}</span>}>
       <strong>{format_value(metric, last[1], units)}</strong>
       {readings.length > 1 && <span className="muted small">{` ${format_change(metric, last[1] - first[1], units)} in ${body_days} days`}</span>}
-      <FittedSparkline label={`${metric.name} over ${body_days} days`} points={readings.map(([date, value]): [number, number] => [epoch_of(date), to_shown_value(metric, value, units)])} />
+      <Sparkline scale="fit" top={0} color="var(--series-1)" label={`${metric.name} over ${body_days} days`} points={readings.map(([date, value]): [number, number] => [epoch_of(date), to_shown_value(metric, value, units)])} />
     </Card>
   );
 }

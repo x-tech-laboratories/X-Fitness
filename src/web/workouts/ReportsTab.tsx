@@ -5,7 +5,7 @@
 
 import { useState } from "react";
 import { format_local } from "@x-tech-laboratories/x-libs/dates";
-import { BarChart, Donut, LineChart, Strip } from "@x-tech-laboratories/x-libs/web/react/charts";
+import { BarChart, Donut, LineChart, Sparkline, Strip } from "@x-tech-laboratories/x-libs/web/react/charts";
 import { Select } from "@x-tech-laboratories/x-libs/web/react/controls";
 import { Card, Cards, Facts, Section, Stack } from "@x-tech-laboratories/x-libs/web/react/layout";
 import { Empty, Loaded } from "@x-tech-laboratories/x-libs/web/react/states";
@@ -15,7 +15,6 @@ import { measurement_of, type Exercise, type LoggedSet, type Measurement } from 
 import type { ExerciseStats, TrendMetric, TrendPoint, WeekTotals } from "../../shared/workouts/reports.ts";
 import type { WorkoutLibrary } from "../../shared/workouts/store.ts";
 import { use_data } from "../api.ts";
-import { FittedSparkline } from "../FittedSparkline.tsx";
 import { ExerciseSelect } from "./controls.tsx";
 import { field_to_shown, format_field, format_number, format_weight, type ShownUnits } from "./units.ts";
 
@@ -220,7 +219,7 @@ export function ReportsTab({ library, units, weekly_target, week_start, today }:
       id: "recent",
       cell: (row) => {
         const key = spark_metrics[row.exercise.measurement];
-        return <FittedSparkline label={`${row.exercise.name}, last ${row.trend.length} sessions`} points={row.trend.map((point): [number, number] => [epoch_of(point.date), point[key]])} />;
+        return <Sparkline scale="fit" top={0} color="var(--series-1)" label={`${row.exercise.name}, last ${row.trend.length} sessions`} points={row.trend.map((point): [number, number] => [epoch_of(point.date), point[key]])} />;
       },
     },
     { label: "Sets", cell: (row) => row.stats.sets },

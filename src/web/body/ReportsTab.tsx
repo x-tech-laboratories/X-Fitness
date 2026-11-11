@@ -4,7 +4,7 @@
 // ── Imports ──────────────────────────────────────────────────────────────────
 
 import { useState } from "react";
-import { LineChart } from "@x-tech-laboratories/x-libs/web/react/charts";
+import { LineChart, Sparkline } from "@x-tech-laboratories/x-libs/web/react/charts";
 import { ChipField } from "@x-tech-laboratories/x-libs/web/react/chip_field";
 import { Select } from "@x-tech-laboratories/x-libs/web/react/controls";
 import { Card, Cards, PageHeading, Section, Tile, Tiles, Toolbar } from "@x-tech-laboratories/x-libs/web/react/layout";
@@ -14,7 +14,6 @@ import { DataTable, type TableColumn } from "@x-tech-laboratories/x-libs/web/rea
 import { average_days, type BodyMetric } from "../../shared/body/readings.ts";
 import type { BodyReport, HistoryDay } from "../../shared/body/store.ts";
 import { use_data } from "../api.ts";
-import { FittedSparkline } from "../FittedSparkline.tsx";
 import { format_change, format_number, format_value, to_shown_value, unit_of, type ShownUnits } from "./format.ts";
 import { today } from "./LogTab.tsx";
 
@@ -102,7 +101,7 @@ function MetricCards({ metrics, history, units, on_pick }: { metrics: BodyMetric
           <Card key={metric.id} title={metric.name} badge={<span className="muted small">{last[0]}</span>} on_click={() => on_pick(metric.id)}>
             <strong>{format_value(metric, last[1], units)}</strong>
             {readings.length > 1 && <span className="muted small">{` ${format_change(metric, last[1] - first[1], units)}`}</span>}
-            <FittedSparkline label={`${metric.name} in this range`} points={readings.map(([date, value]): [number, number] => [epoch_of(date), to_shown_value(metric, value, units)])} />
+            <Sparkline scale="fit" top={0} color="var(--series-1)" label={`${metric.name} in this range`} points={readings.map(([date, value]): [number, number] => [epoch_of(date), to_shown_value(metric, value, units)])} />
           </Card>
         );
       })}
