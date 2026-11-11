@@ -44,7 +44,7 @@ export function BodyView({ parts }: { parts: string[] }) {
           {(values) => {
             const units = shown_units(values);
             if (tab === "reports") return <ReportsTab units={units} />;
-            if (tab === "shape") return <Suspense fallback={<p className="muted">Loading…</p>}><ShapeTab units={units} /></Suspense>;
+            if (tab === "shape") return <Suspense fallback={<p className="muted">Loading…</p>}><ShapeTab units={units} settings={values} /></Suspense>;
             if (tab === "metrics") return <MetricsTab units={units} />;
             return <LogTab units={units} />;
           }}

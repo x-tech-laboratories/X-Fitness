@@ -1,4 +1,4 @@
-// The 3D tab: a body shaped to the readings on a day and the body the goals would give, side by side or one over the other, and how near the shape comes to each.
+// The 3D tab: a body shaped to the readings on a day beside the body the goals would give or the body on another day, side by side or one over the other, and how near the shape comes to each.
 
 // ── Imports ──────────────────────────────────────────────────────────────────
 
@@ -8,9 +8,10 @@ import { Toolbar } from "@x-tech-laboratories/x-libs/web/react/layout";
 import { Loaded } from "@x-tech-laboratories/x-libs/web/react/states";
 import { DataTable, type TableColumn } from "@x-tech-laboratories/x-libs/web/react/table";
 
+import { body_setting_defaults } from "../../shared/body/settings.ts";
 import { shape_roles, type BodyFit, type BodyMeasures, type BodyModel, type FitLine } from "../../shared/body/shape.ts";
 import type { BodyShape } from "../../shared/body/store.ts";
-import { use_data } from "../api.ts";
+import { calls, use_data } from "../api.ts";
 import { BodyViewer, create_view_link, load_body_model, type Look } from "./BodyViewer.tsx";
 import { format_value, type ShownUnits } from "./format.ts";
 import { today } from "./LogTab.tsx";
@@ -18,22 +19,25 @@ import type { FitAnswer, FitRequest } from "./shape_worker.ts";
 
 // ── Fitting ──────────────────────────────────────────────────────────────────
 
-type Shown = "side" | "now" | "goal" | "overlay";
+type Shown = "side" | "now" | "other" | "overlay";
 
-const shown_choices: { value: Shown; label: string }[] = [
-  { value: "side", label: "Side by side" },
-  { value: "now", label: "Now" },
+type Compared = "goal" | "day";
+
+const compared_choices: { value: Compared; label: string }[] = [
   { value: "goal", label: "Goal" },
-  { value: "overlay", label: "Overlay" },
+  { value: "day", label: "Another day" },
 ];
 
-type LayerName = "now" | "goal";
+type LayerName = "now" | "goal" | "day";
 
-const layer_names: Record<LayerName, string> = { now: "Now", goal: "Goal" };
+type Looks = Record<LayerName, Look>;
 
 const swatches = ["#2563eb", "#7c3aed", "#db2777", "#dc2626", "#f59e0b", "#16a34a", "#0891b2", "#6b7280"];
 
-const first_looks: Record<LayerName, Look> = { now: { color: "#2563eb", opacity: 0.6 }, goal: { color: "#f59e0b", opacity: 0.6 } };
+const looks_key = "body.shape_looks";
+
+// A dragged slider saves once it rests this long.
+const save_delay = 400;
 
 // Fits each set of measures in a worker, giving null until its answer comes; a newer set wins over an older one.
 function use_fit(measures: BodyMeasures | null): BodyFit | null {
@@ -74,7 +78,7 @@ function use_model(): BodyModel | null {
 // ── Readings ─────────────────────────────────────────────────────────────────
 
 interface FitRow extends FitLine {
-  goal: number | null;
+  other: number | null;
   units: ShownUnits;
 }
 
@@ -88,20 +92,95 @@ function format_line(name: FitLine["name"], value: number, units: ShownUnits): s
   return format_value({ kind: name === "mass" ? "weight" : "length", unit: "" }, value, units);
 }
 
-const fit_columns: TableColumn<FitRow>[] = [
-  { label: "Reading", cell: (row) => line_label(row.name) },
-  { label: "Measured", cell: (row) => format_line(row.name, row.wanted, row.units) },
-  { label: "On the model", cell: (row) => format_line(row.name, row.reached, row.units) },
-  { label: "Goal", cell: (row) => (row.goal !== null ? format_line(row.name, row.goal, row.units) : "—") },
-];
+// The last column holds the body compared with, headed by its name.
+function fit_columns(other: string): TableColumn<FitRow>[] {
+  return [
+    { label: "Reading", cell: (row) => line_label(row.name) },
+    { label: "Measured", cell: (row) => format_line(row.name, row.wanted, row.units) },
+    { label: "On the model", cell: (row) => format_line(row.name, row.reached, row.units) },
+    { label: other, cell: (row) => (row.other !== null ? format_line(row.name, row.other, row.units) : "—") },
+  ];
+}
 
-// The goal of each line the body was fitted to, when it differs from the reading.
-function goal_of(line: FitLine, goal: BodyFit | null): number | null {
-  const reached = goal?.lines.find((candidate) => candidate.name === line.name);
+// What the compared body was fitted to for each line, when it differs from the reading.
+function other_of(line: FitLine, other: BodyFit | null): number | null {
+  const reached = other?.lines.find((candidate) => candidate.name === line.name);
   return reached && Math.abs(reached.wanted - line.wanted) > 0.05 ? reached.wanted : null;
 }
 
+// ── Looks ────────────────────────────────────────────────────────────────────
+
+// The saved looks laid over the first ones, so a layer missing or broken in the setting keeps its first look.
+function looks_of(saved: unknown): Looks {
+  const first = body_setting_defaults[looks_key];
+  const given = (saved && typeof saved === "object" ? saved : {}) as Partial<Record<LayerName, Partial<Look>>>;
+  const look_of = (name: LayerName): Look => {
+    const { color, opacity } = given[name] ?? {};
+    return {
+      color: typeof color === "string" && color ? color : first[name].color,
+      opacity: typeof opacity === "number" && opacity > 0 && opacity <= 1 ? opacity : first[name].opacity,
+    };
+  };
+  return { now: look_of("now"), goal: look_of("goal"), day: look_of("day") };
+}
+
+// Each layer's look, following the setting and saving to it a moment after the last change so a dragged slider writes once.
+function use_looks(saved: unknown): [Looks, (name: LayerName, look: Look) => void] {
+  const [looks, set_looks] = useState(() => looks_of(saved));
+  const latest = useRef(looks);
+  const pending = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const saved_key = JSON.stringify(saved ?? null);
+  useEffect(() => {
+    if (pending.current) return;
+    latest.current = looks_of(saved);
+    set_looks(latest.current);
+    // The key stands for the setting, which comes as a new object on every load.
+  }, [saved_key]);
+
+  // Leaving the tab saves a change still waiting.
+  useEffect(
+    () => () => {
+      if (!pending.current) return;
+      clearTimeout(pending.current);
+      void calls().set_setting(looks_key, latest.current);
+    },
+    [],
+  );
+
+  function change(name: LayerName, look: Look): void {
+    latest.current = { ...latest.current, [name]: look };
+    set_looks(latest.current);
+    if (pending.current) clearTimeout(pending.current);
+    pending.current = setTimeout(() => {
+      pending.current = null;
+      void calls().set_setting(looks_key, latest.current);
+    }, save_delay);
+  }
+
+  return [looks, change];
+}
+
 // ── View ─────────────────────────────────────────────────────────────────────
+
+// The last day a month or more before the shown one, or the first day when none is that old.
+function month_before(days: string[], date: string): string {
+  const back = new Date(`${date}T00:00:00Z`);
+  back.setUTCMonth(back.getUTCMonth() - 1);
+  const limit = back.toISOString().slice(0, 10);
+  return days.findLast((day) => day <= limit) ?? days[0] ?? date;
+}
+
+// A slider over the days with readings, naming the day it is on.
+function DaySlider({ label, days, date, on_date }: { label: string; days: string[]; date: string; on_date: (date: string) => void }) {
+  const position = Math.max(0, days.findLastIndex((day) => day <= date));
+  return (
+    <label className="body-shape-day">
+      <span>{date}</span>
+      <input type="range" aria-label={label} min={0} max={days.length - 1} step={1} value={position} onChange={(event) => on_date(days[Number(event.currentTarget.value)]!)} />
+    </label>
+  );
+}
 
 // The colour and opacity of one body in the overlay.
 function LayerControls({ name, look, on_change }: { name: string; look: Look; on_change: (look: Look) => void }) {
@@ -117,42 +196,58 @@ function LayerControls({ name, look, on_change }: { name: string; look: Look; on
   );
 }
 
-function ShapeView({ shape, units, on_date }: { shape: BodyShape; units: ShownUnits; on_date: (date: string) => void }) {
+function ShapeView({ shape, units, saved_looks, on_date }: { shape: BodyShape; units: ShownUnits; saved_looks: unknown; on_date: (date: string) => void }) {
   const [shown, set_shown] = useState<Shown>("side");
-  const [looks, set_looks] = useState(first_looks);
+  const [compared, set_compared] = useState<Compared>("goal");
+  const [then_date, set_then_date] = useState<string | null>(null);
+  const [looks, set_look] = use_looks(saved_looks);
   const model = use_model();
-  const now = use_fit(shape.measures);
-  const goal = use_fit(shape.goal);
   const link = useMemo(create_view_link, []);
   const days = shape.days.includes(today()) ? shape.days : [...shape.days, today()];
-  const position = Math.max(0, days.findLastIndex((day) => day <= shape.date));
+  const then_day = then_date ?? month_before(days, shape.date);
+  const then_shape = use_data((api) => (compared === "day" ? api.get_body_shape(then_day) : Promise.resolve(null)), [compared, then_day]);
+  const now = use_fit(shape.measures);
+  const other = use_fit(compared === "day" ? (then_shape.data?.measures ?? null) : shape.goal);
   const missing = [shape.measures.height > 0 ? "" : "height", shape.measures.sex ? "" : "sex"].filter(Boolean);
+
+  // The second body is the goal body or the body on the compared day, each with its own look.
+  const other_layer: LayerName = compared === "day" ? "day" : "goal";
+  const other_name = compared === "day" ? then_day : "Goal";
+  const now_label = `Your body now on ${shape.date}`;
+  const other_label = compared === "day" ? `Your body on ${then_day}` : `Your body at your goals on ${shape.date}`;
+  const overlay_label = `${now_label} with ${compared === "day" ? `the body on ${then_day}` : "the goal body"} over it`;
+  const shown_choices: { value: Shown; label: string }[] = [
+    { value: "side", label: "Side by side" },
+    { value: "now", label: "Now" },
+    { value: "other", label: other_name },
+    { value: "overlay", label: "Overlay" },
+  ];
 
   // Only the overlay is see-through; everywhere else each body is solid in its colour.
   const now_shapes = useMemo(() => [now?.parameters ?? null], [now]);
-  const goal_shapes = useMemo(() => [goal?.parameters ?? null], [goal]);
-  const both_shapes = useMemo(() => [now?.parameters ?? null, goal?.parameters ?? null], [now, goal]);
+  const other_shapes = useMemo(() => [other?.parameters ?? null], [other]);
+  const both_shapes = useMemo(() => [now?.parameters ?? null, other?.parameters ?? null], [now, other]);
   const now_looks = useMemo((): Look[] => [{ color: looks.now.color, opacity: 1 }], [looks.now.color]);
-  const goal_looks = useMemo((): Look[] => [{ color: looks.goal.color, opacity: 1 }], [looks.goal.color]);
-  const overlay_looks = useMemo(() => [looks.now, looks.goal], [looks]);
-  const label = (what: string) => `Your body ${what} on ${shape.date}`;
+  const other_looks = useMemo((): Look[] => [{ color: looks[other_layer].color, opacity: 1 }], [looks, other_layer]);
+  const overlay_looks = useMemo(() => [looks.now, looks[other_layer]], [looks, other_layer]);
+  const columns = useMemo(() => fit_columns(other_name), [other_name]);
 
   return (
     <div className="stack">
       <Toolbar>
         <Segmented label="Show" choices={shown_choices} value={shown} on_change={set_shown} />
-        {days.length > 1 && (
-          <label className="body-shape-day">
-            <span>{shape.date}</span>
-            <input type="range" aria-label="Day" min={0} max={days.length - 1} step={1} value={position} onChange={(event) => on_date(days[Number(event.currentTarget.value)]!)} />
-          </label>
-        )}
+        {days.length > 1 && <DaySlider label="Day" days={days} date={shape.date} on_date={on_date} />}
       </Toolbar>
+      {days.length > 1 && (
+        <Toolbar>
+          <Segmented label="Compare with" choices={compared_choices} value={compared} on_change={set_compared} />
+          {compared === "day" && <DaySlider label="Compared day" days={days} date={then_day} on_date={set_then_date} />}
+        </Toolbar>
+      )}
       {shown === "overlay" && (
         <div className="body-layers">
-          {(Object.keys(layer_names) as LayerName[]).map((name) => (
-            <LayerControls key={name} name={layer_names[name]} look={looks[name]} on_change={(look) => set_looks((current) => ({ ...current, [name]: look }))} />
-          ))}
+          <LayerControls name="Now" look={looks.now} on_change={(look) => set_look("now", look)} />
+          <LayerControls name={other_name} look={looks[other_layer]} on_change={(look) => set_look(other_layer, look)} />
         </div>
       )}
       {missing.length > 0 && <p className="muted">{`Set your ${missing.join(" and ")} under Settings, Body, for a body true to yours.`}</p>}
@@ -162,23 +257,23 @@ function ShapeView({ shape, units, on_date }: { shape: BodyShape; units: ShownUn
             <>
               <div>
                 <p className="muted small">Now</p>
-                <BodyViewer key="side-now" model={model} shapes={now_shapes} looks={now_looks} link={link} label={label("now")} />
+                <BodyViewer key="side-now" model={model} shapes={now_shapes} looks={now_looks} link={link} label={now_label} />
               </div>
               <div>
-                <p className="muted small">Goal</p>
-                <BodyViewer key="side-goal" model={model} shapes={goal_shapes} looks={goal_looks} link={link} label={label("at your goals")} />
+                <p className="muted small">{other_name}</p>
+                <BodyViewer key="side-other" model={model} shapes={other_shapes} looks={other_looks} link={link} label={other_label} />
               </div>
             </>
           )}
-          {shown === "now" && <BodyViewer key="now" model={model} shapes={now_shapes} looks={now_looks} label={label("now")} />}
-          {shown === "goal" && <BodyViewer key="goal" model={model} shapes={goal_shapes} looks={goal_looks} label={label("at your goals")} />}
-          {shown === "overlay" && <BodyViewer key="overlay" model={model} shapes={both_shapes} looks={overlay_looks} label={label("with the goal body over it")} />}
+          {shown === "now" && <BodyViewer key="now" model={model} shapes={now_shapes} looks={now_looks} label={now_label} />}
+          {shown === "other" && <BodyViewer key="other" model={model} shapes={other_shapes} looks={other_looks} label={other_label} />}
+          {shown === "overlay" && <BodyViewer key="overlay" model={model} shapes={both_shapes} looks={overlay_looks} label={overlay_label} />}
         </div>
       ) : (
         <p className="muted">Loading the body…</p>
       )}
       {now && now.lines.length > 0 ? (
-        <DataTable caption="Readings the body is shaped to" columns={fit_columns} rows={now.lines.map((line) => ({ ...line, goal: goal_of(line, goal), units }))} row_key={(row) => row.name} />
+        <DataTable caption="Readings the body is shaped to" columns={columns} rows={now.lines.map((line) => ({ ...line, other: other_of(line, other), units }))} row_key={(row) => row.name} />
       ) : (
         <p className="muted">No readings shape the body yet. Log weight, body fat or girths, and pick what each metric shapes under Metrics.</p>
       )}
@@ -186,9 +281,9 @@ function ShapeView({ shape, units, on_date }: { shape: BodyShape; units: ShownUn
   );
 }
 
-export function ShapeTab({ units }: { units: ShownUnits }) {
+export function ShapeTab({ units, settings }: { units: ShownUnits; settings: Record<string, unknown> }) {
   const [date, set_date] = useState(today);
   const shape = use_data((api) => api.get_body_shape(date), [date]);
 
-  return <Loaded resource={shape}>{(loaded) => <ShapeView shape={loaded} units={units} on_date={set_date} />}</Loaded>;
+  return <Loaded resource={shape}>{(loaded) => <ShapeView shape={loaded} units={units} saved_looks={settings[looks_key]} on_date={set_date} />}</Loaded>;
 }
