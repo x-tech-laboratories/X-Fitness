@@ -71,5 +71,6 @@ It shows the body now beside the body at the goals, or the body on another day (
 side sharing one camera, or as an overlay where each layer has its own colour and opacity. Those looks are saved in the
 synced `body.shape_looks` setting a moment after the last change. "Shade the change" greys the body now and tints it
 red where its skin lies outside the compared body and teal where it lies inside (`change_of_positions`, along each
-vertex normal). Play steps the day through every day with a reading; the last day loaded stays drawn while the next
+vertex normal). Compared with another day, a reading only one of the two days has is taken as the same on both
+(`shared_measures`), so the bodies differ only where both were measured. Play steps the day through every day with a reading; the last day loaded stays drawn while the next
 loads, so the view keeps its place.

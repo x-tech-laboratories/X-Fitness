@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 
 import { describe, expect, it } from "vitest";
 
-import { average_shape, change_of_positions, fit_shape, girth_of_positions, height_of_positions, parse_body_model, shape_positions, volume_of_positions } from "../src/shared/body/shape.ts";
+import { average_shape, change_of_positions, shared_measures, fit_shape, girth_of_positions, height_of_positions, parse_body_model, shape_positions, volume_of_positions } from "../src/shared/body/shape.ts";
 
 const file = readFileSync(new URL("../src/web/body/body_model.bin", import.meta.url));
 const model = parse_body_model(file.buffer.slice(file.byteOffset, file.byteOffset + file.byteLength));
@@ -52,5 +52,14 @@ describe("the 3D body", () => {
     // Any normals do for a body against itself, so its own positions stand in for them.
     const usual = shape_positions(model, average_shape);
     expect(change_of_positions(usual, usual, usual).every((change) => change === 0)).toBe(true);
+  });
+
+  it("takes a reading only one of two days has as unchanged on the other", () => {
+    const now = { sex: "male" as const, height: 180, mass: 88, body_fat: 24, girths: { waist: 97, chest: 104 } };
+    const then = { sex: "male" as const, height: 180, mass: 92, body_fat: 0, girths: { waist: 101, chest: 0 } };
+    expect(shared_measures(now, then)).toEqual([
+      { sex: "male", height: 180, mass: 88, body_fat: 24, girths: { waist: 97, chest: 104 } },
+      { sex: "male", height: 180, mass: 92, body_fat: 24, girths: { waist: 101, chest: 104 } },
+    ]);
   });
 });

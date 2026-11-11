@@ -9,7 +9,7 @@ import { Loaded } from "@x-tech-laboratories/x-libs/web/react/states";
 import { DataTable, type TableColumn } from "@x-tech-laboratories/x-libs/web/react/table";
 
 import { body_setting_defaults } from "../../shared/body/settings.ts";
-import { shape_roles, type BodyFit, type BodyMeasures, type BodyModel, type FitLine } from "../../shared/body/shape.ts";
+import { shape_roles, shared_measures, type BodyFit, type BodyMeasures, type BodyModel, type FitLine } from "../../shared/body/shape.ts";
 import type { BodyShape } from "../../shared/body/store.ts";
 import { calls, use_data } from "../api.ts";
 import { BodyViewer, create_view_link, load_body_model, type Look } from "./BodyViewer.tsx";
@@ -227,8 +227,11 @@ function ShapeView({ shape, units, saved_looks, playing, on_date, on_play }: Sha
   // The compared day stays drawn while the next one loads.
   const then_last = useRef<BodyShape | null>(null);
   if (then_shape.data) then_last.current = then_shape.data;
-  const now = use_fit(shape.measures);
-  const other = use_fit(compared === "day" ? (then_last.current?.measures ?? null) : shape.goal);
+  // A reading only one of the two days has is taken as the same on the other.
+  const then_measures = then_last.current?.measures ?? null;
+  const [now_measures, day_measures] = compared === "day" && then_measures ? shared_measures(shape.measures, then_measures) : [shape.measures, then_measures];
+  const now = use_fit(now_measures);
+  const other = use_fit(compared === "day" ? day_measures : shape.goal);
   const missing = [shape.measures.height > 0 ? "" : "height", shape.measures.sex ? "" : "sex"].filter(Boolean);
 
   // The second body is the goal body or the body on the compared day, each with its own look.
@@ -284,6 +287,7 @@ function ShapeView({ shape, units, saved_looks, playing, on_date, on_play }: Sha
           <LayerControls name={other_name} look={looks[other_layer]} on_change={(look) => set_look(other_layer, look)} />
         </div>
       )}
+      {compared === "day" && <p className="muted small">{`A reading only one of ${shape.date} and ${then_day} has is taken as the same on both.`}</p>}
       {shading && <p className="muted small">{`Red where the body now is larger than ${compared === "day" ? `on ${then_day}` : "at the goals"}, teal where it is smaller.`}</p>}
       {missing.length > 0 && <p className="muted">{`Set your ${missing.join(" and ")} under Settings, Body, for a body true to yours.`}</p>}
       {model ? (

@@ -304,6 +304,18 @@ export interface BodyMeasures {
   girths: Partial<Record<Girth, number>>;
 }
 
+// Both sets of measures, each taking a reading only the other holds as unchanged, so two days differ only where both were measured.
+export function shared_measures(first: BodyMeasures, second: BodyMeasures): [BodyMeasures, BodyMeasures] {
+  const names = [...new Set([...Object.keys(first.girths), ...Object.keys(second.girths)])] as Girth[];
+  const fill = (measures: BodyMeasures, other: BodyMeasures): BodyMeasures => ({
+    ...measures,
+    mass: measures.mass || other.mass,
+    body_fat: measures.body_fat || other.body_fat,
+    girths: Object.fromEntries(names.map((name) => [name, measures.girths[name] || other.girths[name] || 0])),
+  });
+  return [fill(first, second), fill(second, first)];
+}
+
 export interface FitLine {
   // A girth, or "height" or "mass".
   name: Girth | "height" | "mass";
