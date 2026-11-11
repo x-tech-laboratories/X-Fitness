@@ -64,8 +64,6 @@ interface ItemKind {
   item_key?: string;
   levels: Level[];
   watches: HistoryWatch[];
-  // Rows that hold no id of the item, such as a set under a workout's exercise, note it through their parent.
-  lookups?: { table: string; sql: (row: "NEW" | "OLD") => string }[];
   name_of: (snapshot: Snapshot) => string;
   summary: (snapshot: Snapshot) => string;
 }
@@ -86,8 +84,11 @@ export const item_kinds: ItemKind[] = [
       { table: "workout_exercises", column: "workout_id", from: { level: 0, column: "id" } },
       { table: "workout_sets", column: "workout_exercise_id", from: { level: 1, column: "id" } },
     ],
-    watches: [{ table: "workouts", item_columns: ["id"] }, { table: "workout_exercises", item_columns: ["workout_id"] }],
-    lookups: [{ table: "workout_sets", sql: (row) => `SELECT workout_id FROM workout_exercises WHERE id = ${row}.workout_exercise_id` }],
+    watches: [
+      { table: "workouts", item_columns: ["id"] },
+      { table: "workout_exercises", item_columns: ["workout_id"] },
+      { table: "workout_sets", item_lookup: (row) => `SELECT workout_id FROM workout_exercises WHERE id = ${row}.workout_exercise_id` },
+    ],
     name_of: (snapshot) => `${String(first(snapshot, "workouts")?.name || "Workout")} on ${String(first(snapshot, "workouts")?.date ?? "")}`.trim(),
     summary: (snapshot) => `${count(snapshot, "workout_exercises", "exercise")}, ${count(snapshot, "workout_sets", "set")}`,
   },
@@ -109,8 +110,11 @@ export const item_kinds: ItemKind[] = [
       { table: "program_sessions", column: "program_id", from: { level: 0, column: "id" } },
       { table: "session_exercises", column: "session_id", from: { level: 1, column: "id" } },
     ],
-    watches: [{ table: "programs", item_columns: ["id"] }, { table: "program_sessions", item_columns: ["program_id"] }],
-    lookups: [{ table: "session_exercises", sql: (row) => `SELECT program_id FROM program_sessions WHERE id = ${row}.session_id` }],
+    watches: [
+      { table: "programs", item_columns: ["id"] },
+      { table: "program_sessions", item_columns: ["program_id"] },
+      { table: "session_exercises", item_lookup: (row) => `SELECT program_id FROM program_sessions WHERE id = ${row}.session_id` },
+    ],
     name_of: (snapshot) => String(first(snapshot, "programs")?.name ?? "Program"),
     summary: (snapshot) => `${count(snapshot, "program_sessions", "session")}, ${count(snapshot, "session_exercises", "exercise")}`,
   },
@@ -211,17 +215,7 @@ function keep_days(database: SqlDatabase): number {
 
 // Run each time the database opens, before sync installs, since the versions tables sync too.
 export function install_history(database: SqlDatabase): void {
-  for (const [kind, history] of histories) {
-    history.install(database);
-    for (const lookup of kind_of(kind).item.lookups ?? []) {
-      for (const event of ["insert", "update", "delete"] as const) {
-        const row = event === "delete" ? "OLD" : "NEW";
-        const name = `${kind}_history_versions_${lookup.table}_${event}`;
-        database.exec(`DROP TRIGGER IF EXISTS ${name}`);
-        database.exec(`CREATE TRIGGER ${name} AFTER ${event.toUpperCase()} ON ${lookup.table} BEGIN INSERT OR IGNORE INTO ${kind}_history_versions_pending ${lookup.sql(row)}; END`);
-      }
-    }
-  }
+  for (const history of histories.values()) history.install(database);
   prune_history(database);
 }
 
