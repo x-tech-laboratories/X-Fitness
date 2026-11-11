@@ -1,9 +1,9 @@
-// The 3D tab: a body shaped to the readings on a day beside the body the goals would give or the body on another day, side by side or one over the other, and how near the shape comes to each.
+// The 3D tab: a body shaped to the readings on a day beside the body the goals would give or the body on another day, side by side or one over the other, shaded by where they differ, played day by day, and how near the shape comes to each.
 
 // ── Imports ──────────────────────────────────────────────────────────────────
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ColorPicker, Segmented } from "@x-tech-laboratories/x-libs/web/react/controls";
+import { ColorPicker, Segmented, Switch } from "@x-tech-laboratories/x-libs/web/react/controls";
 import { Toolbar } from "@x-tech-laboratories/x-libs/web/react/layout";
 import { Loaded } from "@x-tech-laboratories/x-libs/web/react/states";
 import { DataTable, type TableColumn } from "@x-tech-laboratories/x-libs/web/react/table";
@@ -38,6 +38,9 @@ const looks_key = "body.shape_looks";
 
 // A dragged slider saves once it rests this long.
 const save_delay = 400;
+
+// Playing shows each day this long once it has loaded.
+const play_step = 800;
 
 // Fits each set of measures in a worker, giving null until its answer comes; a newer set wins over an older one.
 function use_fit(measures: BodyMeasures | null): BodyFit | null {
@@ -163,6 +166,11 @@ function use_looks(saved: unknown): [Looks, (name: LayerName, look: Look) => voi
 
 // ── View ─────────────────────────────────────────────────────────────────────
 
+// Every day with a reading, and today.
+function days_of(shape: BodyShape): string[] {
+  return shape.days.includes(today()) ? shape.days : [...shape.days, today()];
+}
+
 // The last day a month or more before the shown one, or the first day when none is that old.
 function month_before(days: string[], date: string): string {
   const back = new Date(`${date}T00:00:00Z`);
@@ -196,18 +204,31 @@ function LayerControls({ name, look, on_change }: { name: string; look: Look; on
   );
 }
 
-function ShapeView({ shape, units, saved_looks, on_date }: { shape: BodyShape; units: ShownUnits; saved_looks: unknown; on_date: (date: string) => void }) {
+interface ShapeViewProps {
+  shape: BodyShape;
+  units: ShownUnits;
+  saved_looks: unknown;
+  playing: boolean;
+  on_date: (date: string) => void;
+  on_play: () => void;
+}
+
+function ShapeView({ shape, units, saved_looks, playing, on_date, on_play }: ShapeViewProps) {
   const [shown, set_shown] = useState<Shown>("side");
   const [compared, set_compared] = useState<Compared>("goal");
   const [then_date, set_then_date] = useState<string | null>(null);
+  const [shaded, set_shaded] = useState(false);
   const [looks, set_look] = use_looks(saved_looks);
   const model = use_model();
   const link = useMemo(create_view_link, []);
-  const days = shape.days.includes(today()) ? shape.days : [...shape.days, today()];
+  const days = days_of(shape);
   const then_day = then_date ?? month_before(days, shape.date);
   const then_shape = use_data((api) => (compared === "day" ? api.get_body_shape(then_day) : Promise.resolve(null)), [compared, then_day]);
+  // The compared day stays drawn while the next one loads.
+  const then_last = useRef<BodyShape | null>(null);
+  if (then_shape.data) then_last.current = then_shape.data;
   const now = use_fit(shape.measures);
-  const other = use_fit(compared === "day" ? (then_shape.data?.measures ?? null) : shape.goal);
+  const other = use_fit(compared === "day" ? (then_last.current?.measures ?? null) : shape.goal);
   const missing = [shape.measures.height > 0 ? "" : "height", shape.measures.sex ? "" : "sex"].filter(Boolean);
 
   // The second body is the goal body or the body on the compared day, each with its own look.
@@ -216,6 +237,8 @@ function ShapeView({ shape, units, saved_looks, on_date }: { shape: BodyShape; u
   const now_label = `Your body now on ${shape.date}`;
   const other_label = compared === "day" ? `Your body on ${then_day}` : `Your body at your goals on ${shape.date}`;
   const overlay_label = `${now_label} with ${compared === "day" ? `the body on ${then_day}` : "the goal body"} over it`;
+  const shading = shaded && (shown === "side" || shown === "now");
+  const change_from = shading ? (other?.parameters ?? null) : null;
   const shown_choices: { value: Shown; label: string }[] = [
     { value: "side", label: "Side by side" },
     { value: "now", label: "Now" },
@@ -237,6 +260,17 @@ function ShapeView({ shape, units, saved_looks, on_date }: { shape: BodyShape; u
       <Toolbar>
         <Segmented label="Show" choices={shown_choices} value={shown} on_change={set_shown} />
         {days.length > 1 && <DaySlider label="Day" days={days} date={shape.date} on_date={on_date} />}
+        {days.length > 1 && (
+          <button type="button" onClick={on_play}>
+            {playing ? "Pause" : "Play"}
+          </button>
+        )}
+        {(shown === "side" || shown === "now") && (
+          <label className="body-shape-shade">
+            <Switch label="Shade the change" checked={shaded} on_change={set_shaded} />
+            <span>Shade the change</span>
+          </label>
+        )}
       </Toolbar>
       {days.length > 1 && (
         <Toolbar>
@@ -250,6 +284,7 @@ function ShapeView({ shape, units, saved_looks, on_date }: { shape: BodyShape; u
           <LayerControls name={other_name} look={looks[other_layer]} on_change={(look) => set_look(other_layer, look)} />
         </div>
       )}
+      {shading && <p className="muted small">{`Red where the body now is larger than ${compared === "day" ? `on ${then_day}` : "at the goals"}, teal where it is smaller.`}</p>}
       {missing.length > 0 && <p className="muted">{`Set your ${missing.join(" and ")} under Settings, Body, for a body true to yours.`}</p>}
       {model ? (
         <div className="body-viewers">
@@ -257,7 +292,7 @@ function ShapeView({ shape, units, saved_looks, on_date }: { shape: BodyShape; u
             <>
               <div>
                 <p className="muted small">Now</p>
-                <BodyViewer key="side-now" model={model} shapes={now_shapes} looks={now_looks} link={link} label={now_label} />
+                <BodyViewer key="side-now" model={model} shapes={now_shapes} looks={now_looks} change_from={change_from} link={link} label={now_label} />
               </div>
               <div>
                 <p className="muted small">{other_name}</p>
@@ -265,7 +300,7 @@ function ShapeView({ shape, units, saved_looks, on_date }: { shape: BodyShape; u
               </div>
             </>
           )}
-          {shown === "now" && <BodyViewer key="now" model={model} shapes={now_shapes} looks={now_looks} label={now_label} />}
+          {shown === "now" && <BodyViewer key="now" model={model} shapes={now_shapes} looks={now_looks} change_from={change_from} label={now_label} />}
           {shown === "other" && <BodyViewer key="other" model={model} shapes={other_shapes} looks={other_looks} label={other_label} />}
           {shown === "overlay" && <BodyViewer key="overlay" model={model} shapes={both_shapes} looks={overlay_looks} label={overlay_label} />}
         </div>
@@ -283,7 +318,40 @@ function ShapeView({ shape, units, saved_looks, on_date }: { shape: BodyShape; u
 
 export function ShapeTab({ units, settings }: { units: ShownUnits; settings: Record<string, unknown> }) {
   const [date, set_date] = useState(today);
+  const [playing, set_playing] = useState(false);
   const shape = use_data((api) => api.get_body_shape(date), [date]);
+  // The last day loaded stays drawn while the next one loads, so the view keeps its place.
+  const last = useRef<BodyShape | null>(null);
+  if (shape.data) last.current = shape.data;
 
-  return <Loaded resource={shape}>{(loaded) => <ShapeView shape={loaded} units={units} saved_looks={settings[looks_key]} on_date={set_date} />}</Loaded>;
+  // While playing, each day moves on to the next a moment after it loads, stopping on the last.
+  useEffect(() => {
+    if (!playing || !shape.data || shape.data.date !== date) return;
+    const next = days_of(shape.data).find((day) => day > date);
+    if (!next) return set_playing(false);
+    const timer = setTimeout(() => set_date(next), play_step);
+    return () => clearTimeout(timer);
+  }, [playing, shape.data, date]);
+
+  // Playing from the last day starts again from the first.
+  function toggle_play(days: string[]): void {
+    if (playing) return set_playing(false);
+    if (date >= days[days.length - 1]!) set_date(days[0]!);
+    set_playing(true);
+  }
+
+  const view = (loaded: BodyShape) => (
+    <ShapeView
+      shape={loaded}
+      units={units}
+      saved_looks={settings[looks_key]}
+      playing={playing}
+      on_date={(day) => {
+        set_playing(false);
+        set_date(day);
+      }}
+      on_play={() => toggle_play(days_of(loaded))}
+    />
+  );
+  return last.current && shape.status !== "failed" ? view(last.current) : <Loaded resource={shape}>{view}</Loaded>;
 }

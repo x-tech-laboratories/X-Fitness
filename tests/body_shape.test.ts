@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 
 import { describe, expect, it } from "vitest";
 
-import { average_shape, fit_shape, girth_of_positions, height_of_positions, parse_body_model, shape_positions, volume_of_positions } from "../src/shared/body/shape.ts";
+import { average_shape, change_of_positions, fit_shape, girth_of_positions, height_of_positions, parse_body_model, shape_positions, volume_of_positions } from "../src/shared/body/shape.ts";
 
 const file = readFileSync(new URL("../src/web/body/body_model.bin", import.meta.url));
 const model = parse_body_model(file.buffer.slice(file.byteOffset, file.byteOffset + file.byteLength));
@@ -40,5 +40,17 @@ describe("the 3D body", () => {
 
     expect(fit.parameters.girths.wrist).toBe(1);
     expect(wrist.reached).toBeLessThan(40);
+  });
+
+  it("measures how far each point of one body lies outside or inside another, both standing on the floor", () => {
+    // A sole on the floor and a point 1 dm out to the side, in a body standing 1 dm higher than the other.
+    const positions = new Float32Array([0, 1, 0, 1.5, 2, 0]);
+    const other = new Float32Array([0, 0, 0, 1, 1, 0]);
+    const normals = new Float32Array([0, -1, 0, 1, 0, 0]);
+    expect([...change_of_positions(positions, other, normals)]).toEqual([0, 5]);
+
+    // Any normals do for a body against itself, so its own positions stand in for them.
+    const usual = shape_positions(model, average_shape);
+    expect(change_of_positions(usual, usual, usual).every((change) => change === 0)).toBe(true);
   });
 });

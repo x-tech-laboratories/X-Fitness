@@ -1,4 +1,4 @@
-// The 3D body on a canvas that turns with a drag and zooms with a wheel or pinch; it draws one or more bodies, each in its own colour and opacity, and can share its view with another canvas.
+// The 3D body on a canvas that turns with a drag and zooms with a wheel or pinch; it draws one or more bodies, each in its own colour and opacity, can shade the first by how it differs from another shape, and can share its view with another canvas.
 
 // ── Imports ──────────────────────────────────────────────────────────────────
 
@@ -6,7 +6,7 @@ import { useEffect, useRef, useState } from "react";
 import * as three from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 
-import { parse_body_model, shape_positions, type BodyModel, type ShapeParameters } from "../../shared/body/shape.ts";
+import { change_of_positions, parse_body_model, shape_positions, type BodyModel, type ShapeParameters } from "../../shared/body/shape.ts";
 import model_url from "./body_model.bin?url";
 
 // ── Model ────────────────────────────────────────────────────────────────────
@@ -63,6 +63,8 @@ interface BodyViewerProps {
   // The bodies to draw, a null one leaving its place empty; each takes the look at the same place.
   shapes: (ShapeParameters | null)[];
   looks: Look[];
+  // Shades the first body red where it lies outside this shape and teal where it lies inside, in place of its colour.
+  change_from?: ShapeParameters | null;
   link?: ViewLink;
   label: string;
 }
@@ -80,9 +82,30 @@ interface Scene {
 const framed_middle = 9;
 const framed_distance = 48;
 
+// The skin moving this many cm or more takes the shade's full colour; a girth 9 cm smaller moves it about that far.
+const full_change = 1.5;
+const grown_color = new three.Color("#dc2626");
+const shrunk_color = new three.Color("#0891b2");
+// A shaded body starts grey, whatever its colour, so both shades stand out.
+const unchanged_color = new three.Color("#d4d4d8");
+
+// Each vertex grey, leaning to the grown or shrunk colour as far as it moved.
+function change_colors(change: Float32Array): three.BufferAttribute {
+  const colors = new Float32Array(change.length * 3);
+  const mixed = new three.Color();
+  change.forEach((amount, vertex) => {
+    mixed.copy(unchanged_color).lerp(amount > 0 ? grown_color : shrunk_color, Math.min(1, Math.abs(amount) / full_change));
+    mixed.toArray(colors, vertex * 3);
+  });
+  return new three.BufferAttribute(colors, 3);
+}
+
 function style_mesh(mesh: Scene["meshes"][number], look: Look, order: number): void {
   const material = mesh.material;
-  material.color.set(look.color);
+  const change = mesh.userData.change as Float32Array | null | undefined;
+  if (change) mesh.geometry.setAttribute("color", change_colors(change));
+  material.vertexColors = Boolean(change);
+  material.color.set(change ? "#ffffff" : look.color);
   material.opacity = look.opacity;
   material.transparent = look.opacity < 1;
   material.depthWrite = look.opacity >= 1;
@@ -90,7 +113,7 @@ function style_mesh(mesh: Scene["meshes"][number], look: Look, order: number): v
   mesh.renderOrder = order;
 }
 
-export function BodyViewer({ model, shapes, looks, link, label }: BodyViewerProps) {
+export function BodyViewer({ model, shapes, looks, change_from, link, label }: BodyViewerProps) {
   const holder = useRef<HTMLDivElement>(null);
   const scene_ref = useRef<Scene | null>(null);
   const link_ref = useRef(link);
@@ -190,16 +213,19 @@ export function BodyViewer({ model, shapes, looks, link, label }: BodyViewerProp
       // Stands the body on the floor.
       mesh.geometry.computeBoundingBox();
       mesh.position.y = shape ? -mesh.geometry.boundingBox!.min.y : 0;
+      const positions = mesh.geometry.getAttribute("position");
+      const shaded = index === 0 && shape && change_from;
+      mesh.userData.change = shaded ? change_of_positions(positions.array as Float32Array, shape_positions(model, change_from), mesh.geometry.getAttribute("normal").array as Float32Array) : null;
     });
     current.draw();
-  }, [model, shapes]);
+  }, [model, shapes, change_from]);
 
   useEffect(() => {
     const current = scene_ref.current;
     if (!current) return;
     current.meshes.forEach((mesh, index) => style_mesh(mesh, looks[index] ?? looks[0]!, index));
     current.draw();
-  }, [looks, shapes]);
+  }, [looks, shapes, change_from]);
 
   if (failed) return <p className="muted">This device cannot draw 3D (WebGL is off or missing), so the body cannot be shown.</p>;
   return <div ref={holder} className="body-viewer" role="img" aria-label={label} />;

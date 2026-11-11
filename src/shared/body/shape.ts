@@ -270,6 +270,27 @@ export function body_density(body_fat: number): number {
   return 495 / (body_fat + 450);
 }
 
+function lowest_of(positions: Float32Array): number {
+  let lowest = Infinity;
+  for (let index = 1; index < positions.length; index += 3) lowest = Math.min(lowest, positions[index]!);
+  return lowest;
+}
+
+// How far, in cm, each vertex of a body lies outside (above 0) or inside (below 0) another along its normal, both standing on the floor.
+export function change_of_positions(positions: Float32Array, other: Float32Array, normals: Float32Array): Float32Array {
+  const lift = lowest_of(other) - lowest_of(positions);
+  const change = new Float32Array(positions.length / 3);
+  for (let vertex = 0; vertex < change.length; vertex += 1) {
+    let along = 0;
+    for (let axis = 0; axis < 3; axis += 1) {
+      const at = vertex * 3 + axis;
+      along += (positions[at]! - other[at]! + (axis === 1 ? lift : 0)) * normals[at]!;
+    }
+    change[vertex] = along * 10;
+  }
+  return change;
+}
+
 // ── Fitting ──────────────────────────────────────────────────────────────────
 
 export interface BodyMeasures {
