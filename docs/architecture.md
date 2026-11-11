@@ -67,3 +67,5 @@ Every measure is stored in metric (kg, cm, km, kcal) and shown in the units set 
 targets. `fit_shape` halves each slider in turn until the model's height, mass (its volume times a density from body
 fat) and girths, measured round the same vertices as MakeHuman's tape, match the readings. Each metric's `role` says which
 reading it is. The Body page's 3D tab loads the model and three.js only when opened, and fits in a Web Worker.
+It shows the body now and at the goals side by side, sharing one camera, or as an overlay where each layer has its own
+colour and opacity.

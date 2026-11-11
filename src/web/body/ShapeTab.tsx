@@ -1,9 +1,9 @@
-// The 3D tab: a body shaped to the readings on a day, the body the goals would give, and how near the shape comes to each.
+// The 3D tab: a body shaped to the readings on a day and the body the goals would give, side by side or one over the other, and how near the shape comes to each.
 
 // ── Imports ──────────────────────────────────────────────────────────────────
 
-import { useEffect, useRef, useState } from "react";
-import { Segmented } from "@x-tech-laboratories/x-libs/web/react/controls";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { ColorPicker, Segmented } from "@x-tech-laboratories/x-libs/web/react/controls";
 import { Toolbar } from "@x-tech-laboratories/x-libs/web/react/layout";
 import { Loaded } from "@x-tech-laboratories/x-libs/web/react/states";
 import { DataTable, type TableColumn } from "@x-tech-laboratories/x-libs/web/react/table";
@@ -11,20 +11,29 @@ import { DataTable, type TableColumn } from "@x-tech-laboratories/x-libs/web/rea
 import { shape_roles, type BodyFit, type BodyMeasures, type BodyModel, type FitLine } from "../../shared/body/shape.ts";
 import type { BodyShape } from "../../shared/body/store.ts";
 import { use_data } from "../api.ts";
-import { BodyViewer, load_body_model } from "./BodyViewer.tsx";
+import { BodyViewer, create_view_link, load_body_model, type Look } from "./BodyViewer.tsx";
 import { format_value, type ShownUnits } from "./format.ts";
 import { today } from "./LogTab.tsx";
 import type { FitAnswer, FitRequest } from "./shape_worker.ts";
 
 // ── Fitting ──────────────────────────────────────────────────────────────────
 
-type Shown = "now" | "goal" | "both";
+type Shown = "side" | "now" | "goal" | "overlay";
 
 const shown_choices: { value: Shown; label: string }[] = [
+  { value: "side", label: "Side by side" },
   { value: "now", label: "Now" },
   { value: "goal", label: "Goal" },
-  { value: "both", label: "Both" },
+  { value: "overlay", label: "Overlay" },
 ];
+
+type LayerName = "now" | "goal";
+
+const layer_names: Record<LayerName, string> = { now: "Now", goal: "Goal" };
+
+const swatches = ["#2563eb", "#7c3aed", "#db2777", "#dc2626", "#f59e0b", "#16a34a", "#0891b2", "#6b7280"];
+
+const first_looks: Record<LayerName, Look> = { now: { color: "#2563eb", opacity: 0.6 }, goal: { color: "#f59e0b", opacity: 0.6 } };
 
 // Fits each set of measures in a worker, giving null until its answer comes; a newer set wins over an older one.
 function use_fit(measures: BodyMeasures | null): BodyFit | null {
@@ -94,14 +103,39 @@ function goal_of(line: FitLine, goal: BodyFit | null): number | null {
 
 // ── View ─────────────────────────────────────────────────────────────────────
 
+// The colour and opacity of one body in the overlay.
+function LayerControls({ name, look, on_change }: { name: string; look: Look; on_change: (look: Look) => void }) {
+  return (
+    <div className="body-layer">
+      <span>{name}</span>
+      <ColorPicker label={`${name} colour`} value={look.color} swatches={swatches} allow_none={false} on_change={(color) => color && on_change({ ...look, color })} />
+      <label className="body-layer-opacity">
+        <span>Opacity</span>
+        <input type="range" aria-label={`${name} opacity`} min={10} max={100} step={5} value={Math.round(look.opacity * 100)} onChange={(event) => on_change({ ...look, opacity: Number(event.currentTarget.value) / 100 })} />
+      </label>
+    </div>
+  );
+}
+
 function ShapeView({ shape, units, on_date }: { shape: BodyShape; units: ShownUnits; on_date: (date: string) => void }) {
-  const [shown, set_shown] = useState<Shown>("now");
+  const [shown, set_shown] = useState<Shown>("side");
+  const [looks, set_looks] = useState(first_looks);
   const model = use_model();
   const now = use_fit(shape.measures);
   const goal = use_fit(shape.goal);
+  const link = useMemo(create_view_link, []);
   const days = shape.days.includes(today()) ? shape.days : [...shape.days, today()];
   const position = Math.max(0, days.findLastIndex((day) => day <= shape.date));
   const missing = [shape.measures.height > 0 ? "" : "height", shape.measures.sex ? "" : "sex"].filter(Boolean);
+
+  // Only the overlay is see-through; everywhere else each body is solid in its colour.
+  const now_shapes = useMemo(() => [now?.parameters ?? null], [now]);
+  const goal_shapes = useMemo(() => [goal?.parameters ?? null], [goal]);
+  const both_shapes = useMemo(() => [now?.parameters ?? null, goal?.parameters ?? null], [now, goal]);
+  const now_looks = useMemo((): Look[] => [{ color: looks.now.color, opacity: 1 }], [looks.now.color]);
+  const goal_looks = useMemo((): Look[] => [{ color: looks.goal.color, opacity: 1 }], [looks.goal.color]);
+  const overlay_looks = useMemo(() => [looks.now, looks.goal], [looks]);
+  const label = (what: string) => `Your body ${what} on ${shape.date}`;
 
   return (
     <div className="stack">
@@ -114,14 +148,32 @@ function ShapeView({ shape, units, on_date }: { shape: BodyShape; units: ShownUn
           </label>
         )}
       </Toolbar>
+      {shown === "overlay" && (
+        <div className="body-layers">
+          {(Object.keys(layer_names) as LayerName[]).map((name) => (
+            <LayerControls key={name} name={layer_names[name]} look={looks[name]} on_change={(look) => set_looks((current) => ({ ...current, [name]: look }))} />
+          ))}
+        </div>
+      )}
       {missing.length > 0 && <p className="muted">{`Set your ${missing.join(" and ")} under Settings, Body, for a body true to yours.`}</p>}
       {model ? (
-        <BodyViewer
-          model={model}
-          body={shown === "goal" ? (goal?.parameters ?? null) : (now?.parameters ?? null)}
-          goal={shown === "both" ? (goal?.parameters ?? null) : null}
-          label={`Your body on ${shape.date}${shown === "both" ? ", with the goal body outlined" : shown === "goal" ? " at your goals" : ""}`}
-        />
+        <div className="body-viewers">
+          {shown === "side" && (
+            <>
+              <div>
+                <p className="muted small">Now</p>
+                <BodyViewer key="side-now" model={model} shapes={now_shapes} looks={now_looks} link={link} label={label("now")} />
+              </div>
+              <div>
+                <p className="muted small">Goal</p>
+                <BodyViewer key="side-goal" model={model} shapes={goal_shapes} looks={goal_looks} link={link} label={label("at your goals")} />
+              </div>
+            </>
+          )}
+          {shown === "now" && <BodyViewer key="now" model={model} shapes={now_shapes} looks={now_looks} label={label("now")} />}
+          {shown === "goal" && <BodyViewer key="goal" model={model} shapes={goal_shapes} looks={goal_looks} label={label("at your goals")} />}
+          {shown === "overlay" && <BodyViewer key="overlay" model={model} shapes={both_shapes} looks={overlay_looks} label={label("with the goal body over it")} />}
+        </div>
       ) : (
         <p className="muted">Loading the body…</p>
       )}

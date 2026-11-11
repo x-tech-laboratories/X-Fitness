@@ -1,4 +1,4 @@
-// The 3D body on a canvas that turns with a drag and zooms with a wheel or pinch, with the goal body as an outline.
+// The 3D body on a canvas that turns with a drag and zooms with a wheel or pinch; it draws one or more bodies, each in its own colour and opacity, and can share its view with another canvas.
 
 // ── Imports ──────────────────────────────────────────────────────────────────
 
@@ -40,23 +40,30 @@ function geometry_of(model: BodyModel, parameters: ShapeParameters): three.Buffe
   return geometry;
 }
 
-// A colour from Halon's tokens, so the body follows the theme.
-function token_colour(element: Element, name: string, fallback: string): three.Color {
-  const value = getComputedStyle(element).getPropertyValue(name).trim();
-  try {
-    return new three.Color(value || fallback);
-  } catch {
-    return new three.Color(fallback);
-  }
+// ── Viewer ───────────────────────────────────────────────────────────────────
+
+export interface Look {
+  // A CSS colour such as "#2563eb".
+  color: string;
+  // From 0 to 1; below 1 the body is see-through.
+  opacity: number;
 }
 
-// ── Viewer ───────────────────────────────────────────────────────────────────
+// Canvases that share one link turn and zoom together.
+export interface ViewLink {
+  listeners: Set<(source: symbol, view: three.Spherical) => void>;
+}
+
+export function create_view_link(): ViewLink {
+  return { listeners: new Set() };
+}
 
 interface BodyViewerProps {
   model: BodyModel;
-  body: ShapeParameters | null;
-  // Drawn as an outline round the body.
-  goal: ShapeParameters | null;
+  // The bodies to draw, a null one leaving its place empty; each takes the look at the same place.
+  shapes: (ShapeParameters | null)[];
+  looks: Look[];
+  link?: ViewLink;
   label: string;
 }
 
@@ -65,15 +72,31 @@ interface Scene {
   scene: three.Scene;
   camera: three.PerspectiveCamera;
   controls: OrbitControls;
-  body: three.Mesh<three.BufferGeometry, three.MeshStandardMaterial>;
-  goal: three.LineSegments<three.WireframeGeometry, three.LineBasicMaterial>;
+  meshes: three.Mesh<three.BufferGeometry, three.MeshStandardMaterial>[];
   draw: () => void;
 }
 
-export function BodyViewer({ model, body, goal, label }: BodyViewerProps) {
+// Every canvas frames the same height, so bodies of different sizes sit true to each other.
+const framed_middle = 9;
+const framed_distance = 48;
+
+function style_mesh(mesh: Scene["meshes"][number], look: Look, order: number): void {
+  const material = mesh.material;
+  material.color.set(look.color);
+  material.opacity = look.opacity;
+  material.transparent = look.opacity < 1;
+  material.depthWrite = look.opacity >= 1;
+  material.needsUpdate = true;
+  mesh.renderOrder = order;
+}
+
+export function BodyViewer({ model, shapes, looks, link, label }: BodyViewerProps) {
   const holder = useRef<HTMLDivElement>(null);
   const scene_ref = useRef<Scene | null>(null);
+  const link_ref = useRef(link);
+  const identity = useRef(Symbol("viewer"));
   const [failed, set_failed] = useState(false);
+  link_ref.current = link;
 
   useEffect(() => {
     const element = holder.current!;
@@ -94,18 +117,31 @@ export function BodyViewer({ model, body, goal, label }: BodyViewerProps) {
     scene.add(key_light);
 
     const camera = new three.PerspectiveCamera(30, 1, 0.1, 500);
-    camera.position.set(0, 1, 45);
+    camera.position.set(0, framed_middle, framed_distance);
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enablePan = false;
     controls.minDistance = 10;
     controls.maxDistance = 120;
-
-    const body_mesh = new three.Mesh(new three.BufferGeometry(), new three.MeshStandardMaterial({ color: token_colour(element, "--series-1", "#4a7fd0"), roughness: 0.7 }));
-    const goal_lines = new three.LineSegments(new three.WireframeGeometry(), new three.LineBasicMaterial({ color: token_colour(element, "--series-2", "#d08a4a"), transparent: true, opacity: 0.25 }));
-    scene.add(body_mesh, goal_lines);
+    controls.target.set(0, framed_middle, 0);
+    controls.update();
 
     const draw = () => renderer.render(scene, camera);
-    controls.addEventListener("change", draw);
+    let following = false;
+    controls.addEventListener("change", () => {
+      draw();
+      if (following) return;
+      const view = new three.Spherical().setFromVector3(camera.position.clone().sub(controls.target));
+      for (const listener of link_ref.current?.listeners ?? []) listener(identity.current, view);
+    });
+    const follow = (source: symbol, view: three.Spherical) => {
+      if (source === identity.current) return;
+      following = true;
+      camera.position.setFromSpherical(view).add(controls.target);
+      controls.update();
+      following = false;
+    };
+    link_ref.current?.listeners.add(follow);
+
     const resize = new ResizeObserver(() => {
       const { width, height } = element.getBoundingClientRect();
       renderer.setSize(width, height, false);
@@ -114,39 +150,56 @@ export function BodyViewer({ model, body, goal, label }: BodyViewerProps) {
       draw();
     });
     resize.observe(element);
-    scene_ref.current = { renderer, scene, camera, controls, body: body_mesh, goal: goal_lines, draw };
+    const current: Scene = { renderer, scene, camera, controls, meshes: [], draw };
+    scene_ref.current = current;
+    const leaving_link = link_ref.current;
 
     return () => {
+      leaving_link?.listeners.delete(follow);
       resize.disconnect();
       controls.dispose();
-      body_mesh.geometry.dispose();
-      goal_lines.geometry.dispose();
+      for (const mesh of current.meshes) {
+        mesh.geometry.dispose();
+        mesh.material.dispose();
+      }
       renderer.dispose();
       renderer.domElement.remove();
       scene_ref.current = null;
     };
   }, []);
 
+  // Each body is built again only when its shape changes.
   useEffect(() => {
     const current = scene_ref.current;
     if (!current) return;
-    current.body.geometry.dispose();
-    current.body.geometry = body ? geometry_of(model, body) : new three.BufferGeometry();
-    current.goal.geometry.dispose();
-    const goal_geometry = goal ? geometry_of(model, goal) : null;
-    current.goal.geometry = goal_geometry ? new three.WireframeGeometry(goal_geometry) : new three.WireframeGeometry();
-
-    // Stands the body on the floor in the middle, and the camera on its middle.
-    const placed = body ? current.body.geometry : goal_geometry;
-    placed?.computeBoundingBox();
-    const bounds = placed?.boundingBox ?? new three.Box3(new three.Vector3(), new three.Vector3(0, 17, 0));
-    goal_geometry?.dispose();
-    const centre = bounds.getCenter(new three.Vector3());
-    for (const object of [current.body, current.goal]) object.position.set(-centre.x, -bounds.min.y, -centre.z);
-    current.controls.target.set(0, (bounds.max.y - bounds.min.y) / 2, 0);
-    current.controls.update();
+    while (current.meshes.length > shapes.length) {
+      const extra = current.meshes.pop()!;
+      current.scene.remove(extra);
+      extra.geometry.dispose();
+      extra.material.dispose();
+    }
+    shapes.forEach((shape, index) => {
+      let mesh = current.meshes[index];
+      if (!mesh) {
+        mesh = new three.Mesh(new three.BufferGeometry(), new three.MeshStandardMaterial({ roughness: 0.7 }));
+        current.meshes.push(mesh);
+        current.scene.add(mesh);
+      }
+      mesh.geometry.dispose();
+      mesh.geometry = shape ? geometry_of(model, shape) : new three.BufferGeometry();
+      // Stands the body on the floor.
+      mesh.geometry.computeBoundingBox();
+      mesh.position.y = shape ? -mesh.geometry.boundingBox!.min.y : 0;
+    });
     current.draw();
-  }, [model, body, goal]);
+  }, [model, shapes]);
+
+  useEffect(() => {
+    const current = scene_ref.current;
+    if (!current) return;
+    current.meshes.forEach((mesh, index) => style_mesh(mesh, looks[index] ?? looks[0]!, index));
+    current.draw();
+  }, [looks, shapes]);
 
   if (failed) return <p className="muted">This device cannot draw 3D (WebGL is off or missing), so the body cannot be shown.</p>;
   return <div ref={holder} className="body-viewer" role="img" aria-label={label} />;

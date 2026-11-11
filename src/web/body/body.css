@@ -29,3 +29,24 @@
 .body-shape-day > input {
   flex: 1 1 auto;
 }
+
+/* Bodies side by side share the width, and stack where a phone is too narrow for two. */
+.body-viewers {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: var(--space-3);
+}
+
+/* Each overlay layer's colour and opacity sit in one wrapping row. */
+.body-layers {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+}
+
+.body-layer,
+.body-layer-opacity {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+}
