@@ -8,6 +8,7 @@ import { NumberField, Segmented, Select } from "@x-tech-laboratories/x-libs/web/
 import { BackupSettings } from "@x-tech-laboratories/x-libs/web/react/backup_settings";
 import { PageHeading, SettingRow, SettingsPage, type SettingsCategory, type SettingsSection } from "@x-tech-laboratories/x-libs/web/react/layout";
 import { Loaded } from "@x-tech-laboratories/x-libs/web/react/states";
+import { TrustedCertificates } from "@x-tech-laboratories/x-libs/web/react/certificates";
 import { SyncSettings } from "@x-tech-laboratories/x-libs/web/react/sync_settings";
 
 import { calls, data_watch, page, use_settings } from "../api.ts";
@@ -81,9 +82,12 @@ function Backups() {
 
 // Sync on a device with its own database, and backups of whichever database the page works on.
 function data_category(): SettingsCategory[] {
-  const { device, backups, backup_folder } = page();
+  const { device, backups, backup_folder, certificates } = page();
   const sections: SettingsSection[] = [
-    ...(device ? [{ id: "sync", heading: "Sync", hint: "Keep this device's data alike with your X-Fitness server.", content: <SyncSettings device={device} subscribe={data_watch.subscribe} data_name="fitness data" placeholder="https://fitness.example.org/" /> }] : []),
+    ...(device ? [{ id: "sync", heading: "Sync", hint: "Keep this device's data alike with your X-Fitness server.", content: <>
+      <SyncSettings device={device} certificates={certificates} subscribe={data_watch.subscribe} data_name="fitness data" placeholder="https://fitness.example.org/" />
+      {certificates && <TrustedCertificates certificates={certificates} />}
+    </> }] : []),
     ...(backups
       ? [{ id: "backups", heading: "Backups", hint: backup_folder ? "Copies of this device's data, kept in a folder you pick." : device ? "Copies of this device's data, kept beside it." : "Copies of the server's data, kept in its data folder. A restore restarts the server.", content: <Backups /> }]
       : []),
