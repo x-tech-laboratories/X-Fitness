@@ -3,9 +3,10 @@
 // ── Imports ──────────────────────────────────────────────────────────────────
 
 import type { Client } from "@x-tech-laboratories/x-libs/electron/bridge";
+import type { CertificateClient } from "@x-tech-laboratories/x-libs/certificate_protocol";
 import type { EventsClient } from "@x-tech-laboratories/x-libs/electron/events";
 
-import { device_api_name, events_api_name, fitness_api_name, type DeviceMethods, type FitnessEvents, type PageApi } from "../../shared/page_api.ts";
+import { certificates_api_name, device_api_name, events_api_name, fitness_api_name, type DeviceMethods, type FitnessEvents, type PageApi } from "../../shared/page_api.ts";
 import type { FitnessMethods } from "../../shared/store.ts";
 
 // ── Api ──────────────────────────────────────────────────────────────────────
@@ -25,6 +26,7 @@ export function desktop_api(): PageApi {
     calls: desktop[fitness_api_name] as Client<FitnessMethods>,
     device,
     backups: device,
+    certificates: desktop[certificates_api_name] as CertificateClient,
     on_change: (listener) => events.on("changed", listener),
   };
 }

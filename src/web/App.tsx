@@ -5,11 +5,12 @@
 import { Fragment, useEffect } from "react";
 import { create_accounts_client, type Me } from "@x-tech-laboratories/x-libs/web/accounts";
 import { AccountView, UsersView } from "@x-tech-laboratories/x-libs/web/react/accounts";
+import { SyncCertificatePrompt } from "@x-tech-laboratories/x-libs/web/react/certificates";
 import { Shell, use_route } from "@x-tech-laboratories/x-libs/web/react/shell";
 import { SignInForm, use_account } from "@x-tech-laboratories/x-libs/web/react/sign_in";
 import { theme_choice } from "@x-tech-laboratories/x-libs/web/theme";
 
-import { page } from "./api.ts";
+import { data_watch, page } from "./api.ts";
 import { page_features } from "./features.tsx";
 import { HistoryView } from "./history/HistoryView.tsx";
 import { OverviewView } from "./overview/OverviewView.tsx";
@@ -29,8 +30,17 @@ const own_sections = ["settings", "account", "users"];
 // ── App ──────────────────────────────────────────────────────────────────────
 
 // A browser signs in to the server; the desktop and phone apps keep their own data and sign in only to sync.
+// A device that syncs asks to trust its server's certificate whenever sync fails over it.
+function DeviceApp() {
+  const { certificates, device } = page();
+  return <>
+    {device && certificates && <SyncCertificatePrompt device={device} certificates={certificates} subscribe={data_watch.subscribe} />}
+    <Pages me={null} />
+  </>;
+}
+
 export function App() {
-  return page().host === "web" ? <SignedInApp /> : <Pages me={null} />;
+  return page().host === "web" ? <SignedInApp /> : <DeviceApp />;
 }
 
 function SignedInApp() {
