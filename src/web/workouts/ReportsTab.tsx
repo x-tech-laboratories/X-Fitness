@@ -126,7 +126,7 @@ const epoch_of = (day: string) => Date.parse(`${day}T00:00:00Z`) / 1000;
 // The figure a sparkline follows for the measurement, the same one its Best column leads with.
 const spark_metrics: Record<Measurement, TrendMetric> = { weight: "one_rep_max", bodyweight: "top_reps", duration: "duration", cardio: "distance" };
 
-const category_colors = ["var(--series-1)", "var(--series-2)", "var(--status-info)", "var(--status-warning)"];
+const category_colors = ["var(--series-1)", "var(--series-2)", "var(--series-4)", "var(--series-5)", "var(--series-6)"];
 
 // The biggest categories each get a slice and the rest share a grey one, so the ring stays readable.
 function category_parts(categories: { category: string; sets: number }[]) {

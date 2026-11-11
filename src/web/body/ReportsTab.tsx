@@ -25,7 +25,7 @@ const epoch_of = (date: string) => Date.parse(`${date}T00:00:00Z`) / 1000;
 // A chart's dates as the day they were logged, read in UTC so a time zone never moves them.
 const day_of = (epoch: number) => new Date(epoch * 1000).toISOString().slice(0, 10);
 
-const compare_colors = ["var(--series-1)", "var(--series-2)", "var(--status-info)", "var(--status-warning)", "var(--series-3)"];
+const compare_colors = ["var(--series-1)", "var(--series-2)", "var(--series-3)", "var(--series-4)", "var(--series-5)", "var(--series-6)"];
 
 const ranges: [days: number, label: string][] = [[30, "30 days"], [90, "90 days"], [180, "6 months"], [365, "1 year"], [0, "All time"]];
 
