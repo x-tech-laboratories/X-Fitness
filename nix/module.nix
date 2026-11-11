@@ -80,7 +80,7 @@ in
         StateDirectory = "x-fitness";
         StateDirectoryMode = "0700";
         LoadCredential = [ "password-hash:${cfg.passwordHashFile}" ];
-        Restart = "on-failure";
+        Restart = "always";
         RestartSec = "5s";
 
         CapabilityBoundingSet = "";

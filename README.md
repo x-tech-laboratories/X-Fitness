@@ -64,8 +64,8 @@ belongs to that device or server and is never synced.
 - **Android:** in a folder you pick once under **Settings → Backups → Backup folder**, such as Documents, where file
   managers and sync apps reach them. Until one is picked there are none, and daily backups wait. A restore backs up the
   current data first and stops sync.
-- **Server:** in `backups_folder`. Only an admin sees them. The page cannot restore one while the server runs on the
-  same database; stop X-Fitness and copy the backup over the database file.
+- **Server:** in `backups_folder`. Only an admin sees them. A restore from the page backs up the current data first,
+  then the server stops and its service starts it again on the backup; every device then chooses which copy wins.
 
 ## History
 

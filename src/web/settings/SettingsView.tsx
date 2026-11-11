@@ -85,7 +85,7 @@ function data_category(): SettingsCategory[] {
   const sections: SettingsSection[] = [
     ...(device ? [{ id: "sync", heading: "Sync", hint: "Keep this device's data alike with your X-Fitness server.", content: <SyncSettings device={device} subscribe={data_watch.subscribe} data_name="fitness data" placeholder="https://fitness.example.org/" /> }] : []),
     ...(backups
-      ? [{ id: "backups", heading: "Backups", hint: backup_folder ? "Copies of this device's data, kept in a folder you pick." : device ? "Copies of this device's data, kept beside it." : "Copies of the server's data, kept in its data folder.", content: <Backups /> }]
+      ? [{ id: "backups", heading: "Backups", hint: backup_folder ? "Copies of this device's data, kept in a folder you pick." : device ? "Copies of this device's data, kept beside it." : "Copies of the server's data, kept in its data folder. A restore restarts the server.", content: <Backups /> }]
       : []),
   ];
   return sections.length ? [{ heading: device ? "This device" : "Server", sections }] : [];

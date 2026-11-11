@@ -60,7 +60,7 @@ export async function build_app(options: AppOptions): Promise<FastifyInstance> {
   register_error_replies(app);
   const accounts = new AccountStore({ database: options.database, app_name: "X-Fitness", declared: options.declared, token_prefix: "xf" });
   // Backups reach the whole database, the accounts included, so only an admin may manage them.
-  await register_accounts(app, { accounts, cookie_name: "x_fitness_session", needed: (_method, path) => (path.startsWith("/api/backup/") ? { role: accounts.top_role } : "any") });
+  await register_accounts(app, { accounts, cookie_name: "x_fitness_session", read_only_paths: ["/api/mcp"], needed: (_method, path) => (path.startsWith("/api/backup/") ? { role: accounts.top_role } : "any") });
 
   const changes = new EventStream();
   const database = () => options.database;
