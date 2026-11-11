@@ -37,6 +37,8 @@ export interface PageApi {
   // The backups of whichever database the page works on: the device's own, or the server's for a browser; left out where
   // none are offered, and Settings then shows no Backups section.
   backups?: BackupClient;
+  // Where a phone keeps its backups: a folder the user picks once, with no backups until then.
+  backup_folder?: { get: () => Promise<string>; choose: () => Promise<string> };
   // Runs whenever the data changed somewhere else; returns the function that stops listening.
   on_change: (listener: () => void) => () => void;
 }

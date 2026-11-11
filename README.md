@@ -61,8 +61,9 @@ belongs to that device or server and is never synced.
 
 - **Desktop:** in `backups/` beside the database in the profile folder. A restore backs up the current data first and
   stops sync, so you choose again which copy wins.
-- **Android:** inside the app's own storage, apart from the database, rather than in a folder you pick; the app has no
-  file-picking permission to ask for.
+- **Android:** in a folder you pick once under **Settings → Backups → Backup folder**, such as Documents, where file
+  managers and sync apps reach them. Until one is picked there are none, and daily backups wait. A restore backs up the
+  current data first and stops sync.
 - **Server:** in `backups_folder`. Only an admin sees them. The page cannot restore one while the server runs on the
   same database; stop X-Fitness and copy the backup over the database file.
 

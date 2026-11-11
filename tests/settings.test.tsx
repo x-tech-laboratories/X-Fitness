@@ -77,4 +77,26 @@ describe("settings", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Back up" }));
     await waitFor(() => expect(backups.create_backup).toHaveBeenCalled());
   });
+
+  it("waits for a phone to pick its backup folder, then reads the backups in it", async () => {
+    const backups = {
+      list_backups: vi.fn(async () => []),
+      create_backup: vi.fn(),
+      restore_backup: vi.fn(),
+      remove_backup: vi.fn(),
+      get_backup_schedule: vi.fn(async () => ({ automatic: true, to_keep: 14 })),
+      set_backup_schedule: vi.fn(),
+    };
+    const backup_folder = { get: vi.fn(async () => ""), choose: vi.fn(async () => "Documents") };
+    const device = { get_sync_status: vi.fn(async () => off) } as unknown as Client<DeviceMethods>;
+    set_page_api({ host: "android", calls: fake_calls({}), device, backups, backup_folder, on_change: () => () => undefined });
+    render(<><SettingsView /><Dialogs /></>);
+
+    expect(await screen.findByRole("button", { name: "Back up" })).toHaveProperty("disabled", true);
+    fireEvent.click(screen.getByRole("button", { name: "Choose" }));
+    expect(await screen.findByRole("button", { name: "Change" })).toBeTruthy();
+    expect(screen.getByText("Documents")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Back up" })).toHaveProperty("disabled", false);
+    await waitFor(() => expect(backups.list_backups).toHaveBeenCalledTimes(2));
+  });
 });

@@ -2,6 +2,8 @@
 
 // ── Imports ──────────────────────────────────────────────────────────────────
 
+import { useEffect, useState } from "react";
+
 import { NumberField, Segmented, Select } from "@x-tech-laboratories/x-libs/web/react/controls";
 import { BackupSettings } from "@x-tech-laboratories/x-libs/web/react/backup_settings";
 import { PageHeading, SettingRow, SettingsPage, type SettingsCategory, type SettingsSection } from "@x-tech-laboratories/x-libs/web/react/layout";
@@ -60,13 +62,30 @@ function history_section(settings: Record<string, unknown>, set_setting: (key: s
 
 // ── Page ─────────────────────────────────────────────────────────────────────
 
+// A phone's backups wait for a folder it picks; the list is read again once one is, as the folder may already hold some.
+function Backups() {
+  const { backups, backup_folder } = page();
+  const [folder_name, set_folder_name] = useState<string | null>(backup_folder ? null : "");
+  useEffect(() => void backup_folder?.get().then(set_folder_name), [backup_folder]);
+  if (!backups || folder_name === null) return null;
+
+  const folder_row = backup_folder && (
+    <SettingRow label="Backup folder" hint={folder_name || "Pick a folder in the phone's storage, such as Documents, where file managers and sync apps can reach the backups."}>
+      <button type="button" onClick={() => void backup_folder.choose().then(set_folder_name)}>
+        {folder_name ? "Change" : "Choose"}
+      </button>
+    </SettingRow>
+  );
+  return <BackupSettings key={folder_name} device={backups} data_name="fitness data" on_restored={() => data_watch.bump()} folder_row={folder_row} can_back_up={!backup_folder || folder_name !== ""} />;
+}
+
 // Sync on a device with its own database, and backups of whichever database the page works on.
 function data_category(): SettingsCategory[] {
-  const { device, backups } = page();
+  const { device, backups, backup_folder } = page();
   const sections: SettingsSection[] = [
     ...(device ? [{ id: "sync", heading: "Sync", hint: "Keep this device's data alike with your X-Fitness server.", content: <SyncSettings device={device} subscribe={data_watch.subscribe} data_name="fitness data" placeholder="https://fitness.example.org/" /> }] : []),
     ...(backups
-      ? [{ id: "backups", heading: "Backups", hint: device ? "Copies of this device's data, kept beside it." : "Copies of the server's data, kept in its data folder.", content: <BackupSettings device={backups} data_name="fitness data" on_restored={() => data_watch.bump()} /> }]
+      ? [{ id: "backups", heading: "Backups", hint: backup_folder ? "Copies of this device's data, kept in a folder you pick." : device ? "Copies of this device's data, kept beside it." : "Copies of the server's data, kept in its data folder.", content: <Backups /> }]
       : []),
   ];
   return sections.length ? [{ heading: device ? "This device" : "Server", sections }] : [];
