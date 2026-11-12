@@ -71,12 +71,12 @@ export function Sidebar({ features, section, page }: SidebarProps) {
   );
 }
 
-// Settings, and Users for an admin signed in on the server.
+// Users, for an admin signed in on the server, above the Shell's own theme, account and Settings rows.
 export function SidebarFoot({ section, show_users = false }: { section: string; show_users?: boolean }) {
   const row = (id: string, label: string) => (
     <a href={`#/${id}`} className={section === id ? "tree-row active" : "tree-row"} aria-current={section === id ? "page" : undefined}>
       <span className="tree-label">{label}</span>
     </a>
   );
-  return <>{show_users && row("users", "Users")}{row("settings", "Settings")}</>;
+  return show_users ? row("users", "Users") : null;
 }
