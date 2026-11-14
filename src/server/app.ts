@@ -38,7 +38,7 @@ const version = (JSON.parse(readFileSync(new URL("../../package.json", import.me
 
 // ── App ──────────────────────────────────────────────────────────────────────
 
-// An import, such as a Trilium or Liftosaur file, arrives as one call's argument.
+// An import, such as a Liftosaur file, arrives as one call's argument.
 const import_body_limit = 32 * 1024 * 1024;
 
 export async function build_app(options: AppOptions): Promise<FastifyInstance> {

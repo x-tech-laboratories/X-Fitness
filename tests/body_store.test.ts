@@ -112,7 +112,6 @@ describe("body metrics store", () => {
     const body = bind_methods(() => database, on_change);
     body.get_body_day("2026-11-01");
     body.list_body_metrics();
-    body.export_body();
     expect(on_change).not.toHaveBeenCalled();
     body.set_body_reading("weight", "2026-11-01", 80);
     expect(on_change).toHaveBeenCalledOnce();
@@ -165,76 +164,5 @@ describe("the 3D body's readings", () => {
     expect(shape.measures).toEqual({ sex: "male", height: 180, mass: 85, body_fat: 0, girths: { neck: 0, chest: 0, waist: 92, hips: 0, upper_arm: 0, thigh: 0 } });
     expect(shape.goal).toMatchObject({ mass: 85, girths: { waist: 84 } });
     expect(shape.days).toEqual(["2026-11-01", "2026-11-05"]);
-  });
-});
-
-describe("importing the Trilium add-on", () => {
-  const add_on_file = JSON.stringify({
-    metrics: [
-      { id: "weight", name: "Weight", kind: "weight", unit: "", goal: 165, comment: "" },
-      { id: "x1y2z3", name: "Calf", kind: "length", unit: "", goal: 15, comment: "left" },
-      { id: "glucose", name: "Glucose", kind: "custom", unit: "mg/dL", goal: 0, comment: "" },
-      { name: "No id" },
-    ],
-    log: {
-      "2026-10-01": { values: { weight: 180, x1y2z3: 14, glucose: 95, gone: 3 }, comment: "first" },
-      "2026-10-02": { values: { weight: 0 }, comment: "" },
-      "not a day": { values: { weight: 170 } },
-    },
-  });
-
-  it("merges metrics and readings, converting weights and lengths from the units given", () => {
-    const { body } = open_body();
-    body.set_body_reading("weight", "2026-10-01", 80);
-    body.set_body_note("2026-10-01", "mine");
-
-    const result = body.import_trilium_body(add_on_file, { mass_unit: "lb", length_unit: "in" });
-    expect(result).toEqual({ metrics: 3, days: 1, added_metrics: 2, added_readings: 2 });
-
-    const metrics = body.list_body_metrics();
-    expect(metrics.find((metric) => metric.id === "weight")?.goal).toBe(0);
-    expect(metrics.slice(-2)).toMatchObject([
-      { id: "x1y2z3", name: "Calf", kind: "length", comment: "left", position: 9 },
-      { id: "glucose", unit: "mg/dL", goal: 0, position: 10 },
-    ]);
-    expect(metrics.find((metric) => metric.id === "x1y2z3")?.goal).toBeCloseTo(38.1);
-    const day = body.list_body_history(0, "2026-11-10")[0]!;
-    expect(day).toMatchObject({ date: "2026-10-01", comment: "mine", values: { weight: 80, glucose: 95 } });
-    expect(day.values.x1y2z3).toBeCloseTo(35.56);
-  });
-
-  it("changes nothing the second time, and reads numbers in the units set here when none are given", () => {
-    const { body } = open_body();
-    body.set_setting("mass_unit", "lb");
-    body.import_trilium_body(add_on_file);
-    const before = body.export_body();
-    expect(body.list_body_history(0, "2026-11-10")[0]?.values.weight).toBeCloseTo(81.65, 2);
-    expect(body.import_trilium_body(add_on_file)).toMatchObject({ added_metrics: 0, added_readings: 0 });
-    expect(body.export_body()).toBe(before);
-  });
-
-  it("takes back its own export whole, whatever the units set", () => {
-    const first = open_body().body;
-    first.set_body_reading("weight", "2026-11-01", 80.25);
-    first.set_body_note("2026-11-01", "note");
-    first.save_body_metric({ id: "steps", name: "Steps", kind: "custom", unit: "k", goal: 10 });
-    const exported = first.export_body();
-
-    const second = open_body().body;
-    second.set_setting("mass_unit", "lb");
-    second.delete_body_metric("neck");
-    second.import_trilium_body(exported);
-    expect(second.list_body_history(0, "2026-11-10")).toEqual([{ date: "2026-11-01", values: { weight: 80.25 }, comment: "note" }]);
-    expect(second.list_body_metrics().map((metric) => metric.id)).toContain("neck");
-    expect(second.list_body_metrics().at(-1)).toMatchObject({ id: "steps", goal: 10 });
-    expect(second.list_body_metrics().find((metric) => metric.id === "neck")?.role).toBe("neck");
-  });
-
-  it("refuses what is not a database and leaves the data alone", () => {
-    const { body } = open_body();
-    body.set_body_reading("weight", "2026-11-01", 80);
-    expect(() => body.import_trilium_body("{nope")).toThrow("Not valid JSON.");
-    expect(() => body.import_trilium_body("[]")).toThrow("Expected a JSON object with metrics/log.");
-    expect(body.list_body_history(0, "2026-11-10")).toHaveLength(1);
   });
 });

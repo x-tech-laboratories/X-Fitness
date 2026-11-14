@@ -190,22 +190,5 @@ export const workouts_api = {
     ],
   },
   get_exercise_report: { description: "One exercise's statistics, trend and every logged set; null when it does not exist.", params: [{ name: "exercise_id", schema: id_of("exercise") }] },
-  export_workouts: { description: "Every exercise, program and workout as JSON in the Trilium workouts add-on's format, in kg, km and minutes.", params: [] },
-  import_trilium_workouts: {
-    description: "Merges a Trilium workouts add-on database.json by id.",
-    params: [
-      { name: "json_text", schema: json_file },
-      {
-        name: "units",
-        optional: true,
-        schema: {
-          type: "object",
-          properties: { mass_unit: { type: "string", enum: ["kg", "lb"] }, distance_unit: { type: "string", enum: ["km", "mi"] } },
-          required: ["mass_unit", "distance_unit"],
-          description: "The units the file's numbers are in; kg and km unless given.",
-        },
-      },
-    ],
-  },
   import_liftosaur_workouts: { description: "Merges a Liftosaur JSON backup or history CSV.", params: [{ name: "text", schema: json_file }] },
 } satisfies Record<string, MethodSpec>;

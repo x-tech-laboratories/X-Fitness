@@ -345,7 +345,7 @@ describe("diet settings", () => {
     expect(screen.getByText("Custom: 1 target(s) set by hand.")).toBeTruthy();
   });
 
-  it("saves targets in the stored units and imports the add-on's database from a file", async () => {
+  it("saves targets in the stored units", async () => {
     const { methods } = start();
     render(
       <>
@@ -374,9 +374,5 @@ describe("diet settings", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Reset to label" }));
     await waitFor(() => expect(methods.get_settings()["diet.shown"]).toEqual({}));
 
-    const file = new File([JSON.stringify({ foods: { a1: { name: "Rice", servingSize: 100, servingUnit: "g", nutrients: { calories: 130, sodium: 5 } } } })], "database.json");
-    fireEvent.change(screen.getByLabelText("Diet Manager database file"), { target: { files: [file] } });
-    expect(await screen.findByText("Imported 1 food(s), 0 recipe(s), 0 diary entries and 0 grocery line(s).")).toBeTruthy();
-    expect(methods.get_diet().foods[0]).toMatchObject({ id: "a1", name: "Rice" });
   });
 });

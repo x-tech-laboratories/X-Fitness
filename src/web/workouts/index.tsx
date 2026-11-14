@@ -1,5 +1,5 @@
 // The Workouts section: the log, programs, the exercise library, reports and categories as pages, and its own settings
-// with the imports from the Trilium add-on and Liftosaur.
+// with the import from Liftosaur.
 
 // ── Imports ──────────────────────────────────────────────────────────────────
 
@@ -87,22 +87,8 @@ function failure_text(error: unknown): string {
   return `Could not import: ${error instanceof Error ? error.message : String(error)}`;
 }
 
-function WorkoutData({ settings }: { settings: Record<string, unknown> }) {
-  const trilium_file = useRef<HTMLInputElement>(null);
+function WorkoutData() {
   const liftosaur_file = useRef<HTMLInputElement>(null);
-  const units = units_of(settings);
-
-  async function import_trilium(event: ChangeEvent<HTMLInputElement>): Promise<void> {
-    const text = await read_picked(event);
-    if (text === null) return;
-    try {
-      const summary = await calls().import_trilium_workouts(text, { mass_unit: units.mass, distance_unit: units.distance });
-      const skipped = summary.skipped_workouts > 0 ? ` ${summary.skipped_workouts} workout(s) were already here.` : "";
-      toast(`Imported ${summary.exercises} exercise(s), ${summary.sessions} session(s) in ${summary.programs} new program(s) and ${summary.workouts} workout(s).${skipped}`, { tone: "good" });
-    } catch (error) {
-      toast(failure_text(error), { tone: "bad" });
-    }
-  }
 
   async function import_liftosaur(event: ChangeEvent<HTMLInputElement>): Promise<void> {
     const text = await read_picked(event);
@@ -118,35 +104,13 @@ function WorkoutData({ settings }: { settings: Record<string, unknown> }) {
     }
   }
 
-  async function export_all(): Promise<void> {
-    const url = URL.createObjectURL(new Blob([await calls().export_workouts()], { type: "application/json" }));
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = "x-fitness-workouts.json";
-    link.click();
-    URL.revokeObjectURL(url);
-  }
-
   return (
-    <>
-      <SettingRow label="Import from Trilium" hint={`The Workout Manager add-on's database.json, merged in by id; its numbers are read as ${units.mass} and ${units.distance}, the units set under Units.`}>
-        <input ref={trilium_file} type="file" accept="application/json,.json" hidden aria-label="Trilium database file" onChange={(event) => void import_trilium(event)} />
-        <button type="button" onClick={() => trilium_file.current?.click()}>
-          Import Trilium…
-        </button>
-      </SettingRow>
-      <SettingRow label="Import from Liftosaur" hint="The JSON backup or the history CSV; warmups and sets never performed are left out, and every weight is converted.">
-        <input ref={liftosaur_file} type="file" accept="application/json,.json,text/csv,.csv" hidden aria-label="Liftosaur export file" onChange={(event) => void import_liftosaur(event)} />
-        <button type="button" onClick={() => liftosaur_file.current?.click()}>
-          Import Liftosaur…
-        </button>
-      </SettingRow>
-      <SettingRow label="Export" hint="Every exercise, program and workout as one JSON file, in the Trilium add-on's shape, which Import Trilium reads back.">
-        <button type="button" onClick={() => void export_all()}>
-          Export JSON
-        </button>
-      </SettingRow>
-    </>
+    <SettingRow label="Import from Liftosaur" hint="The JSON backup or the history CSV; warmups and sets never performed are left out, and every weight is converted.">
+      <input ref={liftosaur_file} type="file" accept="application/json,.json,text/csv,.csv" hidden aria-label="Liftosaur export file" onChange={(event) => void import_liftosaur(event)} />
+      <button type="button" onClick={() => liftosaur_file.current?.click()}>
+        Import Liftosaur…
+      </button>
+    </SettingRow>
   );
 }
 
@@ -173,8 +137,8 @@ export function workouts_settings({ settings, set_setting }: FeatureSettingsProp
     {
       id: "workouts-data",
       heading: "Workout data",
-      hint: "Bring workouts in from elsewhere, or take them all out as one file.",
-      content: <WorkoutData settings={settings} />,
+      hint: "Bring workouts in from elsewhere.",
+      content: <WorkoutData />,
     },
   ];
 }

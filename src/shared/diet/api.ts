@@ -4,7 +4,7 @@
 
 import type { JsonSchema, MethodSpec } from "@x-tech-laboratories/x-libs/api_spec";
 
-import { categories, category_parent, category_position, day, id_of, json_file, moment, number, text } from "../api_schemas.ts";
+import { categories, category_parent, category_position, day, id_of, moment, number, text } from "../api_schemas.ts";
 import { nutrient_keys } from "./model.ts";
 
 // ── Shapes ───────────────────────────────────────────────────────────────────
@@ -191,10 +191,5 @@ export const diet_api = {
   search_online_foods: {
     description: "Searches Open Food Facts and, with a key in Settings, USDA FoodData Central for foods with their nutrients, to save with save_food.",
     params: [{ name: "query", schema: text("A food's name.") }],
-  },
-  export_diet_json: { description: "The whole diet as JSON in the Trilium diet add-on's format.", params: [] },
-  import_trilium_diet: {
-    description: "Merges a Trilium diet add-on database.json: foods and recipes with the same id are replaced, diary entries and grocery lines are added once.",
-    params: [{ name: "json_text", schema: json_file }],
   },
 } satisfies Record<string, MethodSpec>;

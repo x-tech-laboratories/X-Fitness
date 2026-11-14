@@ -7,8 +7,8 @@ import { add_days, format_local, parse_local } from "@x-tech-laboratories/x-libs
 import { asc, between, eq, sql, synced_tables, type InferInsertModel, type InferSelectModel } from "@x-tech-laboratories/x-libs/drizzle";
 import { in_transaction, type SqlDatabase } from "@x-tech-laboratories/x-libs/sql";
 
-import { add_category, delete_category, import_category_paths, move_category, read_categories, rename_category, save_category_refs, type Retag } from "../category_store.ts";
-import { category_paths_of, known_category_ids, placed_categories, type PlacedCategory } from "../category_tree.ts";
+import { add_category, delete_category, move_category, read_categories, rename_category, save_category_refs, type Retag } from "../category_store.ts";
+import { known_category_ids, placed_categories, type PlacedCategory } from "../category_tree.ts";
 import { define_feature, drizzle_of, new_id } from "../feature.ts";
 import { diet_api } from "./api.ts";
 import { label_preset_of, preset_target, shown_nutrients, target_of, target_preset_of, target_source, type TargetSource } from "./labels.ts";
@@ -41,7 +41,6 @@ import {
 } from "./model.ts";
 import { diet_categories, diet_diary, diet_foods, diet_grocery, diet_ingredients, diet_recipes, diet_tables, diet_units } from "./schema.ts";
 import { diet_setting_defaults, type DietSettingKey } from "./settings.ts";
-import { read_trilium_diet, write_trilium_diet, type DietDocument } from "./trilium.ts";
 
 // ── Settings ─────────────────────────────────────────────────────────────────
 
@@ -246,13 +245,6 @@ export interface DayTotals {
   meal_totals: Record<string, MealMacros>;
 }
 
-export interface ImportCounts {
-  foods: number;
-  recipes: number;
-  diary: number;
-  grocery: number;
-}
-
 export interface FoodInput {
   id?: string;
   name: string;
@@ -315,20 +307,6 @@ function get_diet(database: SqlDatabase): DietData {
     ]),
     brands: normalize_names([...foods.map((food) => food.brand), ...grocery.map((item) => item.brand)]),
     grocery,
-  };
-}
-
-// Categories travel as "/" paths, which the add-on reads.
-function read_document(database: SqlDatabase): DietDocument {
-  const categories = read_categories(database, diet_categories);
-  const as_paths = <Item extends { categories: string[] }>(item: Item): Item => ({ ...item, categories: category_paths_of(known_category_ids(item.categories, categories), categories) });
-  return {
-    categories: category_paths_of(categories.map((category) => category.id), categories),
-    units: normalize_names(read_names(database, diet_units)),
-    foods: read_foods(database).map(as_paths),
-    recipes: read_recipes(database).map(as_paths),
-    diary: read_diary(database, "0000-00-00", "9999-99-99"),
-    grocery: read_grocery(database),
   };
 }
 
@@ -557,39 +535,6 @@ export const diet_feature = define_feature({
     // Uses the USDA key kept in Settings, so the key never travels with the call.
     search_online_foods: (database: SqlDatabase, query: string): Promise<LookupReply> => {
       return search_foods(query, String(read_setting(database, "diet.usda_api_key") ?? ""));
-    },
-
-    // ── Import and export ──
-
-    // The whole diet in the Trilium add-on's own format.
-    export_diet_json: (database: SqlDatabase): string => {
-      return write_trilium_diet(read_document(database));
-    },
-    // Merges the add-on's database.json: foods and recipes replace those with the same id, diary entries and grocery lines
-    // are added unless their id is already here, and categories and units join the lists; importing twice changes nothing more.
-    import_trilium_diet: (database: SqlDatabase, json_text: string): ImportCounts => {
-      const document = read_trilium_diet(json_text);
-      const now = Date.now();
-      return in_transaction(database, () => {
-        const db = drizzle_of(database);
-        import_category_paths(database, diet_categories, document.categories);
-        for (const name of document.units) add_name(database, diet_units, name);
-        for (const food of document.foods) write_food(database, { ...food, categories: save_category_refs(database, diet_categories, food.categories) });
-        for (const recipe of document.recipes) write_recipe(database, { ...recipe, categories: save_category_refs(database, diet_categories, recipe.categories) });
-        let diary = 0;
-        for (const entry of document.diary) {
-          if (db.select({ id: diet_diary.id }).from(diet_diary).where(eq(diet_diary.id, entry.id)).get()) continue;
-          insert_entry(database, entry);
-          diary += 1;
-        }
-        let grocery = 0;
-        document.grocery.forEach((item, index) => {
-          if (db.select({ id: diet_grocery.id }).from(diet_grocery).where(eq(diet_grocery.id, item.id)).get()) return;
-          insert_grocery(database, item, new Date(now + index).toISOString());
-          grocery += 1;
-        });
-        return { foods: document.foods.length, recipes: document.recipes.length, diary, grocery };
-      });
     },
   },
 });

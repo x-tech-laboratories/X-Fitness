@@ -7,7 +7,6 @@ import { in_transaction, type SqlDatabase } from "@x-tech-laboratories/x-libs/sq
 
 import { define_feature, drizzle_of, new_id } from "../feature.ts";
 import { body_api } from "./api.ts";
-import { import_trilium_body } from "./importer.ts";
 import { migrations } from "./migrations/index.ts";
 import {
   average_days,
@@ -305,16 +304,6 @@ export const body_feature = define_feature({
 
     // Every day with anything logged in the range, newest first.
     list_body_history: (database: SqlDatabase, days: number, today: string): HistoryDay[] => list_history(database, range_start(check_day(today), days)),
-
-    // The whole log in the Trilium add-on's database.json shape, its numbers in kg and cm as the units field says, with each metric's role besides.
-    export_body: (database: SqlDatabase): string => {
-      const metrics = list_metrics(database).map(({ id, name, kind, unit, goal, comment, role }) => ({ id, name, kind, unit, goal, comment, role }));
-      const log: Record<string, { values: Record<string, number>; comment: string }> = {};
-      for (const day of list_history(database, "").reverse()) log[day.date] = { values: day.values, comment: day.comment };
-      return JSON.stringify({ metrics, log, units: { weight: "kg", length: "cm" } }, null, 4);
-    },
-
-    import_trilium_body,
   },
   api: body_api,
   setting_defaults: body_setting_defaults,

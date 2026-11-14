@@ -5,7 +5,6 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { shown_nutrients, target_of, with_shown } from "../src/shared/diet/labels.ts";
 import { default_meals, empty_nutrients, entry_meal, food_units, food_unit_problems, meal_at, normalize_food, normalize_meals, nutrients, target_progress } from "../src/shared/diet/model.ts";
-import type { DietData } from "../src/shared/diet/store.ts";
 import { bind_methods, features, open_store, setting_defaults, sync_engine } from "../src/shared/store.ts";
 
 afterEach(() => {
@@ -319,116 +318,6 @@ describe("diet store", () => {
     expect(methods.get_diet().grocery[1]).toMatchObject({ done: true, comment: "whatever's on offer" });
     expect(methods.clear_bought_groceries()).toBe(1);
     expect(methods.get_diet().grocery.map((item) => item.food_id)).toEqual([id]);
-  });
-});
-
-// ── Import and export ────────────────────────────────────────────────────────
-
-const trilium_database = JSON.stringify({
-  categories: ["Protein", "Protein/Meat", "Snack"],
-  units: ["bowl", "g", "pack"],
-  foods: {
-    a1b2c3d4: {
-      id: "a1b2c3d4",
-      name: "Chicken Breast",
-      brand: "",
-      comment: "",
-      servingSize: 100,
-      servingUnit: "g",
-      portions: [{ unit: "breast", amount: 1, size: 170, sizeUnit: "g" }],
-      tags: ["Protein/Meat"],
-      nutrients: { calories: 165, protein: 31, carbs: 0, fat: 3.6, fiber: 0, sugar: 0, saturatedFat: 1, sodium: 74, cholesterol: 85 },
-    },
-    oldfood1: { name: "Rice", servingSize: 100, nutrients: { calories: 130 } },
-  },
-  recipes: {
-    e5f6g7h8: { id: "e5f6g7h8", name: "Chicken Salad", comment: "", servings: 2, servingUnit: "bowl", tags: ["Protein"], ingredients: [{ foodId: "a1b2c3d4", amount: 1, unit: "breast" }] },
-  },
-  diary: {
-    "2026-07-22": [
-      { id: "i1j2k3l4", kind: "food", refId: "a1b2c3d4", servings: 1, unit: "breast", loggedAt: "2026-07-22T12:00:00.000Z" },
-      { id: "q1r2s3t4", kind: "food", refId: "oldfood1", servings: 2, loggedAt: "2026-07-22T13:00:00.000Z" },
-      { id: "u1v2w3x4", kind: "recipe", refId: "e5f6g7h8", servings: 1, loggedAt: "2026-07-22T19:00:00.000Z" },
-    ],
-  },
-  grocery: [{ id: "m1n2o3p4", foodId: "a1b2c3d4", brand: "Store own", amount: 2, unit: "pack", comment: "corn only", done: false }],
-});
-
-// The diet with every category id read as its path, so two databases can be compared.
-function with_paths(data: DietData) {
-  const path_of = (id: string) => data.categories.find((category) => category.id === id)!.path.join("/");
-  return {
-    ...data,
-    categories: data.categories.map((category) => category.path.join("/")),
-    foods: data.foods.map((food) => ({ ...food, categories: food.categories.map(path_of) })),
-    recipes: data.recipes.map((recipe) => ({ ...recipe, categories: recipe.categories.map(path_of) })),
-  };
-}
-
-describe("Trilium Diet Manager import", () => {
-  it("reads the add-on's database, sodium and cholesterol from mg, entries without a unit as servings", () => {
-    const { methods } = open_methods();
-    expect(methods.import_trilium_diet(trilium_database)).toEqual({ foods: 2, recipes: 1, diary: 3, grocery: 1 });
-
-    const data = with_paths(methods.get_diet());
-    const chicken = data.foods.find((food) => food.id === "a1b2c3d4")!;
-    expect(chicken).toMatchObject({ name: "Chicken Breast", categories: ["Protein/Meat"], portions: [{ unit: "breast", amount: 1, size: 170, size_unit: "g" }] });
-    expect(chicken.nutrients.sodium).toBeCloseTo(0.074);
-    expect(chicken.nutrients.cholesterol).toBeCloseTo(0.085);
-    expect(chicken.nutrients.saturated_fat).toBe(1);
-    expect(data.foods.find((food) => food.id === "oldfood1")).toMatchObject({ serving_unit: "g", categories: [] });
-    expect(data.categories).toEqual(["Protein", "Protein/Meat", "Snack"]);
-    expect(data.units).toEqual(["bowl", "g", "pack"]);
-    expect(data.grocery).toEqual([{ id: "m1n2o3p4", food_id: "a1b2c3d4", brand: "Store own", amount: 2, unit: "pack", comment: "corn only", done: false }]);
-
-    const day = methods.get_diary_day("2026-07-22");
-    expect(day.entries.map((entry) => [entry.id, entry.unit_label])).toEqual([["i1j2k3l4", "breast"], ["q1r2s3t4", "serving"], ["u1v2w3x4", "bowl"]]);
-    // A breast is 170 g, two servings of rice, and half the salad's one breast.
-    expect(day.totals.calories).toBeCloseTo(165 * 1.7 + 260 + (165 * 1.7) / 2);
-  });
-
-  it("merges instead of duplicating when the same file comes again, keeping what was here", () => {
-    const { methods } = open_methods();
-    const own = methods.save_food(oats);
-    methods.import_trilium_diet(trilium_database);
-    expect(methods.import_trilium_diet(trilium_database)).toEqual({ foods: 2, recipes: 1, diary: 0, grocery: 0 });
-    const data = methods.get_diet();
-    expect(data.foods.map((food) => food.id).sort()).toEqual(["a1b2c3d4", "oldfood1", own].sort());
-    expect(data.recipes[0]!.ingredients).toHaveLength(1);
-    expect(methods.get_diary_day("2026-07-22").entries).toHaveLength(3);
-    expect(data.grocery).toHaveLength(1);
-  });
-
-  it("refuses what is not the add-on's database and leaves the data alone", () => {
-    const { methods } = open_methods();
-    expect(() => methods.import_trilium_diet("not json")).toThrow("Not valid JSON.");
-    expect(() => methods.import_trilium_diet("[1, 2]")).toThrow("Expected a JSON object");
-    expect(methods.get_diet().foods).toEqual([]);
-  });
-
-  it("exports in the add-on's format, which imports back to the same data", () => {
-    const { methods } = open_methods();
-    methods.import_trilium_diet(trilium_database);
-    const exported = JSON.parse(methods.export_diet_json());
-    expect(exported.foods.a1b2c3d4.nutrients).toMatchObject({ sodium: 74, cholesterol: 85, saturatedFat: 1 });
-    expect(exported.foods.a1b2c3d4.portions).toEqual([{ unit: "breast", amount: 1, size: 170, sizeUnit: "g" }]);
-    expect(exported.diary["2026-07-22"]).toHaveLength(3);
-    expect(exported.recipes.e5f6g7h8.ingredients).toEqual([{ foodId: "a1b2c3d4", amount: 1, unit: "breast" }]);
-
-    const { methods: other } = open_methods();
-    other.import_trilium_diet(JSON.stringify(exported));
-    expect(with_paths(other.get_diet())).toEqual(with_paths(methods.get_diet()));
-  });
-
-  it("carries vitamins and minerals through an export and back in grams", () => {
-    const { methods } = open_methods();
-    const id = methods.save_food({ ...oats, nutrients: { ...oats.nutrients, vitamin_b12: 0.0000024, iron: 0.0047 } });
-    const exported = JSON.parse(methods.export_diet_json());
-    expect(exported.foods[id].nutrients).toMatchObject({ vitaminB12: 0.0000024, iron: 0.0047 });
-
-    const { methods: other } = open_methods();
-    other.import_trilium_diet(JSON.stringify(exported));
-    expect(other.get_diet().foods[0]!.nutrients).toEqual(methods.get_diet().foods[0]!.nutrients);
   });
 });
 

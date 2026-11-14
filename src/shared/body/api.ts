@@ -4,7 +4,7 @@
 
 import type { MethodSpec } from "@x-tech-laboratories/x-libs/api_spec";
 
-import { day, id_of, json_file, number, step, text } from "../api_schemas.ts";
+import { day, id_of, number, step, text } from "../api_schemas.ts";
 import { metric_roles } from "./readings.ts";
 
 // ── Calls ────────────────────────────────────────────────────────────────────
@@ -69,21 +69,5 @@ export const body_api = {
   list_body_history: {
     description: "Every day with a reading or note in a range, newest first, its values by metric id.",
     params: [{ name: "days", schema: days_back }, { name: "today", schema: day }],
-  },
-  export_body: { description: "The whole body log as JSON in the Trilium body add-on's format, in kg and cm.", params: [] },
-  import_trilium_body: {
-    description: "Merges a Trilium body add-on database.json into the log.",
-    params: [
-      { name: "json_text", schema: json_file },
-      {
-        name: "units",
-        optional: true,
-        schema: {
-          type: "object",
-          properties: { mass_unit: { type: "string", enum: ["kg", "lb"] }, length_unit: { type: "string", enum: ["cm", "in"] } },
-          description: "The units the file's numbers are in, when the file does not say; the units in Settings otherwise.",
-        },
-      },
-    ],
   },
 } satisfies Record<string, MethodSpec>;

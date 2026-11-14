@@ -258,23 +258,11 @@ describe("workouts plans and library", () => {
 });
 
 describe("workouts settings", () => {
-  it("saves its settings and imports the Trilium add-on's file in the units set", async () => {
-    const store = open_page({ mass_unit: "lb" });
-    render(
-      <>
-        <SettingsView />
-        <Toasts />
-      </>,
-    );
+  it("saves its settings", async () => {
+    const store = open_page();
+    render(<SettingsView />);
 
     commit(await screen.findByRole("textbox", { name: "Workouts per week" }), "4");
     await waitFor(() => expect(store.get_settings()["workouts.weekly_target"]).toBe(4));
-
-    const file = new File([JSON.stringify({ exercises: { e1: { name: "Deadlift" } }, programs: {}, log: { "2026-08-01": [{ id: "w1", name: "Pull", entries: [{ exerciseId: "e1", sets: [{ reps: 5, weight: 225 }] }] }] } })], "database.json", {
-      type: "application/json",
-    });
-    fireEvent.change(screen.getByLabelText("Trilium database file"), { target: { files: [file] } });
-    expect(await screen.findByText(/Imported 1 exercise\(s\), 0 session\(s\) in 0 new program\(s\) and 1 workout\(s\)/)).toBeTruthy();
-    expect(store.list_workouts("2026-08-01")[0]!.entries[0]!.sets[0]!.weight).toBeCloseTo(102.058, 3);
   });
 });

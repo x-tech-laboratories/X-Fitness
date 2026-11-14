@@ -13,7 +13,7 @@ import { nutrient_groups } from "../../shared/diet/model.ts";
 import { use_data, use_settings } from "../api.ts";
 import type { FeaturePage, FeatureSettingsProps } from "../features.tsx";
 import { CategoriesTab, UnitsTab } from "./CategoriesTab.tsx";
-import { DataSettings, GrocerySettings, LabelSettings, LookupSettings, MealSettings, NutrientSettings } from "./DietSettings.tsx";
+import { GrocerySettings, LabelSettings, LookupSettings, MealSettings, NutrientSettings } from "./DietSettings.tsx";
 import { DiaryTab } from "./DiaryTab.tsx";
 import { FoodsTab } from "./FoodsTab.tsx";
 import { energy_unit_of } from "./format.ts";
@@ -93,6 +93,5 @@ export function diet_settings(props: FeatureSettingsProps): SettingsSection[] {
     })),
     { id: "diet-lookup", heading: "Food lookup", content: <LookupSettings {...props} /> },
     { id: "diet-grocery", heading: "Grocery", content: <GrocerySettings {...props} /> },
-    { id: "diet-data", heading: "Import and export", content: <DataSettings /> },
   ];
 }

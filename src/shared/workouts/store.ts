@@ -1,5 +1,5 @@
 // Workouts: the exercise library, programs of sessions that plan exercises, logged workouts with their sets, progression
-// when a workout is finished, reports on the log, wger lookup, and imports from the Trilium add-on and Liftosaur.
+// when a workout is finished, reports on the log, wger lookup, and imports from Liftosaur.
 
 // ── Imports ──────────────────────────────────────────────────────────────────
 
@@ -7,7 +7,7 @@ import { asc, eq, inArray, max, ne, sql, synced_tables, type SQLiteTable } from 
 import { in_transaction, type SqlDatabase } from "@x-tech-laboratories/x-libs/sql";
 
 import { add_category, delete_category, import_category_paths, move_category, read_categories, rename_category, save_category_refs, type Retag } from "../category_store.ts";
-import { category_paths_of, is_in_category, known_category_ids, normalize_category_refs, placed_categories, type Category, type PlacedCategory } from "../category_tree.ts";
+import { is_in_category, known_category_ids, normalize_category_refs, placed_categories, type Category, type PlacedCategory } from "../category_tree.ts";
 import { define_feature, drizzle_of, new_id } from "../feature.ts";
 import { workouts_api } from "./api.ts";
 import { read_liftosaur_export, type LiftosaurSummary } from "./liftosaur.ts";
@@ -37,7 +37,6 @@ import { evaluate_progression, type Outcome } from "./progression.ts";
 import { category_sets, daily_activity, exercise_history, exercise_stats, exercise_trend, leaderboard, leaderboards, weekly_totals, type CategorySets, type DayActivity, type ExerciseStats, type HistoryRecord, type TrendPoint, type WeekTotals } from "./reports.ts";
 import { exercises, program_sessions, programs, session_exercises, workout_categories, workout_exercises, workout_sets, workout_tables, workouts } from "./schema.ts";
 import { workout_setting_defaults } from "./settings.ts";
-import { read_trilium_database, write_trilium_database, type FileUnits } from "./trilium.ts";
 import { search_wger, wger_picture, type WgerResult } from "./wger.ts";
 
 // ── Rows ─────────────────────────────────────────────────────────────────────
@@ -437,30 +436,18 @@ export interface ExerciseReport {
   history: HistoryRecord[];
 }
 
-export interface TriliumImportSummary {
-  exercises: number;
-  programs: number;
-  sessions: number;
-  workouts: number;
-  // Workouts already present, left as they are.
-  skipped_workouts: number;
-}
-
 // ── Merging ──────────────────────────────────────────────────────────────────
 
 // Adds by id: exercises are added or updated, a program present gains the sessions it lacks, and a workout present is skipped.
-function merge_document(database: SqlDatabase, document: WorkoutsDocument): TriliumImportSummary {
-  const summary: TriliumImportSummary = { exercises: 0, programs: 0, sessions: 0, workouts: 0, skipped_workouts: 0 };
+function merge_document(database: SqlDatabase, document: WorkoutsDocument): void {
   in_transaction(database, () => {
     import_category_paths(database, workout_categories, document.categories);
     for (const exercise of document.exercises) {
       write_exercise(database, { ...exercise, categories: save_category_refs(database, workout_categories, exercise.categories) });
-      summary.exercises += 1;
     }
     for (const program of document.programs) {
       if (!has_row(database, programs, eq(programs.id, program.id))) {
         drizzle_of(database).insert(programs).values({ id: program.id, name: program.name, notes: program.notes }).run();
-        summary.programs += 1;
       }
       for (const session of program.sessions) {
         if (has_row(database, program_sessions, eq(program_sessions.id, session.id))) continue;
@@ -468,20 +455,14 @@ function merge_document(database: SqlDatabase, document: WorkoutsDocument): Tril
         session.entries.forEach((entry, position) =>
           write_session_entry(database, session.id, position, has_row(database, session_exercises, eq(session_exercises.id, entry.id)) ? { ...entry, id: new_id() } : entry),
         );
-        summary.sessions += 1;
       }
     }
     for (const workout of document.workouts) {
-      if (has_row(database, workouts, eq(workouts.id, workout.id))) {
-        summary.skipped_workouts += 1;
-        continue;
-      }
+      if (has_row(database, workouts, eq(workouts.id, workout.id))) continue;
       // Nothing points at an entry or a set, so they get fresh ids that cannot clash.
       insert_workout(database, { ...workout, entries: workout.entries.map((entry) => ({ ...entry, id: new_id(), sets: entry.sets.map((set) => ({ ...set, id: new_id() })) })) });
-      summary.workouts += 1;
     }
   });
-  return summary;
 }
 
 // ── Store ────────────────────────────────────────────────────────────────────
@@ -819,21 +800,7 @@ export const workouts_feature = define_feature({
       return { exercise, stats: exercise_stats(history, exercise.measurement), trend: exercise_trend(history, exercise.measurement), history };
     },
 
-    // ── Import and export ──
-
-    // The whole of it in the Trilium add-on's shape, in kg, km and minutes.
-    export_workouts: (database: SqlDatabase): string => {
-      const categories = read_categories(database, workout_categories);
-      const as_paths = <Item extends { categories: string[] }>(item: Item): Item => ({ ...item, categories: category_paths_of(known_category_ids(item.categories, categories), categories) });
-      const exercises = load_exercises(database).map(as_paths);
-      const programs = load_programs(database).map((program) => ({ ...program, sessions: program.sessions.map(as_paths) }));
-      return write_trilium_database({ categories: category_paths_of(categories.map((category) => category.id), categories), exercises, programs, workouts: load_workouts(database) });
-    },
-
-    // The Trilium add-on's database.json, its numbers read in the units it was kept in.
-    import_trilium_workouts: (database: SqlDatabase, json_text: string, units: FileUnits = { mass_unit: "kg", distance_unit: "km" }): TriliumImportSummary => {
-      return merge_document(database, read_trilium_database(json_text, units));
-    },
+    // ── Import ──
 
     // Liftosaur's JSON backup or history CSV, every weight converted from its own unit.
     import_liftosaur_workouts: (database: SqlDatabase, text: string): LiftosaurSummary => {

@@ -1,12 +1,9 @@
-// The Diet section's settings: the nutrition label and target presets, each nutrient's switch and target, the USDA key for food lookup, the grocery comment prefill, and the
-// import and export of the Trilium Diet Manager's database.
+// The Diet section's settings: the nutrition label and target presets, each nutrient's switch and target, the USDA key for food lookup, and the grocery comment prefill.
 
 // ── Imports ──────────────────────────────────────────────────────────────────
 
-import { useRef, useState } from "react";
 import { CommitInput, NumberField, Select, Switch } from "@x-tech-laboratories/x-libs/web/react/controls";
 import { moved, RowActions, SettingRow } from "@x-tech-laboratories/x-libs/web/react/layout";
-import { toast } from "@x-tech-laboratories/x-libs/web/react/toasts";
 
 import {
   is_shown,
@@ -23,9 +20,8 @@ import {
   with_shown,
 } from "../../shared/diet/labels.ts";
 import { normalize_meals, nutrient_keys, nutrients, target_key, type Meal, type NutrientGroup } from "../../shared/diet/model.ts";
-import { calls } from "../api.ts";
 import type { FeatureSettingsProps } from "../features.tsx";
-import { energy_unit_of, error_text, field_value, format_amount, format_nutrient, shown_unit, to_shown_value, to_stored_value } from "./format.ts";
+import { energy_unit_of, field_value, format_amount, format_nutrient, shown_unit, to_shown_value, to_stored_value } from "./format.ts";
 
 // ── Label and targets ────────────────────────────────────────────────────────
 
@@ -169,58 +165,5 @@ export function GrocerySettings({ settings, set_setting }: FeatureSettingsProps)
     <SettingRow label="Prefill grocery comments from the food" hint="A new grocery line's comment starts as the food's own comment; the line's copy can be edited without touching the food.">
       <Switch label="Prefill grocery comments from the food" checked={settings["diet.prefill_grocery_comment"] === true} on_change={(on) => set_setting("diet.prefill_grocery_comment", on)} />
     </SettingRow>
-  );
-}
-
-// ── Import and export ────────────────────────────────────────────────────────
-
-function download(name: string, text: string): void {
-  const url = URL.createObjectURL(new Blob([text], { type: "application/json" }));
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = name;
-  link.click();
-  URL.revokeObjectURL(url);
-}
-
-export function DataSettings() {
-  const picker = useRef<HTMLInputElement>(null);
-  const [busy, set_busy] = useState(false);
-
-  async function import_file(file: File | undefined): Promise<void> {
-    if (!file) return;
-    set_busy(true);
-    try {
-      const counts = await calls().import_trilium_diet(await file.text());
-      toast(`Imported ${counts.foods} food(s), ${counts.recipes} recipe(s), ${counts.diary} diary entr${counts.diary === 1 ? "y" : "ies"} and ${counts.grocery} grocery line(s).`, { tone: "good" });
-    } catch (error) {
-      toast(`Could not import: ${error_text(error)}`, { tone: "bad" });
-    } finally {
-      set_busy(false);
-      if (picker.current) picker.current.value = "";
-    }
-  }
-
-  async function export_file(): Promise<void> {
-    try {
-      download("diet-manager-database.json", await calls().export_diet_json());
-    } catch (error) {
-      toast(error_text(error), { tone: "bad" });
-    }
-  }
-
-  return (
-    <>
-      <SettingRow
-        label="Import from Trilium Diet Manager"
-        hint="Merges the add-on's database.json or its Export JSON file: foods and recipes with the same id are replaced, and diary entries and grocery lines already here are kept, so importing a file twice adds nothing."
-      >
-        <input ref={picker} type="file" accept="application/json,.json" aria-label="Diet Manager database file" hidden onChange={(event) => void import_file(event.currentTarget.files?.[0])} />
-        <button type="button" disabled={busy} onClick={() => picker.current?.click()}>{busy ? "Importing…" : "Import…"}</button>
-      </SettingRow>
-      <SettingRow label="Export" hint="The whole diet as one JSON file in the add-on's format, which imports back here or into the add-on.">
-        <button type="button" onClick={() => void export_file()}>Export JSON</button>
-      </SettingRow>
-    </>
   );
 }

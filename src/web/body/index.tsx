@@ -9,7 +9,7 @@ import { Loaded } from "@x-tech-laboratories/x-libs/web/react/states";
 
 import type { FeaturePage, FeatureSettingsProps } from "../features.tsx";
 import { use_settings } from "../api.ts";
-import { BirthDateSetting, BodyData, HeightSetting, SexSetting } from "./BodySettings.tsx";
+import { BirthDateSetting, HeightSetting, SexSetting } from "./BodySettings.tsx";
 import { shown_units } from "./format.ts";
 import { LogTab } from "./LogTab.tsx";
 import { MetricsTab } from "./MetricsTab.tsx";
@@ -70,12 +70,6 @@ export function body_settings({ settings, set_setting }: FeatureSettingsProps): 
           <BirthDateSetting birth_date={String(settings["body.birth_date"] ?? "")} set_setting={set_setting} />
         </>
       ),
-    },
-    {
-      id: "body-data",
-      heading: "Body data",
-      hint: "Importing merges: metrics not here are added, and on a day both hold, the readings here are kept. Importing a file twice changes nothing.",
-      content: <BodyData units={units} />,
     },
   ];
 }
