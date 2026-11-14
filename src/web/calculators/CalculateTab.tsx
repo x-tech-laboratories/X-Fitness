@@ -217,7 +217,7 @@ function LogBodyFat({ report, value, method }: { report: CalculationsReport; val
 }
 
 const body_fat_columns: TableColumn<BodyFatRow>[] = [
-  { label: "Method", cell: (row) => row.label },
+  { label: "Method", groupable: false, filterable: false, cell: (row) => row.label },
   {
     label: "Body fat",
     cell: (row) =>
@@ -230,7 +230,8 @@ const body_fat_columns: TableColumn<BodyFatRow>[] = [
         </span>
       ),
   },
-  { label: "Log", id: "actions", cell: (row) => row.log },
+  // No label, so a phone's card shows the Log button alone.
+  { label: "", header: <span className="visually-hidden">Log</span>, id: "actions", class: "actions-cell", cell: (row) => row.log },
 ];
 
 function BodyFatCard({ report, measures, results }: { report: CalculationsReport; measures: Measures; results: Calculations }) {
@@ -255,6 +256,8 @@ function Results({ report, measures, units }: { report: CalculationsReport; meas
   const results = calculate(measures);
   const weight = (value: number) => format_mass(value, units);
   const kcal = (value: number) => `${format_measure(value, units.energy, 0)} a day`;
+  // The Daily energy card's figures leave "a day" to its title, so each fits on one line in a narrow card.
+  const energy = (value: number) => format_measure(value, units.energy, 0);
   const { composition } = results;
   const needs = (list: Need[]) => needs_text(missing_needs(list, measures));
   const ratio_needs = measures.waist > 0 ? "Needs a height or the hips." : measures.height > 0 || measures.hips > 0 ? needs_text(["waist"]) : "Needs the waist, and a height or the hips.";
@@ -268,9 +271,8 @@ function Results({ report, measures, units }: { report: CalculationsReport; meas
             {results.bmi === null ? missing(needs(["weight", "height"])) : (
               <Facts
                 rows={[
-                  ["BMI", format_number(results.bmi)],
-                  ["Category", results.bmi_category],
-                  results.healthy_weight && ["Healthy weight at this height", `${weight(results.healthy_weight.low)} – ${weight(results.healthy_weight.high)}`],
+                  ["BMI", `${format_number(results.bmi)} · ${results.bmi_category}`],
+                  results.healthy_weight && ["Healthy weight", `${weight(results.healthy_weight.low)} – ${weight(results.healthy_weight.high)}`],
                 ]}
               />
             )}
@@ -309,9 +311,9 @@ function Results({ report, measures, units }: { report: CalculationsReport; meas
                   rows={[
                     ...bmr_formulas.map((formula): Fact | false => {
                       const rate = results.basal_rates[formula.key];
-                      return rate !== null && [`BMR, ${formula.label.replace(/ \(.*\)$/, "")}${formula.key === results.bmr_formula ? " (used)" : ""}`, kcal(rate)];
+                      return rate !== null && [`BMR, ${formula.label.replace(/ \(.*\)$/, "")}${formula.key === results.bmr_formula ? " (used)" : ""}`, energy(rate)];
                     }),
-                    ["TDEE", kcal(results.tdee)],
+                    ["TDEE", energy(results.tdee)],
                   ]}
                 />
               )}
