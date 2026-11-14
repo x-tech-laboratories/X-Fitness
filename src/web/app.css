@@ -4,3 +4,13 @@
   max-width: 48rem;
   color: var(--text-secondary);
 }
+
+/* On a phone a setting's dropdown takes the row under its text, so a long option never widens the page; its width of 0
+   keeps the longest option out of the row's minimum size. */
+@media (max-width: 700px) {
+  .setting-row > select {
+    flex: 1 1 100%;
+    width: 0;
+    min-width: 0;
+  }
+}

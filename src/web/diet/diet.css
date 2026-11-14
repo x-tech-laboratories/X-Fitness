@@ -9,6 +9,15 @@
   min-width: 0;
 }
 
+/* A dropdown sized by its longest option, such as the label presets, takes the row's space instead of widening the page;
+   its width of 0 keeps the longest option out of the row's minimum size, and its flex basis sets the size it asks for. */
+.diet-inline > select {
+  flex: 1 1 12rem;
+  width: 0;
+  min-width: 0;
+  max-width: 100%;
+}
+
 .diet-grow {
   flex: 1;
   min-width: 8rem;
