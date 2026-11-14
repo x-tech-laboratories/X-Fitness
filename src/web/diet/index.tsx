@@ -71,7 +71,15 @@ export function DietView({ parts }: { parts: string[] }) {
 
 export function diet_settings(props: FeatureSettingsProps): SettingsSection[] {
   return [
-    { id: "diet-targets", heading: "Daily targets", hint: "Each day's diary totals are measured against these. A target of 0 means no target.", content: <TargetSettings {...props} /> },
+    {
+      id: "diet-targets",
+      heading: "Daily targets",
+      hint:
+        props.settings["calculators.follow_diet_targets"] === true
+          ? "Each day's diary totals are measured against these. Calories, protein, fat and carbs follow the plan on Calculators → Goals, which sets them again after every change."
+          : "Each day's diary totals are measured against these. A target of 0 means no target.",
+      content: <TargetSettings {...props} />,
+    },
     { id: "diet-lookup", heading: "Food lookup", content: <LookupSettings {...props} /> },
     { id: "diet-grocery", heading: "Grocery", content: <GrocerySettings {...props} /> },
     { id: "diet-data", heading: "Import and export", content: <DataSettings /> },

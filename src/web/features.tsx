@@ -6,6 +6,7 @@ import type { ReactNode } from "react";
 import type { SettingsSection } from "@x-tech-laboratories/x-libs/web/react/layout";
 
 import { BodyView, body_pages, body_settings } from "./body/index.tsx";
+import { CalculatorsView, calculators_pages, calculators_settings } from "./calculators/index.tsx";
 import { DietView, diet_pages, diet_settings } from "./diet/index.tsx";
 import { WorkoutsView, workouts_pages, workouts_settings } from "./workouts/index.tsx";
 
@@ -36,4 +37,5 @@ export const page_features: PageFeature[] = [
   { id: "workouts", label: "Workouts", pages: workouts_pages, view: (parts) => <WorkoutsView parts={parts} />, settings: workouts_settings },
   { id: "diet", label: "Diet", pages: [...diet_pages], view: (parts) => <DietView parts={parts} />, settings: diet_settings },
   { id: "body", label: "Body", pages: body_pages, view: (parts) => <BodyView parts={parts} />, settings: body_settings },
+  { id: "calculators", label: "Calculators", pages: calculators_pages, view: (parts) => <CalculatorsView parts={parts} />, settings: calculators_settings },
 ];

@@ -8,6 +8,7 @@ import { in_transaction, migrate, type SqlDatabase } from "@x-tech-laboratories/
 import { create_sync_engine } from "@x-tech-laboratories/x-libs/sync_engine";
 
 import { body_feature } from "./body/store.ts";
+import { calculators_feature } from "./calculators/store.ts";
 import { diet_feature } from "./diet/store.ts";
 import { forget_synced_changes, history_feature, install_history, record_history } from "./history/store.ts";
 import { is_read_only } from "./page_api.ts";
@@ -16,7 +17,7 @@ import { workouts_feature } from "./workouts/store.ts";
 
 // ── Features ─────────────────────────────────────────────────────────────────
 
-export const features = [settings_feature, workouts_feature, diet_feature, body_feature, history_feature];
+export const features = [settings_feature, workouts_feature, diet_feature, body_feature, calculators_feature, history_feature];
 
 export const sync_engine = create_sync_engine({ tables: features.flatMap((feature) => feature.tables), after_apply: forget_synced_changes });
 
@@ -70,6 +71,7 @@ const all_methods = {
     typeof workouts_feature.methods &
     typeof diet_feature.methods &
     typeof body_feature.methods &
+    typeof calculators_feature.methods &
     typeof history_feature.methods),
   // Every setting, the ones never set at their defaults, so a page needs no list of defaults of its own.
   get_settings: (database: SqlDatabase): Record<string, unknown> => ({ ...setting_defaults, ...settings_feature.methods.get_settings(database) }),
@@ -89,8 +91,8 @@ export { is_read_only };
 // What every call does and takes, for programs other than the page.
 export const fitness_api = Object.assign({}, ...features.map((feature) => feature.api)) as ApiSpec<FitnessMethods>;
 
-// The calls run on the database given; after each write the history records what it touched and on_change tells the
-// other pages and devices.
+// The calls run on the database given; after each write the features catch up, the history records what it touched and
+// on_change tells the other pages and devices.
 export function bind_methods(database: () => SqlDatabase, on_change: () => void): FitnessMethods {
   const bound = method_names.map((name) => {
     const method = all_methods[name] as (database: SqlDatabase, ...args: unknown[]) => unknown;
@@ -98,6 +100,7 @@ export function bind_methods(database: () => SqlDatabase, on_change: () => void)
       const result = method(database(), ...args);
       if (is_read_only(name)) return result;
       const after_write = () => {
+        for (const feature of features) feature.after_write?.(database());
         record_history(database());
         on_change();
       };

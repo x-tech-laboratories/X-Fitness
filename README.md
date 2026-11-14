@@ -8,6 +8,10 @@ whenever it can be reached.
 - **Diet:** foods and meals, what was eaten each day, and the day's calories and nutrients against targets.
 - **Body:** weight, body fat, girths and any measure of your own, with goals and trends, and a 3D body shaped to
   your readings and to your goals.
+- **Calculators:** BMI, body fat by the US Navy tape and by Jackson-Pollock 3- and 7-site calipers, lean mass and
+  FFMI, waist-to-height and waist-to-hip, and BMR and TDEE, filled in from your latest readings. A plan (target body fat
+  or BMI, waist, weekly change, protein and fat) turns them into goals for your body metrics and diet targets, set once
+  or kept following the plan after every reading.
 - **Overview:** today's eating against its targets, the weeks' training and every body metric's trend on one page.
 
 ## Running it

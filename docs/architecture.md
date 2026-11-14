@@ -33,6 +33,8 @@ A feature is two folders:
     per argument, in order. A method without one fails to compile. The server serves them as MCP tools at `/api/mcp`,
     as `/api/openapi.json`, and lets `/api/call/<method>` take the arguments by name (X-Libs `api_spec` and
     `server/mcp`).
+  - `after_write`, when given, runs after every write the page, API or MCP makes and before history records it; the
+    calculators use it to keep goals following their plan.
   - Settings keys are namespaced, such as `workouts.default_rest`, with their defaults in `setting_defaults`.
 - `src/web/<feature>/index.tsx` exports its view, which gets the route's parts after `#/<feature>`, its pages, which the
   sidebar lists under the feature and the view picks by `#/<feature>/<page>`, and a function giving its sections for the

@@ -25,6 +25,8 @@ export interface Feature<Methods extends Record<string, StoreMethod>> {
   api: ApiSpec<Methods>;
   // Settings this feature reads, by key such as "workouts.default_rest", with their defaults.
   setting_defaults?: Record<string, unknown>;
+  // Runs after every write the page, API or MCP makes, before history records it, such as goals that follow a plan.
+  after_write?: (database: SqlDatabase) => void;
 }
 
 export function define_feature<Methods extends Record<string, StoreMethod>>(feature: Feature<Methods>): Feature<Methods> {

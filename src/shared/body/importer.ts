@@ -8,8 +8,7 @@ import { in_transaction, type SqlDatabase } from "@x-tech-laboratories/x-libs/sq
 import { to_stored, type LengthUnit, type MassUnit } from "@x-tech-laboratories/x-libs/units";
 
 import { drizzle_of } from "../feature.ts";
-import { is_day, kind_of, normalize_metric, positive_number, trimmed_text, type MetricKind } from "./readings.ts";
-import type { ShapeRole } from "./shape.ts";
+import { is_day, kind_of, normalize_metric, positive_number, trimmed_text, type MetricKind, type MetricRole } from "./readings.ts";
 import { body_days, body_metrics, body_readings } from "./schema.ts";
 
 // ── Shapes ───────────────────────────────────────────────────────────────────
@@ -36,7 +35,7 @@ interface FileMetric {
   unit: string;
   goal: number;
   comment: string;
-  role: ShapeRole;
+  role: MetricRole;
 }
 
 interface FileDay {

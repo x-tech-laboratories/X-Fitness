@@ -1,9 +1,10 @@
-// The Body settings: the height BMI is worked out from, the sex the 3D body is built on, and moving the whole log in and out as JSON.
+// The Body settings: the height BMI is worked out from, the sex the 3D body is built on, the birth date the calculators
+// take the age from, and moving the whole log in and out as JSON.
 
 // ── Imports ──────────────────────────────────────────────────────────────────
 
 import { useRef, useState } from "react";
-import { NumberField, Select } from "@x-tech-laboratories/x-libs/web/react/controls";
+import { CommitInput, NumberField, Select } from "@x-tech-laboratories/x-libs/web/react/controls";
 import { SettingRow } from "@x-tech-laboratories/x-libs/web/react/layout";
 import { toast } from "@x-tech-laboratories/x-libs/web/react/toasts";
 
@@ -39,8 +40,25 @@ const sex_options: [string, string][] = [["", "Not set"], ["female", "Female"], 
 
 export function SexSetting({ sex, set_setting }: { sex: string; set_setting: (key: string, value: unknown) => Promise<void> }) {
   return (
-    <SettingRow label="Sex" hint="The body the 3D tab starts from; not set mixes the two.">
+    <SettingRow label="Sex" hint="The body the 3D tab starts from and the calculators use; not set mixes the two.">
       <Select bare label="Sex" options={sex_options} value={sex} on_change={(value) => void set_setting("body.sex", value)} />
+    </SettingRow>
+  );
+}
+
+// ── Birth date ───────────────────────────────────────────────────────────────
+
+export function BirthDateSetting({ birth_date, set_setting }: { birth_date: string; set_setting: (key: string, value: unknown) => Promise<void> }) {
+  return (
+    <SettingRow label="Birth date" hint="The calculators take your age from it, for body fat by calipers and the energy you burn." as_label>
+      <CommitInput
+        type="date"
+        value={birth_date}
+        on_commit={(event) => {
+          const value = event.currentTarget.value;
+          if (value !== birth_date) void set_setting("body.birth_date", value);
+        }}
+      />
     </SettingRow>
   );
 }

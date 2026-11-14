@@ -1,0 +1,341 @@
+// The fitness formulas, from body measures to BMI, body fat, lean mass, energy and the goals a plan gives. Plain
+// functions on kg, cm, years and kcal, so the store, the page and other programs all work them out the same way.
+
+// ── Measures ─────────────────────────────────────────────────────────────────
+
+export type Sex = "" | "female" | "male";
+
+export type Skinfold = "chest" | "abdomen" | "thigh" | "triceps" | "suprailiac" | "midaxillary" | "subscapular";
+
+export const skinfolds: { key: Skinfold; label: string }[] = [
+  { key: "chest", label: "Chest" },
+  { key: "abdomen", label: "Abdomen" },
+  { key: "thigh", label: "Thigh" },
+  { key: "triceps", label: "Triceps" },
+  { key: "suprailiac", label: "Suprailiac" },
+  { key: "midaxillary", label: "Midaxillary" },
+  { key: "subscapular", label: "Subscapular" },
+];
+
+export type Activity = "sedentary" | "light" | "moderate" | "active" | "very_active";
+
+export const activities: { key: Activity; label: string; factor: number }[] = [
+  { key: "sedentary", label: "Sedentary: little or no exercise", factor: 1.2 },
+  { key: "light", label: "Light: exercise 1–3 days a week", factor: 1.375 },
+  { key: "moderate", label: "Moderate: exercise 3–5 days a week", factor: 1.55 },
+  { key: "active", label: "Active: hard exercise 6–7 days a week", factor: 1.725 },
+  { key: "very_active", label: "Very active: physical job or training twice a day", factor: 1.9 },
+];
+
+export type BmrFormula = "mifflin_st_jeor" | "harris_benedict" | "katch_mcardle";
+
+export const bmr_formulas: { key: BmrFormula; label: string }[] = [
+  { key: "mifflin_st_jeor", label: "Mifflin-St Jeor" },
+  { key: "harris_benedict", label: "Harris-Benedict" },
+  { key: "katch_mcardle", label: "Katch-McArdle (needs body fat)" },
+];
+
+// What the calculators work from, 0 where a measure is missing; weights in kg, lengths and skinfolds in cm.
+export interface Measures {
+  sex: Sex;
+  age: number;
+  height: number;
+  weight: number;
+  body_fat: number;
+  neck: number;
+  waist: number;
+  hips: number;
+  skinfolds: Partial<Record<Skinfold, number>>;
+  activity: Activity;
+  bmr_formula: BmrFormula;
+}
+
+export function sex_of(raw: unknown): Sex {
+  return raw === "female" || raw === "male" ? raw : "";
+}
+
+export function activity_of(raw: unknown): Activity {
+  return activities.find((activity) => activity.key === raw)?.key ?? "light";
+}
+
+export function bmr_formula_of(raw: unknown): BmrFormula {
+  return bmr_formulas.find((formula) => formula.key === raw)?.key ?? "mifflin_st_jeor";
+}
+
+// Whole years from a birth date to today, or 0 when the birth date is missing or later.
+export function age_on(birth_date: string, today: string): number {
+  const born = /^(\d{4})-(\d{2})-(\d{2})$/.exec(birth_date);
+  const now = /^(\d{4})-(\d{2})-(\d{2})$/.exec(today);
+  if (!born || !now) return 0;
+  const before_birthday = now[2]! + now[3]! < born[2]! + born[3]!;
+  return Math.max(0, Number(now[1]) - Number(born[1]) - (before_birthday ? 1 : 0));
+}
+
+// ── BMI ──────────────────────────────────────────────────────────────────────
+
+export const healthy_bmi = { low: 18.5, high: 24.9 };
+
+export function body_mass_index(weight: number, height: number): number | null {
+  if (!(weight > 0) || !(height > 0)) return null;
+  return weight / (height / 100) ** 2;
+}
+
+// The weight a BMI gives at a height.
+export function weight_at_bmi(bmi: number, height: number): number | null {
+  if (!(bmi > 0) || !(height > 0)) return null;
+  return bmi * (height / 100) ** 2;
+}
+
+export function bmi_category(bmi: number): string {
+  if (bmi < healthy_bmi.low) return "Underweight";
+  if (bmi < 25) return "Healthy weight";
+  if (bmi < 30) return "Overweight";
+  return "Obese";
+}
+
+// ── Body fat ─────────────────────────────────────────────────────────────────
+
+// Body fat percent from body density, by Siri's equation.
+function siri(density: number): number {
+  return 495 / density - 450;
+}
+
+// A percent outside what a body could be means the measures were wrong, so it is left out.
+function plausible(percent: number): number | null {
+  return Number.isFinite(percent) && percent > 0 && percent < 75 ? percent : null;
+}
+
+// The US Navy tape method from neck, waist, height and, for women, hips; a sex must be set.
+export function navy_body_fat(measures: Pick<Measures, "sex" | "height" | "neck" | "waist" | "hips">): number | null {
+  const { sex, height, neck, waist, hips } = measures;
+  if (!(height > 0) || !(neck > 0) || !(waist > 0)) return null;
+  if (sex === "male" && waist > neck) return plausible(495 / (1.0324 - 0.19077 * Math.log10(waist - neck) + 0.15456 * Math.log10(height)) - 450);
+  if (sex === "female" && hips > 0 && waist + hips > neck) {
+    return plausible(495 / (1.29579 - 0.35004 * Math.log10(waist + hips - neck) + 0.221 * Math.log10(height)) - 450);
+  }
+  return null;
+}
+
+export type CaliperMethod = "jackson_pollock_3" | "jackson_pollock_7";
+
+// The skinfolds each method pinches: three for men and women apiece, or the same seven for both.
+export function caliper_sites(method: CaliperMethod, sex: Sex): Skinfold[] {
+  if (method === "jackson_pollock_7") return ["chest", "midaxillary", "triceps", "subscapular", "abdomen", "suprailiac", "thigh"];
+  if (sex === "female") return ["triceps", "suprailiac", "thigh"];
+  return ["chest", "abdomen", "thigh"];
+}
+
+// Jackson-Pollock skinfold body fat; every site the method needs, a sex and an age must be given.
+export function caliper_body_fat(method: CaliperMethod, measures: Pick<Measures, "sex" | "age" | "skinfolds">): number | null {
+  const { sex, age, skinfolds: folds } = measures;
+  if (!sex || !(age > 0)) return null;
+  const sites = caliper_sites(method, sex).map((site) => folds[site] ?? 0);
+  if (sites.some((site) => !(site > 0))) return null;
+  // The equations take millimetres.
+  const sum = sites.reduce((total, site) => total + site * 10, 0);
+  const coefficients =
+    method === "jackson_pollock_3"
+      ? sex === "male" ? [1.10938, 0.0008267, 0.0000016, 0.0002574] : [1.0994921, 0.0009929, 0.0000023, 0.0001392]
+      : sex === "male" ? [1.112, 0.00043499, 0.00000055, 0.00028826] : [1.097, 0.00046971, 0.00000056, 0.00012828];
+  const [base, linear, square, per_year] = coefficients as [number, number, number, number];
+  return plausible(siri(base - linear * sum + square * sum * sum - per_year * age));
+}
+
+// ── Composition ──────────────────────────────────────────────────────────────
+
+export interface Composition {
+  lean_mass: number;
+  fat_mass: number;
+  // Fat-free mass index, and the same scaled to a height of 1.8 m.
+  ffmi: number | null;
+  normalized_ffmi: number | null;
+}
+
+export function composition(weight: number, body_fat: number, height: number): Composition | null {
+  if (!(weight > 0) || !(body_fat > 0) || body_fat >= 100) return null;
+  const fat_mass = (weight * body_fat) / 100;
+  const lean_mass = weight - fat_mass;
+  const metres = height / 100;
+  const ffmi = height > 0 ? lean_mass / (metres * metres) : null;
+  return { lean_mass, fat_mass, ffmi, normalized_ffmi: ffmi === null ? null : ffmi + 6.1 * (1.8 - metres) };
+}
+
+// The weight that keeps today's lean mass at another body fat percent.
+export function weight_at_body_fat(lean_mass: number, body_fat: number): number | null {
+  if (!(lean_mass > 0) || !(body_fat > 0) || body_fat >= 100) return null;
+  return lean_mass / (1 - body_fat / 100);
+}
+
+export function ratio(part: number, whole: number): number | null {
+  return part > 0 && whole > 0 ? part / whole : null;
+}
+
+// A waist under half the height is the usual sign of a healthy amount of belly fat.
+export function waist_to_height_category(value: number): string {
+  if (value < 0.4) return "Slim";
+  if (value < 0.5) return "Healthy";
+  if (value < 0.6) return "Raised risk";
+  return "High risk";
+}
+
+// The WHO's waist-to-hip cut-offs, 0.85 for women and 0.9 for men.
+export function waist_to_hip_category(value: number, sex: Sex): string {
+  const limit = sex === "female" ? 0.85 : sex === "male" ? 0.9 : 0.875;
+  return value < limit ? "Healthy" : "Raised risk";
+}
+
+// ── Energy ───────────────────────────────────────────────────────────────────
+
+export const kcal_per_kg_of_fat = 7700;
+
+// Basal metabolic rate in kcal a day by each formula, null where a measure it needs is missing; no sex averages the two.
+export function basal_rates(measures: Pick<Measures, "sex" | "age" | "height" | "weight" | "body_fat">): Record<BmrFormula, number | null> {
+  const { sex, age, height, weight, body_fat } = measures;
+  const by_sex = (female: number, male: number) => (sex === "female" ? female : sex === "male" ? male : (female + male) / 2);
+  const whole = weight > 0 && height > 0 && age > 0;
+  const lean = composition(weight, body_fat, height)?.lean_mass ?? 0;
+  return {
+    mifflin_st_jeor: whole ? 10 * weight + 6.25 * height - 5 * age + by_sex(-161, 5) : null,
+    harris_benedict: whole ? by_sex(447.593 + 9.247 * weight + 3.098 * height - 4.33 * age, 88.362 + 13.397 * weight + 4.799 * height - 5.677 * age) : null,
+    katch_mcardle: lean > 0 ? 370 + 21.6 * lean : null,
+  };
+}
+
+export function activity_factor(activity: Activity): number {
+  return activities.find((candidate) => candidate.key === activity)?.factor ?? 1.2;
+}
+
+// ── Everything ───────────────────────────────────────────────────────────────
+
+export type BodyFatSource = "reading" | "navy" | "jackson_pollock_7" | "jackson_pollock_3";
+
+export interface Calculations {
+  bmi: number | null;
+  bmi_category: string | null;
+  // The weights a healthy BMI spans at this height.
+  healthy_weight: { low: number; high: number } | null;
+  navy_body_fat: number | null;
+  jackson_pollock_3: number | null;
+  jackson_pollock_7: number | null;
+  // The body fat the rest is worked out from: the reading, else the first method that gives one.
+  body_fat: number | null;
+  body_fat_source: BodyFatSource | null;
+  composition: Composition | null;
+  waist_to_height: number | null;
+  waist_to_hip: number | null;
+  basal_rates: Record<BmrFormula, number | null>;
+  // The chosen formula's basal rate, falling back to Mifflin-St Jeor when it lacks a measure.
+  bmr: number | null;
+  bmr_formula: BmrFormula | null;
+  // Total daily energy expenditure: the basal rate times the activity.
+  tdee: number | null;
+}
+
+export function calculate(measures: Measures): Calculations {
+  const bmi = body_mass_index(measures.weight, measures.height);
+  const low = weight_at_bmi(healthy_bmi.low, measures.height);
+  const high = weight_at_bmi(healthy_bmi.high, measures.height);
+  const navy = navy_body_fat(measures);
+  const jackson_pollock_3 = caliper_body_fat("jackson_pollock_3", measures);
+  const jackson_pollock_7 = caliper_body_fat("jackson_pollock_7", measures);
+  const candidates: [BodyFatSource, number | null][] = [
+    ["reading", measures.body_fat > 0 ? measures.body_fat : null],
+    ["navy", navy],
+    ["jackson_pollock_7", jackson_pollock_7],
+    ["jackson_pollock_3", jackson_pollock_3],
+  ];
+  const [body_fat_source, body_fat] = candidates.find(([, value]) => value !== null) ?? [null, null];
+  const rates = basal_rates({ ...measures, body_fat: body_fat ?? 0 });
+  const bmr_formula = rates[measures.bmr_formula] !== null ? measures.bmr_formula : rates.mifflin_st_jeor !== null ? "mifflin_st_jeor" : null;
+  const bmr = bmr_formula ? rates[bmr_formula] : null;
+  return {
+    bmi,
+    bmi_category: bmi === null ? null : bmi_category(bmi),
+    healthy_weight: low !== null && high !== null ? { low, high } : null,
+    navy_body_fat: navy,
+    jackson_pollock_3,
+    jackson_pollock_7,
+    body_fat,
+    body_fat_source,
+    composition: body_fat === null ? null : composition(measures.weight, body_fat, measures.height),
+    waist_to_height: ratio(measures.waist, measures.height),
+    waist_to_hip: ratio(measures.waist, measures.hips),
+    basal_rates: rates,
+    bmr,
+    bmr_formula,
+    tdee: bmr === null ? null : bmr * activity_factor(measures.activity),
+  };
+}
+
+// ── Goals ────────────────────────────────────────────────────────────────────
+
+// What the goals aim for; a 0 leaves that part of the plan out.
+export interface GoalPlan {
+  body_fat: number;
+  bmi: number;
+  waist_to_height: number;
+  // Kilograms a week, below 0 to lose.
+  weekly_change: number;
+  protein_per_kg: number;
+  // The share of the day's energy from fat, in percent.
+  fat_percent: number;
+}
+
+export type GoalKey = "weight" | "body_fat" | "waist" | "calories" | "protein" | "fat" | "carbs";
+
+export const body_goal_keys: GoalKey[] = ["weight", "body_fat", "waist"];
+export const diet_goal_keys: GoalKey[] = ["calories", "protein", "fat", "carbs"];
+
+export interface PlannedGoal {
+  key: GoalKey;
+  // In kg, percent, cm, kcal or grams; null when the measures it needs are missing.
+  value: number | null;
+  // How it was worked out, or what is missing.
+  basis: string;
+}
+
+function round_to(value: number, step: number): number {
+  const per_unit = 1 / step;
+  return Math.round(value * per_unit) / per_unit;
+}
+
+// Each goal the plan gives from the measures, rounded as a goal is set by hand.
+export function plan_goals(measures: Measures, calculations: Calculations, plan: GoalPlan): PlannedGoal[] {
+  const lean = calculations.composition?.lean_mass ?? 0;
+  const at_body_fat = plan.body_fat > 0 ? weight_at_body_fat(lean, plan.body_fat) : null;
+  const at_bmi = weight_at_bmi(plan.bmi, measures.height);
+  const weight: PlannedGoal = at_body_fat !== null
+    ? { key: "weight", value: round_to(at_body_fat, 0.1), basis: `Keeps today's lean mass at ${plan.body_fat}% body fat` }
+    : at_bmi !== null
+      ? { key: "weight", value: round_to(at_bmi, 0.1), basis: `A BMI of ${plan.bmi} at your height` }
+      : { key: "weight", value: null, basis: "Needs a height, and a target BMI or a target body fat with a body fat reading" };
+  const body_fat: PlannedGoal = plan.body_fat > 0
+    ? { key: "body_fat", value: plan.body_fat, basis: "The target body fat" }
+    : { key: "body_fat", value: null, basis: "Needs a target body fat" };
+  const waist_value = plan.waist_to_height > 0 && measures.height > 0 ? round_to(plan.waist_to_height * measures.height, 0.1) : null;
+  const waist: PlannedGoal = waist_value !== null
+    ? { key: "waist", value: waist_value, basis: `A waist ${plan.waist_to_height} of your height` }
+    : { key: "waist", value: null, basis: "Needs a height and a target waist-to-height ratio" };
+  const diet = plan_diet(measures, calculations, plan);
+  return [weight, body_fat, waist, ...diet];
+}
+
+function plan_diet(measures: Measures, calculations: Calculations, plan: GoalPlan): PlannedGoal[] {
+  const { tdee } = calculations;
+  if (tdee === null || !(measures.weight > 0)) {
+    const basis = "Needs a weight, a height and a birth date for the daily energy";
+    return diet_goal_keys.map((key) => ({ key, value: null, basis }));
+  }
+  const daily_change = (plan.weekly_change * kcal_per_kg_of_fat) / 7;
+  const calories = round_to(tdee + daily_change, 10);
+  const protein = round_to(plan.protein_per_kg * measures.weight, 1);
+  const fat = round_to((calories * plan.fat_percent) / 100 / 9, 1);
+  const carbs = Math.max(0, round_to((calories - protein * 4 - fat * 9) / 4, 1));
+  const change = plan.weekly_change === 0 ? "to keep your weight" : `to ${plan.weekly_change < 0 ? "lose" : "gain"} at the planned rate`;
+  return [
+    { key: "calories", value: calories, basis: `The energy you burn a day, ${change}` },
+    { key: "protein", value: protein, basis: `${plan.protein_per_kg} g per kg of body weight` },
+    { key: "fat", value: fat, basis: `${plan.fat_percent}% of the calories` },
+    { key: "carbs", value: carbs, basis: "The calories left after protein and fat" },
+  ];
+}

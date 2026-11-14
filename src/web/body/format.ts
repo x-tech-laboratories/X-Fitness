@@ -1,11 +1,11 @@
-// A metric's numbers as the page shows them: weights and lengths in the units from settings, percent and custom units
-// as kept, to a tenth.
+// A metric's numbers as the page shows them: weights and lengths in the units from settings, skinfolds in mm, percent
+// and custom units as kept, to a tenth.
 
 // ── Imports ──────────────────────────────────────────────────────────────────
 
 import { to_shown, to_stored, type LengthUnit, type MassUnit } from "@x-tech-laboratories/x-libs/units";
 
-import type { BodyMetric } from "../../shared/body/readings.ts";
+import { skinfold_of, type BodyMetric, type MetricRole } from "../../shared/body/readings.ts";
 
 // ── Units ────────────────────────────────────────────────────────────────────
 
@@ -18,10 +18,16 @@ export function shown_units(settings: Record<string, unknown>): ShownUnits {
   return { mass: settings.mass_unit === "lb" ? "lb" : "kg", length: settings.length_unit === "in" ? "in" : "cm" };
 }
 
-type Measured = Pick<BodyMetric, "kind" | "unit">;
+type Measured = Pick<BodyMetric, "kind" | "unit"> & { role?: MetricRole };
+
+// Calipers read skinfolds in millimetres, whatever the length unit.
+function is_skinfold(metric: Measured): boolean {
+  return metric.kind === "length" && metric.role !== undefined && skinfold_of(metric.role) !== null;
+}
 
 // The label beside a metric's numbers, such as "kg", "%" or "bpm".
 export function unit_of(metric: Measured, units: ShownUnits): string {
+  if (is_skinfold(metric)) return "mm";
   if (metric.kind === "weight") return units.mass;
   if (metric.kind === "length") return units.length;
   if (metric.kind === "percent") return "%";
@@ -30,11 +36,13 @@ export function unit_of(metric: Measured, units: ShownUnits): string {
 
 // Readings are taken to a tenth, so a stored value is shown rounded to one.
 export function to_shown_value(metric: Measured, value: number, units: ShownUnits): number {
+  if (is_skinfold(metric)) return Math.round(value * 100) / 10;
   const shown = metric.kind === "weight" || metric.kind === "length" ? to_shown(value, unit_of(metric, units) as MassUnit | LengthUnit) : value;
   return Math.round(shown * 10) / 10;
 }
 
 export function to_stored_value(metric: Measured, value: number, units: ShownUnits): number {
+  if (is_skinfold(metric)) return value / 10;
   return metric.kind === "weight" || metric.kind === "length" ? to_stored(value, unit_of(metric, units) as MassUnit | LengthUnit) : value;
 }
 
@@ -53,7 +61,7 @@ export function format_value(metric: Measured, value: number, units: ShownUnits)
 
 // A difference with its sign, such as "+1.5 kg"; converting a difference needs no offset, so it goes as a value does.
 export function format_change(metric: Measured, change: number, units: ShownUnits): string {
-  const shown = metric.kind === "weight" || metric.kind === "length" ? to_shown(change, unit_of(metric, units) as MassUnit | LengthUnit) : change;
+  const shown = is_skinfold(metric) ? change * 10 : metric.kind === "weight" || metric.kind === "length" ? to_shown(change, unit_of(metric, units) as MassUnit | LengthUnit) : change;
   const text = format_number(shown);
   return `${shown > 0 && text !== "0" ? "+" : ""}${text} ${unit_of(metric, units)}`.trim();
 }

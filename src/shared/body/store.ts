@@ -14,6 +14,7 @@ import {
   body_mass_index,
   is_day,
   kind_of,
+  metric_role_of,
   moving_average,
   normalize_metric,
   range_start,
@@ -26,7 +27,7 @@ import {
 } from "./readings.ts";
 import { body_days, body_metrics, body_readings, body_tables } from "./schema.ts";
 import { body_setting_defaults } from "./settings.ts";
-import { girths, role_of, type BodyMeasures, type Girth } from "./shape.ts";
+import { girths, type BodyMeasures, type Girth } from "./shape.ts";
 
 // ── Shapes ───────────────────────────────────────────────────────────────────
 
@@ -96,15 +97,15 @@ const metric_fields = {
   role: body_metrics.role,
 };
 
-function list_metrics(database: SqlDatabase): BodyMetric[] {
+export function list_metrics(database: SqlDatabase): BodyMetric[] {
   const rows = drizzle_of(database).select(metric_fields).from(body_metrics).orderBy(asc(body_metrics.position), asc(body_metrics.name)).all();
-  return rows.map((row) => ({ ...row, kind: kind_of(row.kind), role: role_of(row.role) }));
+  return rows.map((row) => ({ ...row, kind: kind_of(row.kind), role: metric_role_of(row.role) }));
 }
 
 function find_metric(database: SqlDatabase, id: string): BodyMetric {
   const row = drizzle_of(database).select(metric_fields).from(body_metrics).where(eq(body_metrics.id, id)).get();
   if (!row) throw new Error(`No metric ${id}`);
-  return { ...row, kind: kind_of(row.kind), role: role_of(row.role) };
+  return { ...row, kind: kind_of(row.kind), role: metric_role_of(row.role) };
 }
 
 const point_fields = { date: body_readings.date, value: body_readings.value };
@@ -114,7 +115,7 @@ function metric_series(database: SqlDatabase, metric_id: string): Point[] {
   return drizzle_of(database).select(point_fields).from(body_readings).where(eq(body_readings.metric_id, metric_id)).orderBy(asc(body_readings.date)).all();
 }
 
-function latest_on_or_before(database: SqlDatabase, metric_id: string, date: string): Point | null {
+export function latest_on_or_before(database: SqlDatabase, metric_id: string, date: string): Point | null {
   const row = drizzle_of(database)
     .select(point_fields)
     .from(body_readings)
@@ -136,7 +137,7 @@ function height_of(database: SqlDatabase): number {
 }
 
 // BMI is worked out from the first weight metric, as the order lists them.
-function weight_metric(metrics: BodyMetric[]): BodyMetric | undefined {
+export function weight_metric(metrics: BodyMetric[]): BodyMetric | undefined {
   return metrics.find((metric) => metric.kind === "weight");
 }
 

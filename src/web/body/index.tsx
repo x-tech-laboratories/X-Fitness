@@ -9,7 +9,7 @@ import { Loaded } from "@x-tech-laboratories/x-libs/web/react/states";
 
 import type { FeaturePage, FeatureSettingsProps } from "../features.tsx";
 import { use_settings } from "../api.ts";
-import { BodyData, HeightSetting, SexSetting } from "./BodySettings.tsx";
+import { BirthDateSetting, BodyData, HeightSetting, SexSetting } from "./BodySettings.tsx";
 import { shown_units } from "./format.ts";
 import { LogTab } from "./LogTab.tsx";
 import { MetricsTab } from "./MetricsTab.tsx";
@@ -67,6 +67,7 @@ export function body_settings({ settings, set_setting }: FeatureSettingsProps): 
         <>
           <HeightSetting height={Number(settings["body.height"]) || 0} units={units} set_setting={set_setting} />
           <SexSetting sex={String(settings["body.sex"] ?? "")} set_setting={set_setting} />
+          <BirthDateSetting birth_date={String(settings["body.birth_date"] ?? "")} set_setting={set_setting} />
         </>
       ),
     },

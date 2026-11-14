@@ -5,7 +5,8 @@
 
 import { add_days, format_local, parse_local } from "@x-tech-laboratories/x-libs/dates";
 
-import { role_of, type ShapeRole } from "./shape.ts";
+import { skinfolds, type Skinfold } from "../calculators/formulas.ts";
+import { shape_roles, type ShapeRole } from "./shape.ts";
 
 // ── Metrics ──────────────────────────────────────────────────────────────────
 
@@ -30,10 +31,29 @@ export interface BodyMetric {
   goal: number;
   comment: string;
   position: number;
-  role: ShapeRole;
+  role: MetricRole;
 }
 
 export type MetricInput = Partial<Omit<BodyMetric, "position">>;
+
+// ── Roles ────────────────────────────────────────────────────────────────────
+
+// What a metric stands for: body fat or a girth, which also shape the 3D body, or a caliper skinfold.
+export type MetricRole = ShapeRole | `skinfold_${Skinfold}`;
+
+export const metric_roles: { key: MetricRole; label: string }[] = [
+  ...shape_roles,
+  ...skinfolds.map((fold) => ({ key: `skinfold_${fold.key}` as const, label: `${fold.label} skinfold` })),
+];
+
+export function metric_role_of(role: unknown): MetricRole {
+  return metric_roles.find((candidate) => candidate.key === role)?.key ?? "";
+}
+
+// The skinfold a role is, or null for any other role.
+export function skinfold_of(role: MetricRole): Skinfold | null {
+  return role.startsWith("skinfold_") ? (role.slice("skinfold_".length) as Skinfold) : null;
+}
 
 export function kind_of(kind: unknown): MetricKind {
   return metric_kinds.find((candidate) => candidate.key === kind)?.key ?? "weight";
@@ -57,7 +77,7 @@ export function normalize_metric(input: MetricInput): Omit<BodyMetric, "id" | "p
     unit: kind === "custom" ? trimmed_text(input.unit) : "",
     goal: positive_number(input.goal),
     comment: trimmed_text(input.comment),
-    role: role_of(input.role),
+    role: metric_role_of(input.role),
   };
 }
 

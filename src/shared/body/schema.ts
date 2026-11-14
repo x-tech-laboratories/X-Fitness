@@ -14,7 +14,7 @@ export const body_metrics = sqliteTable("body_metrics", {
   goal: real().notNull().default(0),
   comment: text().notNull().default(""),
   position: integer().notNull().default(0),
-  // What the metric tells the 3D body, such as "waist"; empty for nothing.
+  // What the metric stands for, such as "waist" or "skinfold_thigh"; empty for nothing.
   role: text().notNull().default(""),
 });
 

@@ -5,7 +5,7 @@
 import type { MethodSpec } from "@x-tech-laboratories/x-libs/api_spec";
 
 import { day, id_of, json_file, number, step, text } from "../api_schemas.ts";
-import { shape_roles } from "./shape.ts";
+import { metric_roles } from "./readings.ts";
 
 // ── Calls ────────────────────────────────────────────────────────────────────
 
@@ -32,8 +32,9 @@ export const body_api = {
             comment: text("A note on the metric."),
             role: {
               type: "string",
-              enum: shape_roles.map((role) => role.key),
-              description: "What the metric shapes in the 3D body: body_fat for a percent metric, or a girth for a length metric; empty for nothing.",
+              enum: metric_roles.map((role) => role.key),
+              description:
+                "What the metric stands for: body_fat for a percent metric; a girth, which also shapes the 3D body, or a caliper skinfold such as skinfold_thigh for a length metric; empty for nothing. The calculators read their measures by role.",
             },
           },
           required: ["name"],
