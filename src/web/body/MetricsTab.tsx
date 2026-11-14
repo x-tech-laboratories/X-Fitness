@@ -147,7 +147,7 @@ function save_reading(row: ReadingRow, shown: number | null): void {
   void attempt(() => calls().set_body_reading(row.metric.id, row.date, shown === null ? null : to_stored_value(row.metric, shown, row.units)));
 }
 
-// Previous and Goal leave a phone's card to the metric, its reading and Edit.
+// Previous and Goal hide on a phone, leaving each metric one line of its name, reading and Edit.
 const wide_only = "body-wide-only";
 
 const columns: TableColumn<ReadingRow>[] = [
@@ -169,6 +169,8 @@ const columns: TableColumn<ReadingRow>[] = [
   {
     label: "Previous",
     class: wide_only,
+    groupable: false,
+    filterable: false,
     cell: (row) =>
       row.previous ? (
         <span>
@@ -178,7 +180,7 @@ const columns: TableColumn<ReadingRow>[] = [
         </span>
       ) : "—",
   },
-  { label: "Goal", class: wide_only, cell: (row) => (row.metric.goal > 0 ? format_value(row.metric, row.metric.goal, row.units) : "—") },
+  { label: "Goal", class: wide_only, groupable: false, filterable: false, cell: (row) => (row.metric.goal > 0 ? format_value(row.metric, row.metric.goal, row.units) : "—") },
   row_actions_column<ReadingRow>({ name: (row) => row.metric.name, edit: (row) => edit_metric(row.metric, row.units) }),
 ];
 
@@ -201,7 +203,7 @@ export function MetricsTab({ units }: { units: ShownUnits }) {
             {loaded.rows.length === 0 ? (
               <Empty title="No metrics." hint="Add one with the Add metric button." />
             ) : (
-              <DataTable caption={`Readings on ${loaded.date}`} columns={columns} rows={loaded.rows.map((row) => ({ ...row, date: loaded.date, units }))} row_key={(row) => row.metric.id} />
+              <DataTable caption={`Readings on ${loaded.date}`} wrap_class="body-readings" columns={columns} rows={loaded.rows.map((row) => ({ ...row, date: loaded.date, units }))} row_key={(row) => row.metric.id} />
             )}
             {loaded.bmi && (
               <p className="muted">

@@ -1,8 +1,28 @@
 /* Layout only; the Body section's look comes from Halon's tokens and stylesheet. */
 
-/* On a phone each metric's card keeps its name, reading and Edit, and leaves the previous reading and goal to wider screens. */
+/* On a phone each metric is one line of its name, reading and Edit, and leaves the previous reading and goal to wider screens. */
 @media (max-width: 640px) {
-  table.responsive td.body-wide-only {
+  .body-readings table.responsive tr {
+    display: flex;
+    gap: var(--space-2) var(--space-4);
+    align-items: center;
+  }
+
+  .body-readings table.responsive td {
+    width: auto;
+  }
+
+  .body-readings table.responsive td::before {
+    content: none;
+  }
+
+  .body-readings table.responsive td:first-child {
+    flex: 1 1 auto;
+    min-width: 0;
+    text-align: left;
+  }
+
+  .body-readings table.responsive td.body-wide-only {
     display: none;
   }
 }
