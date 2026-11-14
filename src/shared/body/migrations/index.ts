@@ -35,5 +35,13 @@ export const migrations: DrizzleMigration[] = [
     "statements": [
       "-- The starting resting heart rate metric gives the calculators the resting pulse.\nUPDATE `body_metrics` SET `role` = 'resting_heart_rate' WHERE `id` = 'restinghr' AND `role` = '';"
     ]
+  },
+  {
+    "name": "20261114045645_seed_height",
+    "statements": [
+      "-- A length metric already named Height takes the height role, so no second one is made.\nUPDATE `body_metrics` SET `role` = 'height'\nWHERE `id` = (SELECT `id` FROM `body_metrics` WHERE `kind` = 'length' AND `role` = '' AND lower(trim(`name`)) = 'height' ORDER BY `position`, `id` LIMIT 1)\n\tAND NOT EXISTS (SELECT 1 FROM `body_metrics` WHERE `role` = 'height');",
+      "-- Otherwise a Height metric is added, with a fixed id so two devices that upgrade hold the same one.\nINSERT INTO `body_metrics` (`id`, `name`, `kind`, `unit`, `position`, `role`)\nSELECT 'height', 'Height', 'length', '', coalesce((SELECT max(`position`) + 1 FROM `body_metrics`), 0), 'height'\nWHERE NOT EXISTS (SELECT 1 FROM `body_metrics` WHERE `role` = 'height' OR `id` = 'height');",
+      "-- The height setting becomes the metric's reading, dated at the first weight so BMI covers every weight logged.\nINSERT OR IGNORE INTO `body_readings` (`metric_id`, `date`, `value`)\nSELECT `metric`.`id`,\n\tcoalesce(\n\t\t(SELECT min(`date`) FROM `body_readings` WHERE `metric_id` = (SELECT `id` FROM `body_metrics` WHERE `kind` = 'weight' ORDER BY `position`, `name` LIMIT 1)),\n\t\tdate('now', 'localtime')\n\t),\n\tCAST(`setting`.`value` AS REAL)\nFROM `settings` AS `setting`, (SELECT `id` FROM `body_metrics` WHERE `role` = 'height' AND `kind` = 'length' ORDER BY `position`, `name` LIMIT 1) AS `metric`\nWHERE `setting`.`key` = 'body.height'\n\tAND CAST(`setting`.`value` AS REAL) > 0\n\tAND NOT EXISTS (SELECT 1 FROM `body_readings` WHERE `metric_id` = `metric`.`id`);"
+    ]
   }
 ];

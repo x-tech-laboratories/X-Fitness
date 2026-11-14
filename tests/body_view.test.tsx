@@ -55,7 +55,7 @@ describe("body log", () => {
   it("shows readings in pounds and keeps them in kg, and gives BMI once a height is set", async () => {
     const store = fake_page();
     store.set_setting("mass_unit", "lb");
-    store.set_setting("body.height", 180);
+    store.set_body_reading("height", "2026-01-01", 180);
     show(["log"]);
 
     const weight = await screen.findByRole("textbox", { name: "Weight" });
@@ -163,15 +163,23 @@ describe("body metrics", () => {
   });
 });
 
-describe("body settings", () => {
-  it("saves the height in cm from the length unit", async () => {
+describe("you on the metrics page", () => {
+  it("edits the sex and the birth date above the metrics, and Settings has no Body section", async () => {
     const store = fake_page();
-    store.set_setting("length_unit", "in");
-    render(<SettingsView />);
+    show(["metrics"]);
 
-    const height = await screen.findByRole("textbox", { name: "Height" });
-    fireEvent.change(height, { target: { value: "70" } });
-    fireEvent.blur(height);
-    await waitFor(() => expect(store.get_settings()["body.height"]).toBeCloseTo(177.8));
+    fireEvent.change(await screen.findByRole("combobox", { name: "Sex" }), { target: { value: "female" } });
+    await waitFor(() => expect(store.get_settings()["body.sex"]).toBe("female"));
+    const birth_date = screen.getByLabelText("Birth date");
+    fireEvent.change(birth_date, { target: { value: "1990-05-31" } });
+    fireEvent.blur(birth_date);
+    await waitFor(() => expect(store.get_settings()["body.birth_date"]).toBe("1990-05-31"));
+    expect(await screen.findByText("36 years old")).toBeTruthy();
+
+    cleanup();
+    render(<SettingsView />);
+    expect(await screen.findByRole("combobox", { name: "BMR formula" })).toBeTruthy();
+    expect(screen.queryByRole("textbox", { name: "Height" })).toBeNull();
+    expect(screen.queryByRole("combobox", { name: "Sex" })).toBeNull();
   });
 });

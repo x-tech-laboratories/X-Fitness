@@ -130,14 +130,20 @@ function setting_of(database: SqlDatabase, key: keyof typeof body_setting_defaul
   return row ? JSON.parse(row.value) : body_setting_defaults[key];
 }
 
-function height_of(database: SqlDatabase): number {
-  const height = Number(setting_of(database, "body.height"));
-  return Number.isFinite(height) ? height : 0;
-}
-
 // BMI is worked out from the first weight metric, as the order lists them.
 export function weight_metric(metrics: BodyMetric[]): BodyMetric | undefined {
   return metrics.find((metric) => metric.kind === "weight");
+}
+
+// The height is the first length metric with the height role.
+export function height_metric(metrics: BodyMetric[]): BodyMetric | undefined {
+  return metrics.find((metric) => metric.role === "height" && metric.kind === "length");
+}
+
+// The latest height reading on or before the day in cm, or 0 without one.
+export function height_on(database: SqlDatabase, date: string, metrics = list_metrics(database)): number {
+  const metric = height_metric(metrics);
+  return metric ? (latest_on_or_before(database, metric.id, date)?.value ?? 0) : 0;
 }
 
 function check_day(date: unknown): string {
@@ -161,7 +167,7 @@ function body_shape(database: SqlDatabase, date: string): BodyShape {
   const metrics = list_metrics(database);
   const sex_setting = setting_of(database, "body.sex");
   const sex = sex_setting === "female" || sex_setting === "male" ? sex_setting : "";
-  const height = height_of(database);
+  const height = height_on(database, date, metrics);
   const measures: BodyMeasures = { sex, height, mass: 0, body_fat: 0, girths: {} };
   const goal: BodyMeasures = { sex, height, mass: 0, body_fat: 0, girths: {} };
   const shaping: string[] = [];
@@ -259,7 +265,7 @@ export const body_feature = define_feature({
       const rows = metrics.map((metric) => ({ metric, value: by_metric.get(metric.id) ?? null, previous: latest_on_or_before(database, metric.id, shift_day(date, -1)) }));
       const weight = weight_metric(metrics);
       const weight_reading = weight ? latest_on_or_before(database, weight.id, date) : null;
-      const bmi = weight_reading ? body_mass_index(weight_reading.value, height_of(database)) : 0;
+      const bmi = weight_reading ? body_mass_index(weight_reading.value, height_on(database, date, metrics)) : 0;
       return { date, comment: day?.comment ?? "", rows, bmi: weight_reading && bmi > 0 ? { value: bmi, weight: weight_reading } : null };
     },
 
@@ -295,7 +301,7 @@ export const body_feature = define_feature({
       const average = moving_average(all, average_days).filter((point) => point.date >= from);
       const stats = series_stats(series);
       const is_weight = weight_metric(list_metrics(database))?.id === metric.id;
-      const bmi = stats && is_weight ? body_mass_index(stats.latest.value, height_of(database)) : 0;
+      const bmi = stats && is_weight ? body_mass_index(stats.latest.value, height_on(database, stats.latest.date)) : 0;
       return { metric, series, average, stats, to_go: stats && metric.goal > 0 ? metric.goal - stats.latest.value : null, bmi: bmi > 0 ? bmi : null };
     },
 

@@ -1,8 +1,7 @@
-// The body settings and their defaults, apart from the store so the page can read them without loading it.
+// The body settings and their defaults, apart from the store so the page can read them without loading it; the height is
+// a metric with the height role, and sex and birth date are edited on Goals.
 
 export const body_setting_defaults = {
-  // In cm; above 0 it turns on BMI.
-  "body.height": 0,
   // "female", "male", or "" to mix the two in the 3D body.
   "body.sex": "",
   // A day such as 1990-05-31, or "" when not set; the calculators take the age from it.

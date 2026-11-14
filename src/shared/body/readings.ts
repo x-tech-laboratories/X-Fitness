@@ -38,11 +38,12 @@ export type MetricInput = Partial<Omit<BodyMetric, "position">>;
 
 // ── Roles ────────────────────────────────────────────────────────────────────
 
-// What a metric stands for: body fat or a girth, which also shape the 3D body, a caliper skinfold, or the resting pulse.
-export type MetricRole = ShapeRole | `skinfold_${Skinfold}` | "resting_heart_rate";
+// What a metric stands for: body fat or a girth, which also shape the 3D body, the height, a caliper skinfold, or the resting pulse.
+export type MetricRole = ShapeRole | "height" | `skinfold_${Skinfold}` | "resting_heart_rate";
 
 export const metric_roles: { key: MetricRole; label: string }[] = [
   ...shape_roles,
+  { key: "height", label: "Height" },
   ...skinfolds.map((fold) => ({ key: `skinfold_${fold.key}` as const, label: `${fold.label} skinfold` })),
   { key: "resting_heart_rate", label: "Resting heart rate" },
 ];

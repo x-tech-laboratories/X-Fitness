@@ -1,4 +1,4 @@
-// The Body section: its page and its own settings.
+// The Body section: its pages, and no settings of its own.
 
 // ── Imports ──────────────────────────────────────────────────────────────────
 
@@ -7,12 +7,12 @@ import type { SettingsSection } from "@x-tech-laboratories/x-libs/web/react/layo
 import { PageHeading } from "@x-tech-laboratories/x-libs/web/react/layout";
 import { Loaded } from "@x-tech-laboratories/x-libs/web/react/states";
 
-import type { FeaturePage, FeatureSettingsProps } from "../features.tsx";
+import type { FeaturePage } from "../features.tsx";
 import { use_settings } from "../api.ts";
 import { shown_units } from "../units.ts";
-import { BirthDateSetting, HeightSetting, SexSetting } from "./BodySettings.tsx";
 import { LogTab } from "./LogTab.tsx";
 import { MetricsTab } from "./MetricsTab.tsx";
+import { YouCard } from "./YouCard.tsx";
 import { ReportsTab } from "./ReportsTab.tsx";
 import "./body.css";
 
@@ -45,7 +45,7 @@ export function BodyView({ parts }: { parts: string[] }) {
             const units = shown_units(values);
             if (tab === "reports") return <ReportsTab units={units} />;
             if (tab === "shape") return <Suspense fallback={<p className="muted">Loading…</p>}><ShapeTab units={units} settings={values} /></Suspense>;
-            if (tab === "metrics") return <MetricsTab units={units} />;
+            if (tab === "metrics") return <><YouCard settings={values} /><MetricsTab units={units} /></>;
             return <LogTab units={units} />;
           }}
         </Loaded>
@@ -56,20 +56,7 @@ export function BodyView({ parts }: { parts: string[] }) {
 
 // ── Settings ─────────────────────────────────────────────────────────────────
 
-export function body_settings({ settings, set_setting }: FeatureSettingsProps): SettingsSection[] {
-  const units = shown_units(settings);
-  return [
-    {
-      id: "body",
-      heading: "Body",
-      hint: "Weights and lengths follow the units under General.",
-      content: (
-        <>
-          <HeightSetting height={Number(settings["body.height"]) || 0} units={units} set_setting={set_setting} />
-          <SexSetting sex={String(settings["body.sex"] ?? "")} set_setting={set_setting} />
-          <BirthDateSetting birth_date={String(settings["body.birth_date"] ?? "")} set_setting={set_setting} />
-        </>
-      ),
-    },
-  ];
+// The height is a metric, sex and birth date are edited on Metrics and the 3D looks on the 3D tab, so Body has no section here.
+export function body_settings(): SettingsSection[] {
+  return [];
 }
