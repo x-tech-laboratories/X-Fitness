@@ -5,7 +5,7 @@ as an Android app; the desktop and Android apps keep their own copy of the data,
 whenever it can be reached.
 
 - **Workouts:** exercises, routines, logged sessions with their sets, rest timer, and progress per exercise.
-- **Diet:** foods and meals, what was eaten each day, and the day's calories and nutrients against targets. Around 70
+- **Diet:** foods and meals, what was eaten each day, and the day's calories and nutrients against targets. Around 80
   nutrients, from the macros to vitamins, minerals and amino acids; a country's nutrition label (US, EU and UK, Canada,
   Australia and NZ) picks the ones shown and a region's reference intakes the targets, each changeable by hand.
 - **Body:** weight, body fat, girths and any measure of your own, with goals and trends, and a 3D body shaped to

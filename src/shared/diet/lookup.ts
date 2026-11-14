@@ -104,6 +104,13 @@ const off_nutriment_keys: Partial<Record<NutrientKey, string | string[]>> = {
   fluoride: "fluoride_100g",
   caffeine: "caffeine_100g",
   water: "water_100g",
+  soluble_fiber: "soluble-fiber_100g",
+  insoluble_fiber: "insoluble-fiber_100g",
+  ala: "alpha-linolenic-acid_100g",
+  epa: "eicosapentaenoic-acid_100g",
+  dha: "docosahexaenoic-acid_100g",
+  linoleic_acid: "linoleic-acid_100g",
+  arachidonic_acid: "arachidonic-acid_100g",
 };
 
 export function open_food_facts_url(query: string): string {
@@ -216,6 +223,15 @@ const usda_nutrient_numbers: Partial<Record<NutrientKey, [parts: string[][], uni
   alcohol: [[["221"]], "G"],
   caffeine: [[["262"]], "MG"],
   water: [[["255"]], "G"],
+  soluble_fiber: [[["295", "293.2"]], "G"],
+  insoluble_fiber: [[["297", "293.1"]], "G"],
+  ala: [[["851", "619"]], "G"],
+  epa: [[["629"]], "G"],
+  dha: [[["621"]], "G"],
+  linoleic_acid: [[["675", "618"]], "G"],
+  arachidonic_acid: [[["855", "620"]], "G"],
+  oxalate: [[["245"]], "MG"],
+  phytate: [[["246"]], "MG"],
 };
 
 const grams_per_unit: Record<string, number> = { G: 1, MG: 0.001, UG: 0.000001, KCAL: 1 };

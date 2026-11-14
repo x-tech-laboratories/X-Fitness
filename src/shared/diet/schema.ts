@@ -93,6 +93,15 @@ export const diet_foods = sqliteTable("diet_foods", {
   alcohol: real().notNull().default(0),
   caffeine: real().notNull().default(0),
   water: real().notNull().default(0),
+  soluble_fiber: real().notNull().default(0),
+  insoluble_fiber: real().notNull().default(0),
+  ala: real().notNull().default(0),
+  epa: real().notNull().default(0),
+  dha: real().notNull().default(0),
+  linoleic_acid: real().notNull().default(0),
+  arachidonic_acid: real().notNull().default(0),
+  oxalate: real().notNull().default(0),
+  phytate: real().notNull().default(0),
 });
 
 export const diet_recipes = sqliteTable("diet_recipes", {

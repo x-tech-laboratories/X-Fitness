@@ -2,6 +2,10 @@
 // the units a food can be measured in, and the sums for a recipe and a day. Everything here is plain data, so the store
 // and the page share it.
 
+// ── Imports ──────────────────────────────────────────────────────────────────
+
+import type { GramUnit } from "@x-tech-laboratories/x-libs/units";
+
 // ── Nutrients ────────────────────────────────────────────────────────────────
 
 export const nutrient_keys = [
@@ -74,6 +78,15 @@ export const nutrient_keys = [
   "alcohol",
   "caffeine",
   "water",
+  "soluble_fiber",
+  "insoluble_fiber",
+  "ala",
+  "epa",
+  "dha",
+  "linoleic_acid",
+  "arachidonic_acid",
+  "oxalate",
+  "phytate",
 ] as const;
 
 export type NutrientKey = (typeof nutrient_keys)[number];
@@ -99,7 +112,7 @@ export interface NutrientInfo {
   key: NutrientKey;
   label: string;
   // Energy follows the energy unit chosen in Settings; small amounts read better in mg or µg.
-  shown: "energy" | "g" | "mg" | "µg";
+  shown: "energy" | GramUnit;
   group: NutrientGroup;
   // The target is an amount to reach, so going past it is fine; otherwise it is a limit.
   goal?: true;
@@ -120,6 +133,8 @@ export const nutrients: NutrientInfo[] = [
   nutrient("carbs", "Carbs", "g", "macros"),
   nutrient("fat", "Fat", "g", "macros"),
   nutrient("fiber", "Fiber", "g", "carbs"),
+  nutrient("soluble_fiber", "Soluble Fiber", "g", "carbs", goal),
+  nutrient("insoluble_fiber", "Insoluble Fiber", "g", "carbs", goal),
   nutrient("sugar", "Sugar", "g", "carbs"),
   nutrient("added_sugars", "Added Sugars", "g", "carbs"),
   nutrient("starch", "Starch", "g", "carbs"),
@@ -129,7 +144,12 @@ export const nutrients: NutrientInfo[] = [
   nutrient("monounsaturated_fat", "Monounsaturated Fat", "g", "fats"),
   nutrient("polyunsaturated_fat", "Polyunsaturated Fat", "g", "fats"),
   nutrient("omega_3", "Omega-3", "g", "fats"),
+  nutrient("ala", "ALA (Omega-3)", "g", "fats", goal),
+  nutrient("epa", "EPA (Omega-3)", "g", "fats", goal),
+  nutrient("dha", "DHA (Omega-3)", "g", "fats", goal),
   nutrient("omega_6", "Omega-6", "g", "fats"),
+  nutrient("linoleic_acid", "Linoleic Acid (Omega-6)", "g", "fats"),
+  nutrient("arachidonic_acid", "Arachidonic Acid (Omega-6)", "g", "fats"),
   nutrient("cholesterol", "Cholesterol", "mg", "fats"),
   nutrient("vitamin_a", "Vitamin A", "µg", "vitamins", goal),
   nutrient("beta_carotene", "Beta-Carotene", "µg", "vitamins", goal),
@@ -186,6 +206,8 @@ export const nutrients: NutrientInfo[] = [
   nutrient("alcohol", "Alcohol", "g", "other"),
   nutrient("caffeine", "Caffeine", "mg", "other"),
   nutrient("water", "Water", "g", "other", goal),
+  nutrient("oxalate", "Oxalate", "mg", "other"),
+  nutrient("phytate", "Phytate", "mg", "other"),
 ];
 
 export function empty_nutrients(): Nutrients {
