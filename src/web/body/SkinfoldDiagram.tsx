@@ -30,12 +30,12 @@ interface Site {
 // Every site is on the person's right side, as the Jackson-Pollock method measures.
 const sites: Record<Skinfold, Site> = {
   chest: { view: "front", out: 57, down: 196, lean: 60, number_at: [34, 160], where: "A diagonal fold halfway between the front of the armpit and the nipple; a third of the way for women." },
-  abdomen: { view: "front", out: 13, down: 300, lean: 0, number_at: [13, 352], where: "A vertical fold 2 cm to the right of the navel." },
-  thigh: { view: "front", out: 42, down: 442, lean: 0, number_at: [14, 442], where: "A vertical fold on the front of the thigh, halfway between the hip crease and the top of the kneecap." },
+  abdomen: { view: "front", out: 10, down: 300, lean: 0, number_at: [10, 352], where: "A vertical fold 2 cm to the right of the navel." },
+  thigh: { view: "front", out: 42, down: 459, lean: 0, number_at: [14, 459], where: "A vertical fold on the front of the thigh, halfway between the hip crease and the top of the kneecap." },
   triceps: { view: "back", out: 104, down: 224, lean: -16, number_at: [146, 224], where: "A vertical fold on the back of the upper arm, halfway between the shoulder and the elbow." },
   suprailiac: { view: "front", out: 56, down: 330, lean: 45, number_at: [92, 316], where: "A diagonal fold just above the front of the hip bone, in line with the front of the armpit." },
   midaxillary: { view: "front", out: 66, down: 242, lean: 0, number_at: [36, 240], where: "A vertical fold on the side of the ribs, straight below the armpit at the height of the bottom of the breastbone." },
-  subscapular: { view: "back", out: 47, down: 250, lean: -45, number_at: [22, 280], where: "A diagonal fold just below the bottom corner of the shoulder blade." },
+  subscapular: { view: "back", out: 46, down: 245, lean: -45, number_at: [22, 274], where: "A diagonal fold just below the bottom corner of the shoulder blade." },
 };
 
 // The site's number in the list of skinfolds, from 1.
