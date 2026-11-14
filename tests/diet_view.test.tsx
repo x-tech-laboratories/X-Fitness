@@ -265,7 +265,8 @@ describe("diet settings", () => {
     render(<SettingsView />);
 
     expect(((await screen.findByRole("textbox", { name: "Protein target" })) as HTMLInputElement).value).toBe("140");
-    expect(screen.getAllByText("Set by the plan on Calculators → Goals.")).toHaveLength(4);
+    // Only protein has a value from the plan; without body readings the rest still follow the preset.
+    expect(screen.getAllByText("Set by the plan on Calculators → Goals.")).toHaveLength(1);
     expect(screen.queryByRole("button", { name: "Reset Protein target" })).toBeNull();
     expect(screen.getByRole("button", { name: "Reset Iron target" })).toBeTruthy();
     expect(screen.getByText("Custom: 1 target(s) set by hand.")).toBeTruthy();

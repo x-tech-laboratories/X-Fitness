@@ -92,8 +92,13 @@ export const diet_api = {
   },
   delete_recipe: { description: "Deletes a recipe.", params: [{ name: "id", schema: id_of("recipe") }] },
   get_diary_day: {
-    description: "One day's diary: each entry with its food or recipe, amount and nutrients, and the day's totals.",
+    description: "One day's diary: each entry with its food or recipe, amount and nutrients, the day's totals, and the targets in force, 0 meaning none; calories in kcal and the rest in grams.",
     params: [{ name: "date", schema: day }],
+  },
+  get_diet_targets: {
+    description:
+      "Each nutrient's daily target in force, in kcal for calories and grams for the rest, 0 meaning none: whether the page shows it, whether it is a goal to reach or a limit, what the target preset gives, and whether the target comes from the plan on Calculators → Goals, was set by hand (a diet.target_<nutrient> setting, which set_setting to null hands back to the preset) or follows the preset. Also names the nutrition label and the target preset chosen in Settings.",
+    params: [],
   },
   list_daily_totals: {
     description: "Each day's nutrient totals from one day to another, days with nothing logged as zero.",

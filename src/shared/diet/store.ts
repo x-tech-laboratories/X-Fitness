@@ -9,6 +9,7 @@ import { in_transaction, type SqlDatabase } from "@x-tech-laboratories/x-libs/sq
 
 import { define_feature, drizzle_of, new_id } from "../feature.ts";
 import { diet_api } from "./api.ts";
+import { label_preset_of, preset_target, shown_nutrients, target_of, target_preset_of, target_source, type TargetSource } from "./labels.ts";
 import { search_foods, type LookupReply } from "./lookup.ts";
 import { migrations } from "./migrations/index.ts";
 import {
@@ -24,6 +25,7 @@ import {
   normalize_names,
   normalize_recipe,
   nutrient_keys,
+  nutrients,
   rename_in_categories,
   serving_unit,
   unit_usage,
@@ -31,6 +33,8 @@ import {
   type EntryKind,
   type Food,
   type GroceryItem,
+  type NutrientGroup,
+  type NutrientKey,
   type Nutrients,
   type Recipe,
 } from "./model.ts";
@@ -44,6 +48,16 @@ import { read_trilium_diet, write_trilium_diet, type DietDocument } from "./tril
 function read_setting(database: SqlDatabase, key: DietSettingKey): unknown {
   const row = database.prepare("SELECT value FROM settings WHERE key = ?").get(key) as { value: string } | undefined;
   return row ? JSON.parse(row.value) : diet_setting_defaults[key];
+}
+
+// Every setting stored over the diet's defaults, as labels.ts reads them.
+function read_settings(database: SqlDatabase): Record<string, unknown> {
+  const rows = database.prepare("SELECT key, value FROM settings").all() as { key: string; value: string }[];
+  return { ...diet_setting_defaults, ...Object.fromEntries(rows.map((row) => [row.key, JSON.parse(row.value)])) };
+}
+
+function day_targets(settings: Record<string, unknown>): Nutrients {
+  return Object.fromEntries(nutrient_keys.map((key) => [key, target_of(settings, key)])) as Nutrients;
 }
 
 // ── Reading rows ─────────────────────────────────────────────────────────────
@@ -181,6 +195,32 @@ export interface DiaryDay {
   date: string;
   entries: DayEntry[];
   totals: Nutrients;
+  // The targets in force, 0 meaning none.
+  targets: Nutrients;
+}
+
+export interface NutrientTarget {
+  key: NutrientKey;
+  label: string;
+  // What the target is in: kcal for calories and grams for the rest.
+  unit: "kcal" | "g";
+  group: NutrientGroup;
+  // Whether the page shows it, by the nutrition label and the nutrients switched by hand.
+  shown: boolean;
+  // A goal is an amount to reach, so going past it is fine; otherwise the target is a limit.
+  goal: boolean;
+  // The target in force, 0 meaning none.
+  target: number;
+  // What the target preset gives, 0 meaning none.
+  preset_target: number;
+  // Whether the target comes from the plan on Calculators → Goals, was set by hand, or follows the preset.
+  source: TargetSource;
+}
+
+export interface DietTargets {
+  label: string;
+  targets_preset: string;
+  nutrients: NutrientTarget[];
 }
 
 export interface DayTotals {
@@ -315,7 +355,29 @@ export const diet_feature = define_feature({
           nutrients: entry_nutrients(entry, foods, recipes),
         };
       });
-      return { date, entries, totals: day_totals(entries, foods, recipes) };
+      return { date, entries, totals: day_totals(entries, foods, recipes), targets: day_targets(read_settings(database)) };
+    },
+    get_diet_targets: (database: SqlDatabase): DietTargets => {
+      const settings = read_settings(database);
+      const shown = new Set(shown_nutrients(settings).map((info) => info.key));
+      return {
+        label: label_preset_of(settings).label,
+        targets_preset: target_preset_of(settings).label,
+        // Salt is sodium seen another way, so each stored nutrient comes once.
+        nutrients: nutrients
+          .filter((info) => !info.scale)
+          .map((info) => ({
+            key: info.key,
+            label: info.label,
+            unit: info.shown === "energy" ? "kcal" : "g",
+            group: info.group,
+            shown: shown.has(info.key),
+            goal: info.goal === true,
+            target: target_of(settings, info.key),
+            preset_target: preset_target(settings, info.key),
+            source: target_source(settings, info.key),
+          })),
+      };
     },
     // Every day from the first date to the last, those with nothing logged as zero.
     list_daily_totals: (database: SqlDatabase, from: string, to: string): DayTotals[] => {

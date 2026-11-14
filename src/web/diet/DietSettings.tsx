@@ -12,26 +12,22 @@ import {
   is_shown,
   label_preset_of,
   label_presets,
+  plan_keys,
   preset_target,
   shown_overrides,
   target_of,
   target_override,
   target_preset_of,
   target_presets,
+  target_source,
   with_shown,
 } from "../../shared/diet/labels.ts";
-import { diet_goal_keys } from "../../shared/calculators/formulas.ts";
 import { nutrient_keys, nutrients, target_key, type NutrientGroup } from "../../shared/diet/model.ts";
 import { calls } from "../api.ts";
 import type { FeatureSettingsProps } from "../features.tsx";
 import { energy_unit_of, error_text, field_value, format_nutrient, shown_unit, to_shown_value, to_stored_value } from "./format.ts";
 
 // ── Label and targets ────────────────────────────────────────────────────────
-
-// The targets the plan on Calculators → Goals sets again after every change, none when it is not followed.
-function plan_keys(settings: Record<string, unknown>): readonly string[] {
-  return settings["calculators.follow_diet_targets"] === true ? diet_goal_keys : [];
-}
 
 // The two presets, each with a way back to it once nutrients have been changed by hand.
 export function LabelSettings({ settings, set_setting }: FeatureSettingsProps) {
@@ -72,7 +68,7 @@ export function NutrientSettings({ settings, set_setting, group }: FeatureSettin
         const unit = shown_unit(info, energy);
         const override = target_override(settings, info.key);
         const preset = preset_target(settings, info.key);
-        const by_plan = plan_keys(settings).includes(info.key);
+        const by_plan = target_source(settings, info.key) === "plan";
         const preset_text = preset > 0 ? format_nutrient(info, preset, energy) : "none";
         return (
           <SettingRow

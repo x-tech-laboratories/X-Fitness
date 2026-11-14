@@ -3,6 +3,7 @@
 
 // ── Imports ──────────────────────────────────────────────────────────────────
 
+import { diet_goal_keys } from "../calculators/formulas.ts";
 import { nutrients, target_key, type NutrientInfo, type NutrientKey } from "./model.ts";
 
 // ── Labels ───────────────────────────────────────────────────────────────────
@@ -233,4 +234,17 @@ export function target_override(settings: Record<string, unknown>, key: Nutrient
 // The day's target for a nutrient, 0 meaning none.
 export function target_of(settings: Record<string, unknown>, key: NutrientKey): number {
   return target_override(settings, key) ?? preset_target(settings, key);
+}
+
+// The targets the plan on Calculators → Goals sets again after every change, none when it is not followed.
+export function plan_keys(settings: Record<string, unknown>): readonly string[] {
+  return settings["calculators.follow_diet_targets"] === true ? diet_goal_keys : [];
+}
+
+export type TargetSource = "plan" | "hand" | "preset";
+
+// A target the plan follows but has not set yet, for want of the measures it needs, still follows the preset.
+export function target_source(settings: Record<string, unknown>, key: NutrientKey): TargetSource {
+  if (target_override(settings, key) === null) return "preset";
+  return plan_keys(settings).includes(key) ? "plan" : "hand";
 }

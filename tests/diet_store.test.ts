@@ -158,6 +158,30 @@ describe("diet store", () => {
     expect(target_of({}, "leucine")).toBe(0);
   });
 
+  it("gives the targets in force with where each comes from", () => {
+    const { methods } = open_methods();
+    methods.set_setting("diet.targets", "eu");
+    methods.set_setting("diet.target_iron", 0.02);
+    methods.set_setting("diet.shown", { iron: true });
+    methods.set_setting("calculators.follow_diet_targets", true);
+    methods.set_setting("diet.target_protein", 140);
+
+    const targets = methods.get_diet_targets();
+    expect(targets).toMatchObject({ label: "US Nutrition Facts", targets_preset: "EU Reference Intakes" });
+    const of = (key: string) => targets.nutrients.find((item) => item.key === key)!;
+    expect(of("protein")).toMatchObject({ unit: "g", target: 140, preset_target: 50, source: "plan", shown: true, goal: false });
+    expect(of("iron")).toMatchObject({ target: 0.02, source: "hand", shown: true, goal: true });
+    expect(of("calories")).toMatchObject({ unit: "kcal", target: 2000, source: "preset" });
+    expect(of("magnesium")).toMatchObject({ shown: false, source: "preset" });
+    // Salt is sodium seen another way, so sodium comes once.
+    expect(targets.nutrients.filter((item) => item.key === "sodium")).toHaveLength(1);
+
+    const day = methods.get_diary_day("2026-11-13");
+    expect(day.targets.protein).toBe(140);
+    expect(day.targets.vitamin_c).toBeCloseTo(0.08);
+    expect(day.targets.leucine).toBe(0);
+  });
+
   it("replaces a recipe's ingredients and drops them with the recipe", () => {
     const { database, methods } = open_methods();
     const oats_id = methods.save_food(oats);
@@ -348,6 +372,8 @@ const usda_reply = {
         { nutrientNumber: "851", unitName: "G", value: 0.03 },
         { nutrientNumber: "621", unitName: "G", value: 0.01 },
         { nutrientNumber: "504", unitName: "G", value: 1.5 },
+        { nutrientNumber: "293.2", unitName: "G", value: 0.8 },
+        { nutrientNumber: "245", unitName: "MG", value: 12 },
       ],
     },
   ],
@@ -406,6 +432,11 @@ describe("food lookup", () => {
     // Omega-3 is its fatty acids added up.
     expect(usda.nutrients.omega_3).toBeCloseTo(0.04);
     expect(usda.nutrients.leucine).toBe(1.5);
+    // DHA counts on its own and inside omega-3; soluble fiber falls back to the newer method's number.
+    expect(usda.nutrients.dha).toBeCloseTo(0.01);
+    expect(usda.nutrients.ala).toBeCloseTo(0.03);
+    expect(usda.nutrients.soluble_fiber).toBeCloseTo(0.8);
+    expect(usda.nutrients.oxalate).toBeCloseTo(0.012);
     expect(usda.key).toBe("usda-171705");
   });
 

@@ -7,6 +7,7 @@ import { useMemo, useState, type CSSProperties, type ReactNode } from "react";
 import type { EnergyUnit } from "@x-tech-laboratories/x-libs/units";
 import { ChipField } from "@x-tech-laboratories/x-libs/web/react/chip_field";
 import { NumberField, Select } from "@x-tech-laboratories/x-libs/web/react/controls";
+import { FormGroup } from "@x-tech-laboratories/x-libs/web/react/layout";
 import { use_pref } from "@x-tech-laboratories/x-libs/web/react/prefs";
 import type { RowGroup, Sorting } from "@x-tech-laboratories/x-libs/web/react/table";
 
@@ -233,15 +234,14 @@ function NutrientGroups({ infos, values, energy, on_change, bare_first = false }
 export function NutrientFields({ shown, ...props }: NutrientFieldsProps & { shown: NutrientInfo[] }) {
   // Salt is only another view of sodium, so it stays out of the rest.
   const rest = nutrients.filter((info) => !shown.includes(info) && !info.scale);
-  const [open, set_open] = useState(() => rest.some((info) => props.values[info.key] > 0));
+
   return (
     <div className="stack">
       <NutrientGroups {...props} infos={shown} bare_first />
       {rest.length > 0 && (
-        <details open={open} onToggle={(event) => set_open(event.currentTarget.open)}>
-          <summary>More nutrients</summary>
+        <FormGroup summary="More nutrients" open={rest.some((info) => props.values[info.key] > 0)}>
           <NutrientGroups {...props} infos={rest} />
-        </details>
+        </FormGroup>
       )}
     </div>
   );
