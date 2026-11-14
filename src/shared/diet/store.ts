@@ -7,29 +7,27 @@ import { add_days, format_local, parse_local } from "@x-tech-laboratories/x-libs
 import { asc, between, eq, sql, synced_tables, type InferInsertModel, type InferSelectModel } from "@x-tech-laboratories/x-libs/drizzle";
 import { in_transaction, type SqlDatabase } from "@x-tech-laboratories/x-libs/sql";
 
+import { add_category, delete_category, import_category_paths, move_category, read_categories, rename_category, save_category_refs, type Retag } from "../category_store.ts";
+import { category_paths_of, known_category_ids, placed_categories, type PlacedCategory } from "../category_tree.ts";
 import { define_feature, drizzle_of, new_id } from "../feature.ts";
 import { diet_api } from "./api.ts";
 import { label_preset_of, preset_target, shown_nutrients, target_of, target_preset_of, target_source, type TargetSource } from "./labels.ts";
 import { search_foods, type LookupReply } from "./lookup.ts";
 import { migrations } from "./migrations/index.ts";
 import {
-  all_categories,
   by_id,
   day_totals,
-  drop_from_categories,
   empty_nutrients,
   entry_meal,
   entry_nutrients,
   food_label,
   meal_at,
-  normalize_category_name,
   normalize_food,
   normalize_meals,
   normalize_names,
   normalize_recipe,
   nutrient_keys,
   nutrients,
-  rename_in_categories,
   serving_unit,
   unit_usage,
   type DiaryEntry,
@@ -64,8 +62,6 @@ function day_targets(settings: Record<string, unknown>): Nutrients {
 }
 
 // ── Reading rows ─────────────────────────────────────────────────────────────
-
-type NameTable = typeof diet_categories | typeof diet_units;
 
 // SQLite's own row order breaks ties between rows logged or added at the same moment.
 const insertion_order = sql`rowid`;
@@ -105,7 +101,7 @@ function read_grocery(database: SqlDatabase): GroceryItem[] {
   return rows.map(({ added_at: _added_at, ...row }) => ({ ...row, done: row.done === 1 }));
 }
 
-function read_names(database: SqlDatabase, table: NameTable): string[] {
+function read_names(database: SqlDatabase, table: typeof diet_units): string[] {
   return drizzle_of(database).select({ name: table.name }).from(table).all().map((row) => row.name);
 }
 
@@ -146,24 +142,26 @@ function insert_grocery(database: SqlDatabase, item: GroceryItem, added_at: stri
 }
 
 // Adds a name unless one differing only in case is already there.
-function add_name(database: SqlDatabase, table: NameTable, name: string): void {
+function add_name(database: SqlDatabase, table: typeof diet_units, name: string): void {
   if (read_names(database, table).some((existing) => existing.toLowerCase() === name.toLowerCase())) return;
   drizzle_of(database).insert(table).values({ name }).run();
 }
 
-function delete_name(database: SqlDatabase, table: NameTable, name: string): void {
+function delete_name(database: SqlDatabase, table: typeof diet_units, name: string): void {
   drizzle_of(database).delete(table).where(eq(table.name, name)).run();
 }
 
 // Rewrites the categories of every food and recipe whose list changes, leaving the rest untouched for sync.
-function map_item_categories(database: SqlDatabase, change: (categories: string[]) => string[]): void {
-  const db = drizzle_of(database);
-  for (const table of [diet_foods, diet_recipes]) {
-    for (const row of db.select({ id: table.id, categories: table.categories }).from(table).all()) {
-      const next = JSON.stringify(change(JSON.parse(row.categories) as string[]));
-      if (next !== row.categories) db.update(table).set({ categories: next }).where(eq(table.id, row.id)).run();
+function map_item_categories(database: SqlDatabase): Retag {
+  return (change) => {
+    const db = drizzle_of(database);
+    for (const table of [diet_foods, diet_recipes]) {
+      for (const row of db.select({ id: table.id, categories: table.categories }).from(table).all()) {
+        const next = JSON.stringify(change(JSON.parse(row.categories) as string[]));
+        if (next !== row.categories) db.update(table).set({ categories: next }).where(eq(table.id, row.id)).run();
+      }
     }
-  }
+  };
 }
 
 function positive(raw: unknown, name: string): number {
@@ -177,8 +175,8 @@ function positive(raw: unknown, name: string): number {
 export interface DietData {
   foods: Food[];
   recipes: Recipe[];
-  // Every category: those made on their own, those carried, and every parent their paths imply.
-  categories: string[];
+  // Every category in tree order, with its path.
+  categories: PlacedCategory[];
   // Every unit: those made on their own and those in use.
   units: string[];
   brands: string[];
@@ -300,13 +298,15 @@ export interface GroceryInput {
 export type GroceryChanges = Partial<Pick<GroceryItem, "brand" | "amount" | "unit" | "comment" | "done">>;
 
 function get_diet(database: SqlDatabase): DietData {
-  const foods = read_foods(database);
-  const recipes = read_recipes(database);
+  const categories = read_categories(database, diet_categories);
+  const known = <Item extends { categories: string[] }>(item: Item): Item => ({ ...item, categories: known_category_ids(item.categories, categories) });
+  const foods = read_foods(database).map(known);
+  const recipes = read_recipes(database).map(known);
   const grocery = read_grocery(database);
   return {
     foods,
     recipes,
-    categories: all_categories([...read_names(database, diet_categories), ...foods.flatMap((food) => food.categories), ...recipes.flatMap((recipe) => recipe.categories)]),
+    categories: placed_categories(categories),
     units: normalize_names([
       ...read_names(database, diet_units),
       ...foods.map((food) => food.serving_unit),
@@ -318,12 +318,15 @@ function get_diet(database: SqlDatabase): DietData {
   };
 }
 
+// Categories travel as "/" paths, which the add-on reads.
 function read_document(database: SqlDatabase): DietDocument {
+  const categories = read_categories(database, diet_categories);
+  const as_paths = <Item extends { categories: string[] }>(item: Item): Item => ({ ...item, categories: category_paths_of(known_category_ids(item.categories, categories), categories) });
   return {
-    categories: normalize_names(read_names(database, diet_categories)),
+    categories: category_paths_of(categories.map((category) => category.id), categories),
     units: normalize_names(read_names(database, diet_units)),
-    foods: read_foods(database),
-    recipes: read_recipes(database),
+    foods: read_foods(database).map(as_paths),
+    recipes: read_recipes(database).map(as_paths),
     diary: read_diary(database, "0000-00-00", "9999-99-99"),
     grocery: read_grocery(database),
   };
@@ -342,10 +345,11 @@ export const diet_feature = define_feature({
 
     // ── Foods and recipes ──
 
+    // A category given as a "/" path is found, or made where missing.
     save_food: (database: SqlDatabase, input: FoodInput): string => {
       const food = normalize_food({ ...input, id: input.id || new_id() });
       if (!food.name) throw new Error("A food needs a name.");
-      write_food(database, food);
+      in_transaction(database, () => write_food(database, { ...food, categories: save_category_refs(database, diet_categories, food.categories) }));
       return food.id;
     },
     delete_food: (database: SqlDatabase, id: string): void => {
@@ -354,7 +358,7 @@ export const diet_feature = define_feature({
     save_recipe: (database: SqlDatabase, input: RecipeInput): string => {
       const recipe = normalize_recipe({ ...input, id: input.id || new_id() });
       if (!recipe.name) throw new Error("A recipe needs a name.");
-      in_transaction(database, () => write_recipe(database, recipe));
+      in_transaction(database, () => write_recipe(database, { ...recipe, categories: save_category_refs(database, diet_categories, recipe.categories) }));
       return recipe.id;
     },
     delete_recipe: (database: SqlDatabase, id: string): void => {
@@ -462,30 +466,17 @@ export const diet_feature = define_feature({
 
     // ── Categories ──
 
-    add_category: (database: SqlDatabase, name: string): void => {
-      const normalized = normalize_category_name(name);
-      if (!normalized) throw new Error("A category needs a name.");
-      add_name(database, diet_categories, normalized);
+    add_category: (database: SqlDatabase, name: string, parent_id: string | null = null): string => {
+      return add_category(database, diet_categories, name, parent_id);
     },
-    rename_category: (database: SqlDatabase, from: string, to: string): void => {
-      const target = normalize_category_name(to);
-      if (!target || target === from) return;
-      in_transaction(database, () => {
-        map_item_categories(database, (categories) => rename_in_categories(categories, from, target));
-        const managed = read_names(database, diet_categories);
-        const renamed = rename_in_categories(managed, from, target);
-        for (const name of managed.filter((name) => !renamed.includes(name))) delete_name(database, diet_categories, name);
-        for (const name of renamed) add_name(database, diet_categories, name);
-      });
+    rename_category: (database: SqlDatabase, id: string, name: string): void => {
+      in_transaction(database, () => rename_category(database, diet_categories, id, name, map_item_categories(database)));
     },
-    // The category and its subcategories leave every food and recipe; the items themselves stay.
-    delete_category: (database: SqlDatabase, name: string): void => {
-      in_transaction(database, () => {
-        map_item_categories(database, (categories) => drop_from_categories(categories, name));
-        for (const managed of read_names(database, diet_categories)) {
-          if (!drop_from_categories([managed], name).length) delete_name(database, diet_categories, managed);
-        }
-      });
+    move_category: (database: SqlDatabase, id: string, parent_id: string | null, position: number | null = null): void => {
+      in_transaction(database, () => move_category(database, diet_categories, id, parent_id, position, map_item_categories(database)));
+    },
+    delete_category: (database: SqlDatabase, id: string): void => {
+      in_transaction(database, () => delete_category(database, diet_categories, id, map_item_categories(database)));
     },
 
     // ── Units ──
@@ -581,10 +572,10 @@ export const diet_feature = define_feature({
       const now = Date.now();
       return in_transaction(database, () => {
         const db = drizzle_of(database);
-        for (const name of document.categories) add_name(database, diet_categories, name);
+        import_category_paths(database, diet_categories, document.categories);
         for (const name of document.units) add_name(database, diet_units, name);
-        for (const food of document.foods) write_food(database, food);
-        for (const recipe of document.recipes) write_recipe(database, recipe);
+        for (const food of document.foods) write_food(database, { ...food, categories: save_category_refs(database, diet_categories, food.categories) });
+        for (const recipe of document.recipes) write_recipe(database, { ...recipe, categories: save_category_refs(database, diet_categories, recipe.categories) });
         let diary = 0;
         for (const entry of document.diary) {
           if (db.select({ id: diet_diary.id }).from(diet_diary).where(eq(diet_diary.id, entry.id)).get()) continue;

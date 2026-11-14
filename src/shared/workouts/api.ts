@@ -4,7 +4,7 @@
 
 import type { JsonSchema, MethodSpec } from "@x-tech-laboratories/x-libs/api_spec";
 
-import { categories, day, id_of, json_file, moment, number, step, text } from "../api_schemas.ts";
+import { categories, category_parent, category_position, day, id_of, json_file, moment, number, step, text } from "../api_schemas.ts";
 
 // ── Shapes ───────────────────────────────────────────────────────────────────
 
@@ -45,13 +45,12 @@ const session_entry: JsonSchema = {
   required: ["exercise_id"],
 };
 
-const category_name = text('The category path, such as "Legs/Quads".');
 
 // ── Calls ────────────────────────────────────────────────────────────────────
 
 export const workouts_api = {
   get_workout_library: {
-    description: "Every exercise with when it was last done, every program with its sessions and their exercises' targets, and the category, equipment and muscle lists.",
+    description: "Every exercise with when it was last done, every program with its sessions and their exercises' targets, the category tree in order with each id, parent and path, and the equipment and muscle lists.",
     params: [],
   },
   save_exercise: {
@@ -80,15 +79,29 @@ export const workouts_api = {
     description: "Searches the public wger exercise database by name, for exercises to add with save_exercise.",
     params: [{ name: "term", schema: text("Part of the exercise's name.") }],
   },
-  list_workout_categories: { description: "Every workout category with how many exercises and sessions use it, directly and through its subcategories.", params: [] },
-  add_workout_category: { description: "Adds a workout category.", params: [{ name: "name", schema: category_name }] },
+  list_workout_categories: { description: "Every workout category in tree order with its id, parent and path, and how many exercises and sessions use it, directly and through its subcategories.", params: [] },
+  add_workout_category: {
+    description: "Adds a workout category, or gives back the one with that name already under the same parent. Gives back its id.",
+    params: [
+      { name: "name", schema: text("The category's own name, such as Chest; a slash is part of the name.") },
+      { name: "parent_id", schema: category_parent, optional: true },
+    ],
+  },
   rename_workout_category: {
-    description: "Renames a workout category with its subcategories everywhere; a name already in use merges the two.",
-    params: [{ name: "from", schema: category_name }, { name: "to", schema: category_name }],
+    description: "Renames a workout category everywhere; taking the name of a category beside it merges the two, exercises, sessions and subcategories.",
+    params: [{ name: "id", schema: id_of("category") }, { name: "name", schema: text("The new name.") }],
+  },
+  move_workout_category: {
+    description: "Moves a workout category, with every category inside it, under another or to the top, or to another place among its siblings; landing beside one with the same name merges the two.",
+    params: [
+      { name: "id", schema: id_of("category") },
+      { name: "parent_id", schema: category_parent },
+      { name: "position", schema: category_position, optional: true },
+    ],
   },
   delete_workout_category: {
-    description: "Deletes a workout category and its subcategories; the exercises and sessions stay, untagged.",
-    params: [{ name: "name", schema: category_name }],
+    description: "Deletes a workout category and every category inside it; the exercises and sessions stay, without them.",
+    params: [{ name: "id", schema: id_of("category") }],
   },
   save_program: {
     description: "Adds a program, or renames the one with the id given. Gives back its id.",

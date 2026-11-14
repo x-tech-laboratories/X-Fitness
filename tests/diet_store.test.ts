@@ -1,10 +1,12 @@
 import { DatabaseSync } from "node:sqlite";
 
+import { migrate } from "@x-tech-laboratories/x-libs/sql";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { shown_nutrients, target_of, with_shown } from "../src/shared/diet/labels.ts";
 import { default_meals, empty_nutrients, entry_meal, food_units, food_unit_problems, meal_at, normalize_food, normalize_meals, nutrients, target_progress } from "../src/shared/diet/model.ts";
-import { bind_methods, open_store, setting_defaults, sync_engine } from "../src/shared/store.ts";
+import type { DietData } from "../src/shared/diet/store.ts";
+import { bind_methods, features, open_store, setting_defaults, sync_engine } from "../src/shared/store.ts";
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -227,23 +229,60 @@ describe("diet store", () => {
     expect(database.prepare("SELECT count(*) AS count FROM diet_ingredients").get()).toEqual({ count: 0 });
   });
 
-  it("nests categories, moves a subtree on rename, merges onto an existing one and deletes a subtree", () => {
+  it("nests categories by parent, finding or making them by a typed path, and renames, moves, merges and deletes them", () => {
     const { methods } = open_methods();
-    methods.add_category("Snack");
-    const chicken = methods.save_food({ ...oats, name: "Chicken", categories: ["Protein/Meat/Poultry", "protein/meat/poultry"] });
-    methods.save_food({ ...oats, name: "Tofu", categories: ["Protein"] });
-    expect(methods.get_diet().categories).toEqual(["Protein", "Protein/Meat", "Protein/Meat/Poultry", "Snack"]);
+    const snack = methods.add_category("Snack");
+    expect(methods.add_category(" snack ")).toBe(snack);
+    const chicken = methods.save_food({ ...oats, name: "Chicken", categories: ["Protein/Meat/Poultry", "protein / meat / poultry"] });
+    const tofu = methods.save_food({ ...oats, name: "Tofu", categories: ["Protein"] });
+    const paths = () => methods.get_diet().categories.map((category) => category.path);
+    const id_of = (...path: string[]) => methods.get_diet().categories.find((category) => category.path.join("\u0000") === path.join("\u0000"))!.id;
+    const carried = (id: string) => methods.get_diet().foods.find((food) => food.id === id)!.categories.map((category) => methods.get_diet().categories.find((each) => each.id === category)!.path);
+    expect(paths()).toEqual([["Snack"], ["Protein"], ["Protein", "Meat"], ["Protein", "Meat", "Poultry"]]);
+    expect(carried(chicken)).toEqual([["Protein", "Meat", "Poultry"]]);
 
-    methods.rename_category("Protein", "Macros/Protein");
-    expect(methods.get_diet().foods.find((food) => food.id === chicken)!.categories).toEqual(["Macros/Protein/Meat/Poultry"]);
+    methods.add_category("1/2 portions", snack);
+    expect(paths()).toContainEqual(["Snack", "1/2 portions"]);
 
-    methods.rename_category("Snack", "Macros/Protein");
-    expect(methods.get_diet().categories).toEqual(["Macros", "Macros/Protein", "Macros/Protein/Meat", "Macros/Protein/Meat/Poultry"]);
+    const poultry = id_of("Protein", "Meat", "Poultry");
+    methods.rename_category(id_of("Protein"), "Proteins");
+    methods.move_category(id_of("Proteins", "Meat"), snack);
+    expect(carried(chicken)).toEqual([["Snack", "Meat", "Poultry"]]);
+    expect(id_of("Snack", "Meat", "Poultry")).toBe(poultry);
+    expect(() => methods.move_category(snack, id_of("Snack", "Meat"))).toThrow("inside itself");
 
-    methods.delete_category("Macros/Protein/Meat");
+    const fish = methods.save_food({ ...oats, name: "Cod", categories: ["Meat/Fish", "Meat"] });
+    methods.move_category(id_of("Snack", "Meat"), null);
+    expect(paths()).toEqual([["Snack"], ["Snack", "1/2 portions"], ["Proteins"], ["Meat"], ["Meat", "Fish"], ["Meat", "Poultry"]]);
+    expect(carried(chicken)).toEqual([["Meat", "Poultry"]]);
+    expect(carried(fish)).toEqual([["Meat", "Fish"], ["Meat"]]);
+
+    methods.rename_category(id_of("Proteins"), "meat");
+    expect(paths()).toEqual([["Snack"], ["Snack", "1/2 portions"], ["Meat"], ["Meat", "Fish"], ["Meat", "Poultry"]]);
+    expect(carried(tofu)).toEqual([["Meat"]]);
+
+    methods.delete_category(id_of("Meat"));
+    expect(methods.get_diet().foods.map((food) => [food.name, food.categories])).toEqual([["Chicken", []], ["Cod", []], ["Tofu", []]]);
+    expect(paths()).toEqual([["Snack"], ["Snack", "1/2 portions"]]);
+  });
+
+  it("turns the category paths of an older database into a tree keyed by those paths", () => {
+    const database = new DatabaseSync(":memory:");
+    for (const feature of features) migrate(database, feature.id === "diet" ? feature.migrations.slice(0, -1) : feature.migrations, { owner: feature.id });
+    database.prepare("INSERT INTO diet_categories (name) VALUES (?), (?)").run("Snack", "Protein/Meat");
+    database.prepare("INSERT INTO diet_foods (id, name, categories) VALUES (?, ?, ?)").run("chicken", "Chicken", JSON.stringify(["Protein/Meat/Poultry", "Carbs"]));
+    open_store(database);
+    const methods = bind_methods(() => database, () => undefined);
+
     const data = methods.get_diet();
-    expect(data.foods.map((food) => [food.name, food.categories])).toEqual([["Chicken", []], ["Tofu", ["Macros/Protein"]]]);
-    expect(data.categories).toEqual(["Macros", "Macros/Protein"]);
+    expect(data.categories.map((category) => [category.id, category.parent_id, category.name])).toEqual([
+      ["Carbs", null, "Carbs"],
+      ["Protein", null, "Protein"],
+      ["Protein/Meat", "Protein", "Meat"],
+      ["Protein/Meat/Poultry", "Protein/Meat", "Poultry"],
+      ["Snack", null, "Snack"],
+    ]);
+    expect(data.foods[0]!.categories).toEqual(["Protein/Meat/Poultry", "Carbs"]);
   });
 
   it("renames a unit everywhere, merging onto another, and refuses to delete one in use", () => {
@@ -315,12 +354,23 @@ const trilium_database = JSON.stringify({
   grocery: [{ id: "m1n2o3p4", foodId: "a1b2c3d4", brand: "Store own", amount: 2, unit: "pack", comment: "corn only", done: false }],
 });
 
+// The diet with every category id read as its path, so two databases can be compared.
+function with_paths(data: DietData) {
+  const path_of = (id: string) => data.categories.find((category) => category.id === id)!.path.join("/");
+  return {
+    ...data,
+    categories: data.categories.map((category) => category.path.join("/")),
+    foods: data.foods.map((food) => ({ ...food, categories: food.categories.map(path_of) })),
+    recipes: data.recipes.map((recipe) => ({ ...recipe, categories: recipe.categories.map(path_of) })),
+  };
+}
+
 describe("Trilium Diet Manager import", () => {
   it("reads the add-on's database, sodium and cholesterol from mg, entries without a unit as servings", () => {
     const { methods } = open_methods();
     expect(methods.import_trilium_diet(trilium_database)).toEqual({ foods: 2, recipes: 1, diary: 3, grocery: 1 });
 
-    const data = methods.get_diet();
+    const data = with_paths(methods.get_diet());
     const chicken = data.foods.find((food) => food.id === "a1b2c3d4")!;
     expect(chicken).toMatchObject({ name: "Chicken Breast", categories: ["Protein/Meat"], portions: [{ unit: "breast", amount: 1, size: 170, size_unit: "g" }] });
     expect(chicken.nutrients.sodium).toBeCloseTo(0.074);
@@ -367,7 +417,7 @@ describe("Trilium Diet Manager import", () => {
 
     const { methods: other } = open_methods();
     other.import_trilium_diet(JSON.stringify(exported));
-    expect(other.get_diet()).toEqual(methods.get_diet());
+    expect(with_paths(other.get_diet())).toEqual(with_paths(methods.get_diet()));
   });
 
   it("carries vitamins and minerals through an export and back in grams", () => {

@@ -171,12 +171,16 @@ describe("diet foods and recipes", () => {
     expect((screen.getByRole("textbox", { name: "Sodium" }) as HTMLInputElement).value).toBe("400");
     expect((screen.getByRole("textbox", { name: "Vitamin E" }) as HTMLInputElement).value).toBe("9");
     type_number(screen.getByRole("textbox", { name: "Selenium" }), "4.1");
-    fireEvent.change(screen.getByRole("combobox", { name: "Categories" }), { target: { value: "Spreads" } });
+    const categories = screen.getByRole("combobox", { name: "Categories" });
+    fireEvent.focus(categories);
+    fireEvent.change(categories, { target: { value: "Spreads" } });
+    fireEvent.keyDown(categories, { key: "Enter" });
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
     expect(await screen.findByRole("cell", { name: "Peanut Butter" })).toBeTruthy();
-    const [food] = methods.get_diet().foods;
-    expect(food).toMatchObject({ name: "Peanut Butter", categories: ["Spreads"], serving_size: 100, serving_unit: "g" });
+    const { foods: [food], categories: [spreads] } = methods.get_diet();
+    expect(spreads).toMatchObject({ name: "Spreads", parent_id: null });
+    expect(food).toMatchObject({ name: "Peanut Butter", categories: [spreads!.id], serving_size: 100, serving_unit: "g" });
     expect(food!.nutrients.sodium).toBeCloseTo(0.4);
     expect(food!.nutrients.vitamin_e).toBeCloseTo(0.009);
     expect(food!.nutrients.selenium).toBeCloseTo(0.0000041, 10);
@@ -200,22 +204,33 @@ describe("diet foods and recipes", () => {
     expect(methods.get_diet().recipes[0]).toMatchObject({ name: "Porridge", servings: 2, ingredients: [{ food_id: id, amount: 100, unit: "g" }] });
   });
 
-  it("filters and groups foods by nested category", async () => {
+  it("steps into nested categories to filter foods, climbs back by the trail, and groups them under their paths", async () => {
     const { methods } = start();
     methods.save_food({ ...oats, name: "Chicken", brand: "", categories: ["Protein/Meat"] });
     methods.save_food({ ...oats, name: "Apple", brand: "", categories: [] });
     show(["foods"]);
 
     await screen.findByRole("cell", { name: "Apple" });
-    fireEvent.change(screen.getByRole("combobox", { name: "Filter by category" }), { target: { value: "Protein" } });
+    const filter = screen.getByRole("group", { name: "Filter by category" });
+    const trail = () => within(filter).getByRole("navigation", { name: "Breadcrumb" }).textContent;
+    expect([...screen.getByRole("table").querySelectorAll("td .tree-path")].map((path) => path.textContent)).toEqual(["Protein › Meat"]);
+    fireEvent.click(within(filter).getByRole("button", { name: "Protein (1)" }));
+    fireEvent.click(within(filter).getByRole("button", { name: "Meat (1)" }));
+    expect(trail()).toBe("All categories › Protein › Meat");
     expect(screen.queryByRole("cell", { name: "Apple" })).toBeNull();
     expect(screen.getByRole("cell", { name: "Chicken" })).toBeTruthy();
 
-    fireEvent.change(screen.getByRole("combobox", { name: "Filter by category" }), { target: { value: "" } });
+    fireEvent.click(within(filter).getByRole("button", { name: "Protein" }));
+    expect(trail()).toBe("All categories › Protein");
+    fireEvent.click(within(filter).getByRole("button", { name: "All categories" }));
+    fireEvent.click(within(filter).getByRole("button", { name: "(uncategorized) (1)" }));
+    expect(screen.getByRole("cell", { name: "Apple" })).toBeTruthy();
+    expect(screen.queryByRole("cell", { name: "Chicken" })).toBeNull();
+
+    fireEvent.click(within(filter).getByRole("button", { name: "All categories" }));
     fireEvent.click(screen.getByRole("checkbox", { name: "Group by category" }));
-    const table = screen.getByRole("table");
-    expect(within(table).getByText("Meat")).toBeTruthy();
-    expect(within(table).getByText("(uncategorized)")).toBeTruthy();
+    const headings = [...screen.getByRole("table").querySelectorAll(".tree-path")].map((path) => path.textContent);
+    expect(headings).toEqual(expect.arrayContaining(["Protein", "Protein › Meat", "(uncategorized)"]));
   });
 
   it("asks before deleting a food", async () => {
@@ -245,16 +260,32 @@ describe("diet grocery, categories and units", () => {
     expect(methods.get_diet().grocery).toEqual([]);
   });
 
-  it("renames a category in place and refuses to delete a unit in use", async () => {
+  it("opens categories like folders, adds one inside, renames and moves them, and refuses to delete a unit in use", async () => {
     const { methods } = start();
     methods.save_food({ ...oats, categories: ["Grains"] });
+    const carbs = methods.add_category("Carbs");
+    const paths = () => methods.get_diet().categories.map((category) => category.path.join("/"));
     show(["categories"]);
 
     fireEvent.click(await screen.findByRole("button", { name: "Rename Grains" }));
     const field = screen.getByRole("textbox", { name: "Rename Grains" });
-    fireEvent.change(field, { target: { value: "Carbs/Grains" } });
+    fireEvent.change(field, { target: { value: "Cereals" } });
     fireEvent.keyDown(field, { key: "Enter" });
-    await waitFor(() => expect(methods.get_diet().foods[0]!.categories).toEqual(["Carbs/Grains"]));
+    fireEvent.click(await screen.findByRole("button", { name: "Move Cereals" }));
+    const dialog = await screen.findByRole("dialog");
+    fireEvent.change(within(dialog).getByRole("combobox", { name: "Move into" }), { target: { value: carbs } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Move" }));
+    await waitFor(() => expect(paths()).toEqual(["Carbs", "Carbs/Cereals"]));
+    expect(methods.get_diet().foods[0]!.categories).toEqual([methods.get_diet().categories[1]!.id]);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Carbs" }));
+    expect(screen.getByRole("navigation", { name: "Breadcrumb" }).textContent).toBe("All categories › Carbs");
+    expect(screen.getByRole("cell", { name: "Cereals" })).toBeTruthy();
+    fireEvent.change(screen.getByRole("textbox", { name: "New category in Carbs" }), { target: { value: "Bread" } });
+    fireEvent.click(screen.getByRole("button", { name: "Add category" }));
+    await waitFor(() => expect(paths()).toEqual(["Carbs", "Carbs/Cereals", "Carbs/Bread"]));
+    fireEvent.click(screen.getByRole("button", { name: "All categories" }));
+    expect(await screen.findByText("(2 inside)")).toBeTruthy();
 
     cleanup();
     show(["units"]);

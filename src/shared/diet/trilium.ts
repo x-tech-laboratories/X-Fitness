@@ -3,8 +3,8 @@
 
 // ── Imports ──────────────────────────────────────────────────────────────────
 
+import { normalize_category_path, normalize_category_refs } from "../category_tree.ts";
 import {
-  normalize_categories,
   normalize_food,
   normalize_names,
   normalize_recipe,
@@ -21,6 +21,7 @@ import {
 // ── Shapes ───────────────────────────────────────────────────────────────────
 
 export interface DietDocument {
+  // Categories as "/" paths, here and on each food and recipe.
   categories: string[];
   units: string[];
   foods: Food[];
@@ -141,7 +142,7 @@ export function read_trilium_diet(json_text: string, now = new Date().toISOStrin
   const grocery = Array.isArray(source.grocery) ? source.grocery.map((item) => read_grocery(item, foods_by_id)) : [];
 
   return {
-    categories: normalize_categories(source.categories),
+    categories: normalize_category_refs(Array.isArray(source.categories) ? source.categories.map(normalize_category_path) : []),
     units: normalize_names(source.units),
     foods,
     recipes,

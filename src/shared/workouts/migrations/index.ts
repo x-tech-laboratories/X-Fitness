@@ -20,5 +20,16 @@ export const migrations: DrizzleMigration[] = [
       "CREATE INDEX `workout_sets_by_entry` ON `workout_sets` (`workout_exercise_id`);",
       "CREATE INDEX `workouts_by_date` ON `workouts` (`date`);"
     ]
+  },
+  {
+    "name": "20261114021118_category_tree",
+    "statements": [
+      "CREATE TABLE `__new_workout_categories` (\n\t`id` text PRIMARY KEY,\n\t`parent_id` text,\n\t`name` text DEFAULT '' NOT NULL,\n\t`position` real DEFAULT 0 NOT NULL\n);",
+      "WITH RECURSIVE named(path) AS (\n  SELECT `name` FROM `workout_categories`\n  UNION SELECT value FROM `exercises`, json_each(`exercises`.`categories`) WHERE json_valid(`exercises`.`categories`) AND type = 'text'\n  UNION SELECT value FROM `program_sessions`, json_each(`program_sessions`.`categories`) WHERE json_valid(`program_sessions`.`categories`) AND type = 'text'\n), every_path(path) AS (\n  SELECT path FROM named WHERE path <> ''\n  UNION SELECT substr(path, 1, length(rtrim(path, replace(path, '/', ''))) - 1) FROM every_path WHERE instr(path, '/') > 0\n)\nINSERT INTO `__new_workout_categories` (`id`) SELECT path FROM every_path;",
+      "UPDATE `__new_workout_categories` SET\n  `parent_id` = CASE WHEN instr(`id`, '/') > 0 THEN substr(`id`, 1, length(rtrim(`id`, replace(`id`, '/', ''))) - 1) END,\n  `name` = substr(`id`, length(rtrim(`id`, replace(`id`, '/', ''))) + 1);",
+      "UPDATE `__new_workout_categories` SET `position` = (\n  SELECT count(*) FROM `__new_workout_categories` AS `other`\n  WHERE `other`.`parent_id` IS `__new_workout_categories`.`parent_id` AND `other`.`name` COLLATE NOCASE < `__new_workout_categories`.`name` COLLATE NOCASE\n);",
+      "DROP TABLE `workout_categories`;",
+      "ALTER TABLE `__new_workout_categories` RENAME TO `workout_categories`;"
+    ]
   }
 ];

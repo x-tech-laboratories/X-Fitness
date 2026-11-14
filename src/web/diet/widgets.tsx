@@ -1,27 +1,22 @@
-// The Diet section's own pieces: the food and recipe picker, a food's unit picker, the category editor and filter,
-// the nutrient fields, and the grouping and sorting the Foods, Recipes and Grocery tabs share.
+// The Diet section's own pieces: the food and recipe picker, a food's unit picker, the nutrient fields, and the category
+// filter, grouping and sorting the Foods, Recipes and Grocery tabs share.
 
 // ── Imports ──────────────────────────────────────────────────────────────────
 
-import { useMemo, useState, type CSSProperties, type ReactNode } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import type { EnergyUnit } from "@x-tech-laboratories/x-libs/units";
-import { ChipField } from "@x-tech-laboratories/x-libs/web/react/chip_field";
 import { NumberField, Select } from "@x-tech-laboratories/x-libs/web/react/controls";
-import { FormGroup } from "@x-tech-laboratories/x-libs/web/react/layout";
+import { FormGroup, PathText } from "@x-tech-laboratories/x-libs/web/react/layout";
 import { use_pref } from "@x-tech-laboratories/x-libs/web/react/prefs";
 import type { RowGroup, Sorting } from "@x-tech-laboratories/x-libs/web/react/table";
 
+import { is_in_category, shown_separator, uncategorized, type PlacedCategory } from "../../shared/category_tree.ts";
 import {
-  category_depth,
-  category_leaf,
   food_label,
   food_units,
-  is_in_category,
-  normalize_categories,
   nutrient_groups,
   nutrients,
   serving_unit,
-  uncategorized,
   type Food,
   type NutrientInfo,
   type NutrientKey,
@@ -41,7 +36,7 @@ interface Pickable {
 interface ItemSelectProps {
   label: string;
   items: Pickable[];
-  categories: string[];
+  categories: PlacedCategory[];
   value: string;
   placeholder: string;
   // Shown instead of the placeholder when nothing is left to pick.
@@ -57,7 +52,7 @@ export function ItemSelect({ label, items, categories, value, placeholder, empty
     const available = items.filter((item) => !exclude?.has(item.id)).sort((first, second) => first.name.localeCompare(second.name));
     const option = (item: Pickable): [string, string] => [item.id, food_label(item)];
     const grouped = categories
-      .map((category) => ({ label: category, options: available.filter((item) => item.categories.includes(category)).map(option) }))
+      .map((category) => ({ label: category.path.join(shown_separator), options: available.filter((item) => item.categories.includes(category.id)).map(option) }))
       .filter((group) => group.options.length > 0);
     const loose = available.filter((item) => item.categories.length === 0);
     return loose.length ? [...grouped, { label: uncategorized, options: loose.map(option) }] : grouped;
@@ -79,52 +74,6 @@ export function FoodUnitSelect({ label, food, value, on_change }: { label: strin
 
 // ── Categories ───────────────────────────────────────────────────────────────
 
-// An indented leaf, so a flat list reads as the tree.
-export function indented_category(name: string): string {
-  return `${"   ".repeat(category_depth(name))}${category_leaf(name)}`;
-}
-
-export function with_draft(categories: string[], draft: string): string[] {
-  return draft.trim() ? normalize_categories([...categories, draft]) : categories;
-}
-
-interface CategoryEditorProps {
-  categories: string[];
-  draft: string;
-  suggestions: string[];
-  on_change: (categories: string[]) => void;
-  on_draft_change: (draft: string) => void;
-}
-
-// Chips for the categories carried and a field offering the rest, kept as the tree's paths; the draft lives with the form
-// so Save keeps it too.
-export function CategoryEditor({ categories, draft, suggestions, on_change, on_draft_change }: CategoryEditorProps) {
-  return (
-    <ChipField
-      label="Categories"
-      values={categories}
-      suggestions={suggestions}
-      draft={draft}
-      on_draft={on_draft_change}
-      on_change={(next) => on_change(normalize_categories(next))}
-      placeholder="Add a category…"
-      empty_text="No categories."
-    />
-  );
-}
-
-export function CategoryFilter({ categories, value, on_change }: { categories: string[]; value: string; on_change: (value: string) => void }) {
-  return (
-    <Select
-      label="Filter by category"
-      bare
-      options={[["", "All categories"], ...categories.map((name): [string, string] => [name, indented_category(name)]), [uncategorized, uncategorized]]}
-      value={value}
-      on_change={on_change}
-    />
-  );
-}
-
 export function GroupToggle({ checked, on_change }: { checked: boolean; on_change: (checked: boolean) => void }) {
   return (
     <label className="check">
@@ -142,25 +91,25 @@ export interface ListRow<Item> {
   item: Item;
 }
 
-function group_label(name: string, depth: number, count: number): ReactNode {
+function group_label(path: string[], count: number): ReactNode {
   return (
-    <span className="diet-group" style={{ "--depth": depth } as CSSProperties}>
-      {category_leaf(name)} <span className="muted">({count})</span>
-    </span>
+    <>
+      <PathText names={path} /> <span className="muted">({count})</span>
+    </>
   );
 }
 
-// A group per category in tree order holding the items carrying it exactly; a parent whose items are all nested still
-// gets its heading, and the uncategorised come last.
-export function category_groups<Item>(items: Item[], categories: string[], categories_of: (item: Item) => string[], id_of: (item: Item) => string): RowGroup<ListRow<Item>>[] {
+// A group per category in tree order, headed by its whole path, holding the items carrying it exactly; a parent whose
+// items are all nested still gets its heading, and the uncategorised come last.
+export function category_groups<Item>(items: Item[], categories: PlacedCategory[], categories_of: (item: Item) => string[], id_of: (item: Item) => string): RowGroup<ListRow<Item>>[] {
   const groups = categories
-    .filter((category) => items.some((item) => categories_of(item).some((tag) => is_in_category(tag, category))))
+    .filter((category) => items.some((item) => is_in_category(categories_of(item), category.id, categories)))
     .map((category) => {
-      const members = items.filter((item) => categories_of(item).includes(category));
-      return { key: category, label: group_label(category, category_depth(category), members.length), rows: members.map((item) => ({ key: `${category}\u0000${id_of(item)}`, item })) };
+      const members = items.filter((item) => categories_of(item).includes(category.id));
+      return { key: category.id, label: group_label(category.path, members.length), rows: members.map((item) => ({ key: `${category.id}\u0000${id_of(item)}`, item })) };
     });
   const loose = items.filter((item) => categories_of(item).length === 0);
-  if (loose.length) groups.push({ key: uncategorized, label: group_label(uncategorized, 0, loose.length), rows: loose.map((item) => ({ key: `\u0000${id_of(item)}`, item })) });
+  if (loose.length) groups.push({ key: uncategorized, label: group_label([uncategorized], loose.length), rows: loose.map((item) => ({ key: `\u0000${id_of(item)}`, item })) });
   return groups;
 }
 
@@ -173,10 +122,13 @@ interface CategoryView<Item> {
   set_sorting: (sorting: Sorting) => void;
   rows: ListRow<Item>[];
   groups: RowGroup<ListRow<Item>>[] | undefined;
+  // How many of all the items sit in a category or below it, and how many have none, for the filter's chips.
+  count_in: (id: string) => number;
+  uncategorized_count: number;
 }
 
 // The filter, grouping and sorting of a list of categorised items; grouping is remembered in this browser, per list.
-export function use_category_view<Item extends { id: string; categories: string[] }>(items: Item[], categories: string[], grouped_key: string): CategoryView<Item> {
+export function use_category_view<Item extends { id: string; categories: string[] }>(items: Item[], categories: PlacedCategory[], grouped_key: string): CategoryView<Item> {
   const [filter, set_filter] = useState("");
   const [grouped, set_grouped] = use_pref(grouped_key, false, (value): value is boolean => typeof value === "boolean");
   const [sorting, set_sorting] = useState<Sorting>({ key: "name", descending: false });
@@ -184,12 +136,14 @@ export function use_category_view<Item extends { id: string; categories: string[
   const filtered = useMemo(() => {
     if (!filter) return items;
     if (filter === uncategorized) return items.filter((item) => item.categories.length === 0);
-    return items.filter((item) => item.categories.some((tag) => is_in_category(tag, filter)));
-  }, [items, filter]);
+    return items.filter((item) => is_in_category(item.categories, filter, categories));
+  }, [items, filter, categories]);
 
   const groups = useMemo(() => (grouped ? category_groups(filtered, categories, (item) => item.categories, (item) => item.id) : undefined), [grouped, filtered, categories]);
   const rows = useMemo(() => filtered.map((item) => ({ key: item.id, item })), [filtered]);
-  return { filter, set_filter, grouped, set_grouped, sorting, set_sorting, rows, groups };
+  const count_in = (id: string) => items.filter((item) => is_in_category(item.categories, id, categories)).length;
+  const uncategorized_count = items.filter((item) => item.categories.length === 0).length;
+  return { filter, set_filter, grouped, set_grouped, sorting, set_sorting, rows, groups, count_in, uncategorized_count };
 }
 
 // ── Nutrients ────────────────────────────────────────────────────────────────

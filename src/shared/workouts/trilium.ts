@@ -6,11 +6,11 @@
 
 import { to_stored, type DistanceUnit, type MassUnit } from "@x-tech-laboratories/x-libs/units";
 
+import { normalize_category_path, normalize_category_refs } from "../category_tree.ts";
 import { new_id } from "../feature.ts";
 import {
   is_measurement,
   non_negative,
-  normalize_categories,
   normalize_names,
   normalize_progression,
   positive,
@@ -71,7 +71,7 @@ function read_exercise(raw: Raw, id: string): Exercise {
     measurement: is_measurement(raw.measurement) ? raw.measurement : "weight",
     equipment: trimmed(raw.equipment),
     muscles: normalize_names(raw.muscles),
-    categories: normalize_categories(raw.tags),
+    categories: normalize_category_refs(Array.isArray(raw.tags) ? raw.tags.map(normalize_category_path) : []),
     notes: trimmed(raw.comment),
   };
 }
@@ -101,7 +101,7 @@ function read_session(raw: Raw, program_id: string, scale: Scale, id = id_of(raw
     program_id,
     name: typeof raw.name === "string" ? raw.name : "",
     notes: trimmed(raw.comment),
-    categories: normalize_categories(raw.tags),
+    categories: normalize_category_refs(Array.isArray(raw.tags) ? raw.tags.map(normalize_category_path) : []),
     entries: as_list(raw.entries).map((entry) => ({
       id: id_of(entry),
       exercise_id: typeof entry.exerciseId === "string" ? entry.exerciseId : "",
@@ -200,7 +200,7 @@ export function read_trilium_database(text: string, units: FileUnits): WorkoutsD
     else programs.push(migrated);
   }
   const workouts = Object.entries(as_raw(document.log)).flatMap(([date, list]) => (Array.isArray(list) ? as_list(list).map((workout) => read_workout(workout, date, scale)) : []));
-  return { categories: normalize_categories(document.categories), exercises, programs, workouts };
+  return { categories: normalize_category_refs(Array.isArray(document.categories) ? document.categories.map(normalize_category_path) : []), exercises, programs, workouts };
 }
 
 // ── Writing ──────────────────────────────────────────────────────────────────

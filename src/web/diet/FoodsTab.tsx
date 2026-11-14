@@ -12,13 +12,15 @@ import { use_pref } from "@x-tech-laboratories/x-libs/web/react/prefs";
 import { DataTable, type TableColumn } from "@x-tech-laboratories/x-libs/web/react/table";
 import { ComboField } from "@x-tech-laboratories/x-libs/web/react/suggestions";
 
+import type { PlacedCategory } from "../../shared/category_tree.ts";
 import { food_label, food_unit_problems, normalize_food, nutrients, serving_unit, type Food, type NutrientInfo, type Portion } from "../../shared/diet/model.ts";
 import type { LookupReply, LookupResult } from "../../shared/diet/lookup.ts";
 import type { DietData } from "../../shared/diet/store.ts";
 import { calls } from "../api.ts";
+import { CategoryBrowser, CategoryEditor, CategoryPaths, category_paths_text } from "../categories.tsx";
 import { HistoryButton } from "../history/HistoryView.tsx";
 import { attempt, error_text, format_amount, format_nutrient } from "./format.ts";
-import { CategoryEditor, CategoryFilter, GroupToggle, NutrientFields, serving_label, use_category_view, with_draft, type ListRow } from "./widgets.tsx";
+import { GroupToggle, NutrientFields, serving_label, use_category_view, type ListRow } from "./widgets.tsx";
 
 // ── Form ─────────────────────────────────────────────────────────────────────
 
@@ -120,13 +122,12 @@ function PortionRows({ food, units, on_change }: { food: Food; units: string[]; 
 
 export function FoodForm({ initial, data, energy, shown, has_usda_key, on_done }: FoodFormProps) {
   const [food, set_food] = useState<Food>(() => initial ?? normalize_food({}));
-  const [draft, set_draft] = useState("");
   const [saving, set_saving] = useState(false);
   const change = (changes: Partial<Food>) => set_food((current) => ({ ...current, ...changes }));
 
   async function save(): Promise<void> {
     set_saving(true);
-    const id = await attempt(() => calls().save_food({ ...food, categories: with_draft(food.categories, draft) }), `Saved ${food.name.trim()}`);
+    const id = await attempt(() => calls().save_food({ ...food, categories: food.categories }), `Saved ${food.name.trim()}`);
     set_saving(false);
     if (id) on_done();
   }
@@ -159,7 +160,7 @@ export function FoodForm({ initial, data, energy, shown, has_usda_key, on_done }
             <PortionRows food={food} units={data.units} on_change={(portions) => change({ portions })} />
           </FormRow>
           <FormRow label="Categories" id="diet-food-categories">
-            <CategoryEditor categories={food.categories} draft={draft} suggestions={data.categories} on_change={(categories) => change({ categories })} on_draft_change={set_draft} />
+            <CategoryEditor categories={data.categories} values={food.categories} on_change={(categories) => change({ categories })} />
           </FormRow>
           <FormRow label="Comment" id="diet-food-comment">
             <textarea id="diet-food-comment" rows={4} placeholder="Notes about this food" value={food.comment} onChange={(event) => change({ comment: event.currentTarget.value })} />
@@ -180,7 +181,7 @@ export function FoodForm({ initial, data, energy, shown, has_usda_key, on_done }
 // Fixed widths for the short columns leave the rest of the fitted table to the text, so the actions always stay in view.
 const number_width = 90;
 
-function food_columns(energy: EnergyUnit, on_edit: (food: Food) => void, on_delete: (food: Food) => void): TableColumn<ListRow<Food>>[] {
+function food_columns(energy: EnergyUnit, categories: PlacedCategory[], on_edit: (food: Food) => void, on_delete: (food: Food) => void): TableColumn<ListRow<Food>>[] {
   const nutrient = (index: number): TableColumn<ListRow<Food>> => {
     const info = nutrients[index]!;
     return { label: info.label, id: info.key, class: "number", width: number_width, cell: (row) => format_nutrient(info, row.item.nutrients[info.key], energy), sort: (row) => row.item.nutrients[info.key] };
@@ -189,7 +190,7 @@ function food_columns(energy: EnergyUnit, on_edit: (food: Food) => void, on_dele
     { label: "Name", id: "name", hideable: false, cell: (row) => row.item.name, sort: (row) => row.item.name.toLowerCase() },
     { label: "Brand", id: "brand", cell: (row) => row.item.brand, sort: (row) => row.item.brand.toLowerCase() },
     { label: "Comment", id: "comment", cell: (row) => row.item.comment, sort: (row) => row.item.comment.toLowerCase() },
-    { label: "Categories", id: "categories", cell: (row) => row.item.categories.join(", "), sort: (row) => row.item.categories.join(", ").toLowerCase() },
+    { label: "Categories", id: "categories", cell: (row) => <CategoryPaths ids={row.item.categories} categories={categories} />, sort: (row) => category_paths_text(row.item.categories, categories).toLowerCase() },
     { label: "Serving", id: "serving", width: number_width, cell: (row) => `${format_amount(row.item.serving_size)} ${row.item.serving_unit}`, sort: (row) => row.item.serving_size },
     nutrient(0),
     nutrient(1),
@@ -220,7 +221,7 @@ export function FoodsTab({ data, energy, shown, has_usda_key }: { data: DietData
 
   const columns = useMemo(
     () =>
-      food_columns(energy, set_editing, (food) =>
+      food_columns(energy, data.categories, set_editing, (food) =>
         confirm_dialog({
           title: "Delete food",
           message: `Delete ${food_label(food)}? Recipes and diary entries that use it will show it as deleted.`,
@@ -229,7 +230,7 @@ export function FoodsTab({ data, energy, shown, has_usda_key }: { data: DietData
           run: async () => void (await attempt(() => calls().delete_food(food.id))),
         }),
       ),
-    [energy],
+    [energy, data.categories],
   );
 
   if (editing) return <FoodForm initial={editing === "new" ? null : editing} data={data} energy={energy} shown={shown} has_usda_key={has_usda_key} on_done={() => set_editing(null)} />;
@@ -238,9 +239,9 @@ export function FoodsTab({ data, energy, shown, has_usda_key }: { data: DietData
     <div className="stack tight">
       <Toolbar>
         <button type="button" className="accent solid" onClick={() => set_editing("new")}>Add food</button>
-        <CategoryFilter categories={data.categories} value={view.filter} on_change={view.set_filter} />
         <GroupToggle checked={view.grouped} on_change={view.set_grouped} />
       </Toolbar>
+      <CategoryBrowser categories={data.categories} value={view.filter} on_change={view.set_filter} count_in={view.count_in} uncategorized_count={view.uncategorized_count} />
       {view.rows.length === 0 ? (
         <p className="muted">{view.filter ? "No foods in this category." : "No foods yet."}</p>
       ) : (

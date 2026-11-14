@@ -1,10 +1,12 @@
-// What the diet keeps and the rules that turn amounts into nutrients: the nutrients tracked, categories as nested paths,
+// What the diet keeps and the rules that turn amounts into nutrients: the nutrients tracked, categories by their ids,
 // the units a food can be measured in, and the sums for a recipe and a day. Everything here is plain data, so the store
 // and the page share it.
 
 // ── Imports ──────────────────────────────────────────────────────────────────
 
 import type { GramUnit } from "@x-tech-laboratories/x-libs/units";
+
+import { is_in_category, normalize_category_refs, type Category } from "../category_tree.ts";
 
 // ── Nutrients ────────────────────────────────────────────────────────────────
 
@@ -269,56 +271,6 @@ export function normalize_names(raw: unknown): string[] {
   return [...by_lower.values()].sort((first, second) => first.localeCompare(second));
 }
 
-// ── Categories ───────────────────────────────────────────────────────────────
-
-// "Protein/Meat/Poultry" is Poultry inside Meat inside Protein; the path is the category's whole identity.
-export const category_separator = "/";
-
-export const uncategorized = "(uncategorized)";
-
-export function normalize_category_name(raw: unknown): string {
-  if (typeof raw !== "string") return "";
-  return raw.split(category_separator).map((segment) => segment.trim()).filter(Boolean).join(category_separator);
-}
-
-// Sorted order also puts every parent straight before its children.
-export function normalize_categories(raw: unknown): string[] {
-  if (!Array.isArray(raw)) return [];
-  return normalize_names(raw.map(normalize_category_name));
-}
-
-export function category_depth(name: string): number {
-  return name.split(category_separator).length - 1;
-}
-
-export function category_leaf(name: string): string {
-  return name.split(category_separator).at(-1) ?? name;
-}
-
-// "A/B/C" belongs to "A" and "A/B" too.
-export function category_ancestors(name: string): string[] {
-  const segments = name.split(category_separator);
-  return segments.slice(0, -1).map((_, index) => segments.slice(0, index + 1).join(category_separator));
-}
-
-export function is_in_category(tag: string, category: string): boolean {
-  return tag === category || tag.startsWith(`${category}${category_separator}`);
-}
-
-// Every category named anywhere, with every parent its path implies.
-export function all_categories(named: string[]): string[] {
-  return normalize_categories(named.flatMap((name) => [name, ...category_ancestors(name)]));
-}
-
-// Renaming moves the subtree with it, and renaming onto an existing name merges the two.
-export function rename_in_categories(categories: string[], from: string, to: string): string[] {
-  return normalize_categories(categories.map((tag) => (is_in_category(tag, from) ? to + tag.slice(from.length) : tag)));
-}
-
-export function drop_from_categories(categories: string[], name: string): string[] {
-  return categories.filter((tag) => !is_in_category(tag, name));
-}
-
 // ── Foods ────────────────────────────────────────────────────────────────────
 
 // One more way to measure a food: `amount` of `unit` equals `size` of `size_unit`, which is the serving unit when empty.
@@ -424,7 +376,7 @@ export function normalize_food(raw: unknown): Food {
     serving_size: Number.isFinite(size) && size > 0 ? size : 100,
     serving_unit: text(food.serving_unit) || "g",
     portions: normalize_portions(food.portions),
-    categories: normalize_categories(food.categories),
+    categories: normalize_category_refs(food.categories),
     nutrients: normalize_nutrients(food.nutrients),
   };
 }
@@ -438,7 +390,7 @@ export function normalize_recipe(raw: unknown): Recipe {
     comment: text(recipe.comment),
     servings: positive(recipe.servings, 1),
     serving_unit: text(recipe.serving_unit) || serving_unit,
-    categories: normalize_categories(recipe.categories),
+    categories: normalize_category_refs(recipe.categories),
     ingredients: ingredients.map((item) => {
       const ingredient = (item ?? {}) as Record<string, unknown>;
       return { food_id: text(ingredient.food_id), amount: positive(ingredient.amount, 1), unit: text(ingredient.unit) };
@@ -602,8 +554,8 @@ interface Usage {
 }
 
 // Items carrying the category itself, or anything in its subtree too.
-export function category_usage(foods: Food[], recipes: Recipe[], name: string, with_nested = false): Usage {
-  const matches = (categories: string[]) => (with_nested ? categories.some((tag) => is_in_category(tag, name)) : categories.includes(name));
+export function category_usage(foods: Food[], recipes: Recipe[], id: string, categories: Category[], with_nested = false): Usage {
+  const matches = (carried: string[]) => (with_nested ? is_in_category(carried, id, categories) : carried.includes(id));
   return { foods: foods.filter((food) => matches(food.categories)).length, recipes: recipes.filter((recipe) => matches(recipe.categories)).length };
 }
 

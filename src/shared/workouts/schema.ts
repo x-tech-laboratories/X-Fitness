@@ -8,8 +8,12 @@ import { index, integer, real, sqliteTable, text } from "@x-tech-laboratories/x-
 
 // Exercise ids are kept without a foreign key, so deleting an exercise leaves the sessions and log that used it alone.
 
+// A category sits under its parent, or at the top when that is null, ordered among its siblings by position.
 export const workout_categories = sqliteTable("workout_categories", {
-  name: text().primaryKey(),
+  id: text().primaryKey(),
+  parent_id: text(),
+  name: text().notNull().default(""),
+  position: real().notNull().default(0),
 });
 
 export const exercises = sqliteTable("exercises", {

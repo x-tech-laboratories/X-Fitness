@@ -1,8 +1,9 @@
 import { DatabaseSync } from "node:sqlite";
 
+import { migrate } from "@x-tech-laboratories/x-libs/sql";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { bind_methods, open_store, setting_defaults, sync_engine } from "../src/shared/store.ts";
+import { bind_methods, features, open_store, setting_defaults, sync_engine } from "../src/shared/store.ts";
 import { normalize_progression, type LoggedSet, type Target } from "../src/shared/workouts/model.ts";
 import { evaluate_progression, step_weight } from "../src/shared/workouts/progression.ts";
 import { week_start_day } from "../src/shared/workouts/reports.ts";
@@ -66,27 +67,54 @@ describe("workouts store", () => {
     const workout = store.start_workout("2026-11-09", null, started);
     store.add_workout_exercise(workout, squat);
     const library = store.get_workout_library();
-    expect(library.exercises).toEqual([{ id: squat, name: "Squat", measurement: "weight", equipment: "Barbell", muscles: ["Glutes", "Quads"], categories: ["Legs/Quads"], notes: "Low bar", last_done: "2026-11-09" }]);
-    expect(library.categories).toEqual(["Cardio", "Legs", "Legs/Quads"]);
+    const quads = library.categories.find((category) => category.name === "Quads")!;
+    expect(library.exercises).toEqual([{ id: squat, name: "Squat", measurement: "weight", equipment: "Barbell", muscles: ["Glutes", "Quads"], categories: [quads.id], notes: "Low bar", last_done: "2026-11-09" }]);
+    expect(library.categories.map((category) => category.path)).toEqual([["Legs"], ["Legs", "Quads"], ["Cardio"]]);
     expect(library.equipment).toEqual(["Barbell"]);
     expect(() => store.save_exercise({ name: "  " })).toThrow("needs a name");
   });
 
-  it("renames a category with its subtree, merges onto an existing one, and deletes a subtree keeping the items", () => {
+  it("renames a category keeping its subtree, merges onto a sibling of that name, moves one and deletes a subtree keeping the items", () => {
     const { store } = open_methods();
     const fly = store.save_exercise({ name: "Fly", categories: ["Push/Chest"] });
     const dip = store.save_exercise({ name: "Dip", categories: ["Upper/Chest"] });
-    store.add_workout_category("Push/Chest/Inner");
-    store.rename_workout_category("Push", "Upper");
+    const id_of = (...path: string[]) => store.list_workout_categories().find((item) => item.path.join("/") === path.join("/"))!.id;
+    store.add_workout_category("Inner", id_of("Push", "Chest"));
+    store.rename_workout_category(id_of("Push"), "upper");
     let usage = store.list_workout_categories();
-    expect(usage.map((item) => item.name)).toEqual(["Upper", "Upper/Chest", "Upper/Chest/Inner"]);
-    expect(usage.find((item) => item.name === "Upper")).toMatchObject({ exercises: 0, exercises_in_tree: 2, depth: 0, leaf: "Upper" });
-    store.delete_workout_category("Upper/Chest");
+    expect(usage.map((item) => item.path.join("/"))).toEqual(["Upper", "Upper/Chest", "Upper/Chest/Inner"]);
+    expect(usage[0]).toMatchObject({ name: "Upper", parent_id: null, exercises: 0, exercises_in_tree: 2 });
+    expect(usage[1]).toMatchObject({ exercises: 2, exercises_in_tree: 2 });
+
+    store.move_workout_category(id_of("Upper", "Chest", "Inner"), null);
+    expect(store.list_workout_categories().map((item) => item.path.join("/"))).toEqual(["Upper", "Upper/Chest", "Inner"]);
+    store.move_workout_category(id_of("Inner"), null, -1);
+    expect(store.list_workout_categories().map((item) => item.path.join("/"))).toEqual(["Inner", "Upper", "Upper/Chest"]);
+
+    store.delete_workout_category(id_of("Upper"));
     usage = store.list_workout_categories();
-    expect(usage.map((item) => item.name)).toEqual([]);
+    expect(usage.map((item) => item.name)).toEqual(["Inner"]);
     expect(store.get_workout_library().exercises.map((exercise) => [exercise.id, exercise.categories])).toEqual([
       [dip, []],
       [fly, []],
+    ]);
+  });
+
+  it("turns the category paths of an older database into a tree keyed by those paths", () => {
+    const database = new DatabaseSync(":memory:");
+    for (const feature of features) migrate(database, feature.id === "workouts" ? feature.migrations.slice(0, -1) : feature.migrations, { owner: feature.id });
+    database.prepare("INSERT INTO workout_categories (name) VALUES (?)").run("Cardio");
+    database.prepare("INSERT INTO exercises (id, name, categories) VALUES (?, ?, ?)").run("fly", "Fly", JSON.stringify(["Push/Chest"]));
+    database.prepare("INSERT INTO programs (id, name) VALUES (?, ?)").run("p", "Plan");
+    database.prepare("INSERT INTO program_sessions (id, program_id, name, categories) VALUES (?, ?, ?, ?)").run("s", "p", "A", JSON.stringify(["Legs"]));
+    open_store(database);
+    const store = bind_methods(() => database, () => undefined);
+
+    expect(store.list_workout_categories().map((item) => [item.id, item.parent_id, item.name, item.exercises_in_tree, item.sessions])).toEqual([
+      ["Cardio", null, "Cardio", 0, 0],
+      ["Legs", null, "Legs", 0, 1],
+      ["Push", null, "Push", 1, 0],
+      ["Push/Chest", "Push", "Chest", 1, 0],
     ]);
   });
 
@@ -267,7 +295,8 @@ describe("importing the Trilium add-on's database", () => {
     const summary = store.import_trilium_workouts(file, { mass_unit: "lb", distance_unit: "mi" });
     expect(summary).toEqual({ exercises: 2, programs: 2, sessions: 2, workouts: 2, skipped_workouts: 0 });
     const library = store.get_workout_library();
-    expect(library.categories).toEqual(["Push", "Push/Chest"]);
+    expect(library.categories.map((category) => category.path.join("/"))).toEqual(["Push", "Push/Chest"]);
+    expect(library.exercises.find((exercise) => exercise.id === "ex1")!.categories).toEqual([library.categories[1]!.id]);
     expect(library.programs.map((program) => [program.name, program.sessions.map((session) => session.name)])).toEqual([
       ["Imported", ["Old Day"]],
       ["Strength", ["A"]],

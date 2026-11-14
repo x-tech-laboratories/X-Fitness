@@ -101,5 +101,16 @@ export const migrations: DrizzleMigration[] = [
     "statements": [
       "ALTER TABLE `diet_diary` ADD `meal` text DEFAULT '' NOT NULL;"
     ]
+  },
+  {
+    "name": "20261114023806_category_tree",
+    "statements": [
+      "CREATE TABLE `__new_diet_categories` (\n\t`id` text PRIMARY KEY,\n\t`parent_id` text,\n\t`name` text DEFAULT '' NOT NULL,\n\t`position` real DEFAULT 0 NOT NULL\n);",
+      "WITH RECURSIVE named(path) AS (\n  SELECT `name` FROM `diet_categories`\n  UNION SELECT value FROM `diet_foods`, json_each(`diet_foods`.`categories`) WHERE json_valid(`diet_foods`.`categories`) AND type = 'text'\n  UNION SELECT value FROM `diet_recipes`, json_each(`diet_recipes`.`categories`) WHERE json_valid(`diet_recipes`.`categories`) AND type = 'text'\n), every_path(path) AS (\n  SELECT path FROM named WHERE path <> ''\n  UNION SELECT substr(path, 1, length(rtrim(path, replace(path, '/', ''))) - 1) FROM every_path WHERE instr(path, '/') > 0\n)\nINSERT INTO `__new_diet_categories` (`id`) SELECT path FROM every_path;",
+      "UPDATE `__new_diet_categories` SET\n  `parent_id` = CASE WHEN instr(`id`, '/') > 0 THEN substr(`id`, 1, length(rtrim(`id`, replace(`id`, '/', ''))) - 1) END,\n  `name` = substr(`id`, length(rtrim(`id`, replace(`id`, '/', ''))) + 1);",
+      "UPDATE `__new_diet_categories` SET `position` = (\n  SELECT count(*) FROM `__new_diet_categories` AS `other`\n  WHERE `other`.`parent_id` IS `__new_diet_categories`.`parent_id` AND `other`.`name` COLLATE NOCASE < `__new_diet_categories`.`name` COLLATE NOCASE\n);",
+      "DROP TABLE `diet_categories`;",
+      "ALTER TABLE `__new_diet_categories` RENAME TO `diet_categories`;"
+    ]
   }
 ];

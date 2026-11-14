@@ -2,6 +2,7 @@
 
 // ── Imports ──────────────────────────────────────────────────────────────────
 
+import { category_path, known_category_ids, type Category } from "../category_tree.ts";
 import { estimated_one_rep_max, set_volume, workout_totals, type Exercise, type LoggedSet, type Measurement, type Workout } from "./model.ts";
 
 // ── Days ─────────────────────────────────────────────────────────────────────
@@ -205,9 +206,14 @@ export interface CategorySets {
   sets: number;
 }
 
+// The name of the top-level category each of an exercise's categories sits under.
+function top_categories(exercise: Exercise, categories: Category[]): string[] {
+  return [...new Set(known_category_ids(exercise.categories, categories).map((id) => category_path(id, categories)[0]!))];
+}
+
 // Sets logged from first to last per top category, most first; an exercise in several categories counts in each.
-export function category_sets(workouts: Workout[], exercises: Exercise[], first: string, last: string): CategorySets[] {
-  const tops = new Map(exercises.map((exercise) => [exercise.id, [...new Set(exercise.categories.map((category) => category.split("/")[0]!))]]));
+export function category_sets(workouts: Workout[], exercises: Exercise[], categories: Category[], first: string, last: string): CategorySets[] {
+  const tops = new Map(exercises.map((exercise) => [exercise.id, top_categories(exercise, categories)]));
   const sets = new Map<string, number>();
   for (const workout of workouts) {
     if (workout.date < first || workout.date > last) continue;

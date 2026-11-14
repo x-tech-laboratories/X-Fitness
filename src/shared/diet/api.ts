@@ -4,7 +4,7 @@
 
 import type { JsonSchema, MethodSpec } from "@x-tech-laboratories/x-libs/api_spec";
 
-import { categories, day, id_of, json_file, moment, number, text } from "../api_schemas.ts";
+import { categories, category_parent, category_position, day, id_of, json_file, moment, number, text } from "../api_schemas.ts";
 import { nutrient_keys } from "./model.ts";
 
 // ── Shapes ───────────────────────────────────────────────────────────────────
@@ -35,7 +35,7 @@ const name: JsonSchema = text("The name.");
 
 export const diet_api = {
   get_diet: {
-    description: "Every food and recipe with its id, nutrients and categories, the category, unit and brand lists, and the grocery list.",
+    description: "Every food and recipe with its id, nutrients and category ids, the category tree in order with each id, parent and path, the unit and brand lists, and the grocery list.",
     params: [],
   },
   save_food: {
@@ -131,14 +131,28 @@ export const diet_api = {
     description: "Moves a diary entry to another meal.",
     params: [{ name: "id", schema: id_of("diary entry") }, { name: "meal", schema: text("The meal's id from the diet.meals setting, such as dinner.") }],
   },
-  add_category: { description: "Adds a diet category.", params: [{ name: "name", schema: text('The category path, such as "Protein/Meat".') }] },
+  add_category: {
+    description: "Adds a diet category, or gives back the one with that name already under the same parent. Gives back its id.",
+    params: [
+      { name: "name", schema: text("The category's own name, such as Meat; a slash is part of the name.") },
+      { name: "parent_id", schema: category_parent, optional: true },
+    ],
+  },
   rename_category: {
-    description: "Renames a diet category with its subcategories on every food and recipe; a name already in use merges the two.",
-    params: [{ name: "from", schema: text("The category path now.") }, { name: "to", schema: text("The new path.") }],
+    description: "Renames a diet category everywhere; taking the name of a category beside it merges the two, foods, recipes and subcategories.",
+    params: [{ name: "id", schema: id_of("category") }, { name: "name", schema: text("The new name.") }],
+  },
+  move_category: {
+    description: "Moves a diet category, with every category inside it, under another or to the top, or to another place among its siblings; landing beside one with the same name merges the two.",
+    params: [
+      { name: "id", schema: id_of("category") },
+      { name: "parent_id", schema: category_parent },
+      { name: "position", schema: category_position, optional: true },
+    ],
   },
   delete_category: {
-    description: "Deletes a diet category and its subcategories from every food and recipe; the foods and recipes stay.",
-    params: [{ name: "name", schema: text("The category path.") }],
+    description: "Deletes a diet category and every category inside it from every food and recipe; the foods and recipes stay.",
+    params: [{ name: "id", schema: id_of("category") }],
   },
   add_unit: { description: "Adds a unit foods can be measured in.", params: [{ name: "name", schema: name }] },
   rename_unit: {

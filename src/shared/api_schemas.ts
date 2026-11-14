@@ -25,7 +25,15 @@ export const moment: JsonSchema = { type: "string", description: "A moment as an
 export const categories: JsonSchema = {
   type: "array",
   items: { type: "string" },
-  description: 'Category paths, a slash nesting one inside another, such as "Protein/Meat".',
+  description: 'Category ids, as a list or get call gives them, or paths with a slash between a category and the one inside it, such as "Protein/Meat", found by name or made where missing.',
+};
+
+// Where a category goes: under the parent given, or at the top for null.
+export const category_parent: JsonSchema = { type: ["string", "null"], description: "The parent category's id, or null for the top level." };
+
+export const category_position: JsonSchema = {
+  type: ["number", "null"],
+  description: "Its place among its new siblings, any number between two of theirs to land between them; null keeps its place, or puts it last under a new parent.",
 };
 
 export const json_file: JsonSchema = { type: "string", description: "The whole file's text." };

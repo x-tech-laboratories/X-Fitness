@@ -185,20 +185,27 @@ describe("workouts plans and library", () => {
     expect((within(dialog).getByRole("textbox", { name: "Name" }) as HTMLInputElement).value).toBe("Rowing Machine");
     fireEvent.click(within(dialog).getByRole("button", { name: "Save" }));
 
-    await waitFor(() => expect(store.get_workout_library().exercises).toMatchObject([{ name: "Rowing Machine", measurement: "cardio", muscles: ["Quads"], categories: ["Cardio"] }]));
+    await waitFor(() => expect(store.get_workout_library().exercises).toMatchObject([{ name: "Rowing Machine", measurement: "cardio", muscles: ["Quads"] }]));
+    expect(store.get_workout_library().exercises[0]!.categories).toEqual([store.get_workout_library().categories[0]!.id]);
+    expect(store.get_workout_library().categories[0]).toMatchObject({ name: "Cardio", parent_id: null });
     expect(await screen.findByRole("cell", { name: "Rowing Machine" })).toBeTruthy();
   });
 
-  it("files exercises under nested categories and renames one with its subtree", async () => {
+  it("files exercises under nested categories, opened like folders, and renames one keeping what is inside", async () => {
     const store = open_page();
     store.save_exercise({ name: "Fly", categories: ["Push/Chest"] });
     view(["categories"]);
 
-    expect(await screen.findByRole("cell", { name: "Chest" })).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Rename Push" }));
-    fireEvent.change(within(await screen.findByRole("dialog")).getByRole("textbox", { name: "Category name" }), { target: { value: "Upper" } });
-    fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Rename" }));
-    await waitFor(() => expect(store.get_workout_library().exercises[0]!.categories).toEqual(["Upper/Chest"]));
+    fireEvent.click(await screen.findByRole("button", { name: "Push" }));
+    expect(await screen.findByRole("button", { name: "Chest" })).toBeTruthy();
+    expect(screen.getByRole("navigation", { name: "Breadcrumb" }).textContent).toBe("All categories › Push");
+    fireEvent.click(screen.getByRole("button", { name: "All categories" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Rename Push" }));
+    const field = screen.getByRole("textbox", { name: "Rename Push" });
+    fireEvent.change(field, { target: { value: "Upper" } });
+    fireEvent.keyDown(field, { key: "Enter" });
+    await waitFor(() => expect(store.list_workout_categories().map((category) => category.path.join("/"))).toEqual(["Upper", "Upper/Chest"]));
+    expect(store.get_workout_library().exercises[0]!.categories).toEqual([store.list_workout_categories()[1]!.id]);
   });
 
   it("reports weekly totals against the target and personal bests", async () => {

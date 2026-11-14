@@ -6,20 +6,16 @@
 import { asc, eq, inArray, max, sql, synced_tables, type SQLiteTable } from "@x-tech-laboratories/x-libs/drizzle";
 import { in_transaction, type SqlDatabase } from "@x-tech-laboratories/x-libs/sql";
 
+import { add_category, delete_category, import_category_paths, move_category, read_categories, rename_category, save_category_refs, type Retag } from "../category_store.ts";
+import { category_paths_of, is_in_category, known_category_ids, normalize_category_refs, placed_categories, type Category, type PlacedCategory } from "../category_tree.ts";
 import { define_feature, drizzle_of, new_id } from "../feature.ts";
 import { workouts_api } from "./api.ts";
 import { read_liftosaur_export, type LiftosaurSummary } from "./liftosaur.ts";
 import { migrations } from "./migrations/index.ts";
 import {
-  category_ancestors,
-  category_depth,
-  category_leaf,
-  is_in_category,
   is_measurement,
   is_progressable,
   non_negative,
-  normalize_categories,
-  normalize_category_name,
   normalize_names,
   normalize_progression,
   positive,
@@ -189,20 +185,6 @@ export function load_workouts(database: SqlDatabase, where?: Condition): Workout
   }));
 }
 
-function managed_categories(database: SqlDatabase): string[] {
-  return drizzle_of(database)
-    .select({ name: workout_categories.name })
-    .from(workout_categories)
-    .all()
-    .map((row) => row.name);
-}
-
-// The managed categories, every one in use, and every parent their paths imply.
-function all_categories(database: SqlDatabase, exercises: Exercise[], sessions: Session[]): string[] {
-  const used = [...managed_categories(database), ...exercises.flatMap((item) => item.categories), ...sessions.flatMap((item) => item.categories)];
-  return normalize_categories(used.flatMap((name) => [name, ...category_ancestors(name)]));
-}
-
 function has_row(database: SqlDatabase, table: SQLiteTable, where: Condition): boolean {
   return drizzle_of(database).select({ found: sql`1` }).from(table).where(where).get() !== undefined;
 }
@@ -218,10 +200,6 @@ function next_position(database: SqlDatabase, table: SQLiteTable, position: Posi
     .from(table)
     .where(under)
     .get()!.position;
-}
-
-function add_category(database: SqlDatabase, name: string): void {
-  drizzle_of(database).insert(workout_categories).values({ name }).onConflictDoNothing().run();
 }
 
 function write_exercise(database: SqlDatabase, exercise: Exercise): void {
@@ -325,20 +303,23 @@ function insert_workout(database: SqlDatabase, workout: Workout): void {
   });
 }
 
-// Every tag on every exercise and session rewritten by the same rule.
-function retag(database: SqlDatabase, change: (tags: string[]) => string[]): void {
-  const db = drizzle_of(database);
-  for (const table of [exercises, program_sessions]) {
-    const rows = db.select({ id: table.id, categories: table.categories }).from(table).all();
-    for (const row of rows) {
-      const next = JSON.stringify(normalize_categories(change(parse_list(row.categories))));
-      if (next !== row.categories) db.update(table).set({ categories: next }).where(eq(table.id, row.id)).run();
+// Every exercise and session whose categories the rule changes, rewritten.
+function retag(database: SqlDatabase): Retag {
+  return (change) => {
+    const db = drizzle_of(database);
+    for (const table of [exercises, program_sessions]) {
+      const rows = db.select({ id: table.id, categories: table.categories }).from(table).all();
+      for (const row of rows) {
+        const next = JSON.stringify(change(parse_list(row.categories)));
+        if (next !== row.categories) db.update(table).set({ categories: next }).where(eq(table.id, row.id)).run();
+      }
     }
-  }
+  };
 }
 
-function delete_managed(database: SqlDatabase, names: string[]): void {
-  for (const name of names) drizzle_of(database).delete(workout_categories).where(eq(workout_categories.name, name)).run();
+// The categories that still exist, each once.
+function with_known_categories<Item extends { categories: string[] }>(item: Item, categories: Category[]): Item {
+  return { ...item, categories: known_category_ids(item.categories, categories) };
 }
 
 // ── Inputs ───────────────────────────────────────────────────────────────────
@@ -386,15 +367,13 @@ export interface LibraryExercise extends Exercise {
 export interface WorkoutLibrary {
   exercises: LibraryExercise[];
   programs: Program[];
-  categories: string[];
+  // Every category in tree order, with its path.
+  categories: PlacedCategory[];
   equipment: string[];
   muscles: string[];
 }
 
-export interface CategoryUsage {
-  name: string;
-  depth: number;
-  leaf: string;
+export interface CategoryUsage extends PlacedCategory {
   exercises: number;
   sessions: number;
   // Counted with every subcategory.
@@ -455,9 +434,9 @@ export interface TriliumImportSummary {
 function merge_document(database: SqlDatabase, document: WorkoutsDocument): TriliumImportSummary {
   const summary: TriliumImportSummary = { exercises: 0, programs: 0, sessions: 0, workouts: 0, skipped_workouts: 0 };
   in_transaction(database, () => {
-    for (const name of document.categories) add_category(database, name);
+    import_category_paths(database, workout_categories, document.categories);
     for (const exercise of document.exercises) {
-      write_exercise(database, exercise);
+      write_exercise(database, { ...exercise, categories: save_category_refs(database, workout_categories, exercise.categories) });
       summary.exercises += 1;
     }
     for (const program of document.programs) {
@@ -467,7 +446,7 @@ function merge_document(database: SqlDatabase, document: WorkoutsDocument): Tril
       }
       for (const session of program.sessions) {
         if (has_row(database, program_sessions, eq(program_sessions.id, session.id))) continue;
-        insert_session(database, program.id, session);
+        insert_session(database, program.id, { ...session, categories: save_category_refs(database, workout_categories, session.categories) });
         session.entries.forEach((entry, position) =>
           write_session_entry(database, session.id, position, has_row(database, session_exercises, eq(session_exercises.id, entry.id)) ? { ...entry, id: new_id() } : entry),
         );
@@ -497,8 +476,9 @@ export const workouts_feature = define_feature({
     // ── Library ──
 
     get_workout_library: (database: SqlDatabase): WorkoutLibrary => {
-      const exercises = load_exercises(database);
-      const programs = load_programs(database);
+      const categories = read_categories(database, workout_categories);
+      const exercises = load_exercises(database).map((exercise) => with_known_categories(exercise, categories));
+      const programs = load_programs(database).map((program) => ({ ...program, sessions: program.sessions.map((session) => with_known_categories(session, categories)) }));
       const done = drizzle_of(database)
         .select({ id: workout_exercises.exercise_id, date: max(workouts.date) })
         .from(workout_exercises)
@@ -509,12 +489,13 @@ export const workouts_feature = define_feature({
       return {
         exercises: exercises.map((exercise) => ({ ...exercise, last_done: last_done.get(exercise.id) ?? null })),
         programs,
-        categories: all_categories(database, exercises, programs.flatMap((program) => program.sessions)),
+        categories: placed_categories(categories),
         equipment: normalize_names(exercises.map((exercise) => exercise.equipment)),
         muscles: normalize_names(exercises.flatMap((exercise) => exercise.muscles)),
       };
     },
 
+    // A category given as a "/" path is found, or made where missing.
     save_exercise: (database: SqlDatabase, input: ExerciseInput): string => {
       const name = trimmed(input.name);
       if (!name) throw new Error("An exercise needs a name.");
@@ -524,10 +505,10 @@ export const workouts_feature = define_feature({
         measurement: is_measurement(input.measurement) ? input.measurement : "weight",
         equipment: trimmed(input.equipment),
         muscles: normalize_names(input.muscles),
-        categories: normalize_categories(input.categories),
+        categories: normalize_category_refs(input.categories),
         notes: trimmed(input.notes),
       };
-      write_exercise(database, exercise);
+      in_transaction(database, () => write_exercise(database, { ...exercise, categories: save_category_refs(database, workout_categories, exercise.categories) }));
       return exercise.id;
     },
 
@@ -541,45 +522,35 @@ export const workouts_feature = define_feature({
     // ── Categories ──
 
     list_workout_categories: (database: SqlDatabase): CategoryUsage[] => {
+      const categories = read_categories(database, workout_categories);
       const exercises = load_exercises(database);
       const sessions = load_sessions(database);
-      const count = (items: { categories: string[] }[], name: string, tree: boolean) =>
-        items.filter((item) => (tree ? item.categories.some((tag) => is_in_category(tag, name)) : item.categories.includes(name))).length;
-      return all_categories(database, exercises, sessions).map((name) => ({
-        name,
-        depth: category_depth(name),
-        leaf: category_leaf(name),
-        exercises: count(exercises, name, false),
-        sessions: count(sessions, name, false),
-        exercises_in_tree: count(exercises, name, true),
-        sessions_in_tree: count(sessions, name, true),
+      const count = (items: { categories: string[] }[], id: string, tree: boolean) =>
+        items.filter((item) => (tree ? is_in_category(item.categories, id, categories) : item.categories.includes(id))).length;
+      return placed_categories(categories).map((category) => ({
+        ...category,
+        exercises: count(exercises, category.id, false),
+        sessions: count(sessions, category.id, false),
+        exercises_in_tree: count(exercises, category.id, true),
+        sessions_in_tree: count(sessions, category.id, true),
       }));
     },
 
-    add_workout_category: (database: SqlDatabase, name: string): void => {
-      const normalized = normalize_category_name(name);
-      if (normalized) add_category(database, normalized);
+    add_workout_category: (database: SqlDatabase, name: string, parent_id: string | null = null): string => {
+      return add_category(database, workout_categories, name, parent_id);
     },
 
-    // The subtree moves with it, and a name already in use merges the two.
-    rename_workout_category: (database: SqlDatabase, from: string, to: string): void => {
-      const target = normalize_category_name(to);
-      if (!target || target === from) return;
-      const rename = (tags: string[]) => tags.map((tag) => (is_in_category(tag, from) ? target + tag.slice(from.length) : tag));
-      in_transaction(database, () => {
-        retag(database, rename);
-        const moved = managed_categories(database).filter((name) => is_in_category(name, from));
-        delete_managed(database, moved);
-        for (const name of normalize_categories(rename(moved))) add_category(database, name);
-      });
+    rename_workout_category: (database: SqlDatabase, id: string, name: string): void => {
+      in_transaction(database, () => rename_category(database, workout_categories, id, name, retag(database)));
     },
 
-    // Its subtree goes too; the exercises and sessions are kept, untagged.
-    delete_workout_category: (database: SqlDatabase, name: string): void => {
-      in_transaction(database, () => {
-        retag(database, (tags) => tags.filter((tag) => !is_in_category(tag, name)));
-        delete_managed(database, managed_categories(database).filter((item) => is_in_category(item, name)));
-      });
+    move_workout_category: (database: SqlDatabase, id: string, parent_id: string | null, position: number | null = null): void => {
+      in_transaction(database, () => move_category(database, workout_categories, id, parent_id, position, retag(database)));
+    },
+
+    // Everything inside it goes too; the exercises and sessions are kept.
+    delete_workout_category: (database: SqlDatabase, id: string): void => {
+      in_transaction(database, () => delete_category(database, workout_categories, id, retag(database)));
     },
 
     // ── Programs ──
@@ -608,8 +579,8 @@ export const workouts_feature = define_feature({
       if (!name) throw new Error("A session needs a name.");
       const id = input.id || new_id();
       const entries = input.entries.filter((entry) => entry.exercise_id).map(normalize_entry);
-      const fields = { name, notes: trimmed(input.notes), categories: normalize_categories(input.categories) };
       in_transaction(database, () => {
+        const fields = { name, notes: trimmed(input.notes), categories: save_category_refs(database, workout_categories, input.categories) };
         const db = drizzle_of(database);
         if (has_row(database, program_sessions, eq(program_sessions.id, id))) {
           db.update(program_sessions)
@@ -798,7 +769,7 @@ export const workouts_feature = define_feature({
       return {
         weeks,
         days: daily_activity(workouts, first, options.today),
-        categories: category_sets(workouts, exercises, first, options.today),
+        categories: category_sets(workouts, exercises, read_categories(database, workout_categories), first, options.today),
         leaders: leaderboards.map((board) => ({
           ...board,
           rows: leaderboard(ranked, board.key).map((item) => ({ exercise_id: item.exercise.id, name: item.exercise.name, value: item.stats[board.key] })),
@@ -819,15 +790,11 @@ export const workouts_feature = define_feature({
 
     // The whole of it in the Trilium add-on's shape, in kg, km and minutes.
     export_workouts: (database: SqlDatabase): string => {
-      const exercises = load_exercises(database);
-      const programs = load_programs(database);
-      const categories = drizzle_of(database)
-        .select({ name: workout_categories.name })
-        .from(workout_categories)
-        .orderBy(asc(workout_categories.name))
-        .all()
-        .map((row) => row.name);
-      return write_trilium_database({ categories, exercises, programs, workouts: load_workouts(database) });
+      const categories = read_categories(database, workout_categories);
+      const as_paths = <Item extends { categories: string[] }>(item: Item): Item => ({ ...item, categories: category_paths_of(known_category_ids(item.categories, categories), categories) });
+      const exercises = load_exercises(database).map(as_paths);
+      const programs = load_programs(database).map((program) => ({ ...program, sessions: program.sessions.map(as_paths) }));
+      return write_trilium_database({ categories: category_paths_of(categories.map((category) => category.id), categories), exercises, programs, workouts: load_workouts(database) });
     },
 
     // The Trilium add-on's database.json, its numbers read in the units it was kept in.

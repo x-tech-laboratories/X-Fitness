@@ -13,10 +13,12 @@ import { DataTable, type TableColumn } from "@x-tech-laboratories/x-libs/web/rea
 import { ComboField } from "@x-tech-laboratories/x-libs/web/react/suggestions";
 import { toast } from "@x-tech-laboratories/x-libs/web/react/toasts";
 
-import { category_depth, category_leaf, is_in_category, measurement_of, measurements, normalize_categories, type Exercise, type Measurement } from "../../shared/workouts/model.ts";
+import { is_in_category, uncategorized } from "../../shared/category_tree.ts";
+import { measurement_of, measurements, type Exercise, type Measurement } from "../../shared/workouts/model.ts";
 import type { LibraryExercise, WorkoutLibrary } from "../../shared/workouts/store.ts";
 import type { WgerResult } from "../../shared/workouts/wger.ts";
 import { calls } from "../api.ts";
+import { CategoryBrowser, CategoryEditor, CategoryPaths, category_paths_text } from "../categories.tsx";
 import { HistoryButton } from "../history/HistoryView.tsx";
 
 // ── Form ─────────────────────────────────────────────────────────────────────
@@ -76,7 +78,6 @@ function WgerLookup({ on_pick }: { on_pick: (result: WgerResult) => void }) {
 export function ExerciseDialog({ initial, library, on_close }: { initial: Exercise | null; library: WorkoutLibrary; on_close: () => void }) {
   const [exercise, set_exercise] = useState<Exercise>(() => initial ?? blank_exercise());
   const [muscle_draft, set_muscle_draft] = useState("");
-  const [category_draft, set_category_draft] = useState("");
   const change = (changes: Partial<Exercise>) => set_exercise((current) => ({ ...current, ...changes }));
 
   function pick(result: WgerResult): void {
@@ -86,7 +87,7 @@ export function ExerciseDialog({ initial, library, on_close }: { initial: Exerci
       measurement: result.measurement,
       equipment: result.equipment,
       muscles: result.muscles,
-      categories: result.category ? normalize_categories([...current.categories, result.category]) : current.categories,
+      categories: result.category && !current.categories.includes(result.category) ? [...current.categories, result.category] : current.categories,
     }));
   }
 
@@ -95,7 +96,7 @@ export function ExerciseDialog({ initial, library, on_close }: { initial: Exerci
       toast("An exercise needs a name.", { tone: "bad" });
       return;
     }
-    await calls().save_exercise({ ...exercise, id: exercise.id || undefined, muscles: with_draft(exercise.muscles, muscle_draft), categories: with_draft(exercise.categories, category_draft) });
+    await calls().save_exercise({ ...exercise, id: exercise.id || undefined, muscles: with_draft(exercise.muscles, muscle_draft), categories: exercise.categories });
     on_close();
   }
 
@@ -130,16 +131,7 @@ export function ExerciseDialog({ initial, library, on_close }: { initial: Exerci
           <ChipField id="exercise-muscles" label="Muscles" placeholder="Add a muscle…" values={exercise.muscles} draft={muscle_draft} suggestions={library.muscles} on_change={(muscles) => change({ muscles })} on_draft={set_muscle_draft} />
         </FormRow>
         <FormRow label="Categories" id="exercise-categories">
-          <ChipField
-            id="exercise-categories"
-            label="Categories"
-            placeholder="Add a category…"
-            values={exercise.categories}
-            draft={category_draft}
-            suggestions={library.categories}
-            on_change={(categories) => change({ categories })}
-            on_draft={set_category_draft}
-          />
+          <CategoryEditor categories={library.categories} values={exercise.categories} on_change={(categories) => change({ categories })} />
         </FormRow>
         <FormRow label="Notes" id="exercise-notes">
           <textarea id="exercise-notes" rows={2} value={exercise.notes} onChange={(event) => change({ notes: event.currentTarget.value })} />
@@ -162,9 +154,9 @@ export function ExercisesTab({ library }: { library: WorkoutLibrary }) {
   const visible = useMemo(() => {
     const needle = search.trim().toLowerCase();
     return library.exercises
-      .filter((exercise) => !category || exercise.categories.some((tag) => is_in_category(tag, category)))
+      .filter((exercise) => !category || (category === uncategorized ? exercise.categories.length === 0 : is_in_category(exercise.categories, category, library.categories)))
       .filter((exercise) => !needle || exercise.name.toLowerCase().includes(needle));
-  }, [library.exercises, search, category]);
+  }, [library, search, category]);
 
   function remove(exercise: LibraryExercise): void {
     confirm_dialog({
@@ -182,7 +174,7 @@ export function ExercisesTab({ library }: { library: WorkoutLibrary }) {
     { label: "Measured as", cell: (exercise) => measurement_of(exercise.measurement).label },
     { label: "Equipment", cell: (exercise) => dash(exercise.equipment) },
     { label: "Muscles", cell: (exercise) => dash(exercise.muscles.join(", ")) },
-    { label: "Categories", cell: (exercise) => dash(exercise.categories.join(", ")) },
+    { label: "Categories", cell: (exercise) => (exercise.categories.length ? <CategoryPaths ids={exercise.categories} categories={library.categories} /> : "—"), sort: (exercise) => category_paths_text(exercise.categories, library.categories).toLowerCase() },
     { label: "Last done", cell: (exercise) => dash(exercise.last_done ?? ""), sort: (exercise) => exercise.last_done },
     {
       label: "",
@@ -209,14 +201,14 @@ export function ExercisesTab({ library }: { library: WorkoutLibrary }) {
           Add Exercise
         </button>
         <SearchBox label="Search exercises" value={search} on_input={set_search} />
-        <Select
-          label="Category"
-          bare
-          options={[["", "All categories"], ...library.categories.map((name): [string, string] => [name, `${" ".repeat(category_depth(name) * 4)}${category_leaf(name)}`])]}
-          value={category}
-          on_change={set_category}
-        />
       </Toolbar>
+      <CategoryBrowser
+        categories={library.categories}
+        value={category}
+        on_change={set_category}
+        count_in={(id) => library.exercises.filter((exercise) => is_in_category(exercise.categories, id, library.categories)).length}
+        uncategorized_count={library.exercises.filter((exercise) => exercise.categories.length === 0).length}
+      />
       {visible.length === 0 ? <Empty title="No exercises." hint={library.exercises.length === 0 ? "Add one by hand or look it up in wger." : "Nothing matches the search."} /> : <DataTable columns={columns} rows={visible} row_key={(exercise) => exercise.id} />}
       {editing && <ExerciseDialog initial={editing === "new" ? null : editing} library={library} on_close={() => set_editing(null)} />}
     </>

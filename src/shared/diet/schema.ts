@@ -6,8 +6,12 @@ import { check, index, integer, real, sql, sqliteTable, text } from "@x-tech-lab
 
 // ── Tables ───────────────────────────────────────────────────────────────────
 
+// A category sits under its parent, or at the top when that is null, ordered among its siblings by position.
 export const diet_categories = sqliteTable("diet_categories", {
-  name: text().primaryKey(),
+  id: text().primaryKey(),
+  parent_id: text(),
+  name: text().notNull().default(""),
+  position: real().notNull().default(0),
 });
 
 export const diet_units = sqliteTable("diet_units", {

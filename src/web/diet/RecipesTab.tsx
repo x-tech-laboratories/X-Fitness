@@ -14,9 +14,10 @@ import { ComboField } from "@x-tech-laboratories/x-libs/web/react/suggestions";
 import { by_id, food_label, normalize_recipe, nutrients, recipe_nutrients_per_serving, type FoodsById, type Ingredient, type Nutrients, type Recipe } from "../../shared/diet/model.ts";
 import type { DietData } from "../../shared/diet/store.ts";
 import { calls } from "../api.ts";
+import { CategoryBrowser, CategoryEditor, CategoryPaths, category_paths_text } from "../categories.tsx";
 import { HistoryButton } from "../history/HistoryView.tsx";
 import { attempt, format_amount, format_nutrient } from "./format.ts";
-import { CategoryEditor, CategoryFilter, FoodUnitSelect, GroupToggle, ItemSelect, use_category_view, with_draft, type ListRow } from "./widgets.tsx";
+import { FoodUnitSelect, GroupToggle, ItemSelect, use_category_view, type ListRow } from "./widgets.tsx";
 
 // ── Form ─────────────────────────────────────────────────────────────────────
 
@@ -51,7 +52,6 @@ function IngredientRows({ ingredients, foods, on_change }: { ingredients: Ingred
 
 export function RecipeForm({ initial, data, energy, on_done }: { initial: Recipe | null; data: DietData; energy: EnergyUnit; on_done: () => void }) {
   const [recipe, set_recipe] = useState<Recipe>(() => initial ?? normalize_recipe({}));
-  const [draft, set_draft] = useState("");
   const [adding, set_adding] = useState("");
   const [saving, set_saving] = useState(false);
   const foods = useMemo(() => by_id(data.foods), [data.foods]);
@@ -67,7 +67,7 @@ export function RecipeForm({ initial, data, energy, on_done }: { initial: Recipe
 
   async function save(): Promise<void> {
     set_saving(true);
-    const id = await attempt(() => calls().save_recipe({ ...recipe, categories: with_draft(recipe.categories, draft) }), `Saved ${recipe.name.trim()}`);
+    const id = await attempt(() => calls().save_recipe({ ...recipe, categories: recipe.categories }), `Saved ${recipe.name.trim()}`);
     set_saving(false);
     if (id) on_done();
   }
@@ -93,7 +93,7 @@ export function RecipeForm({ initial, data, energy, on_done }: { initial: Recipe
             </div>
           </FormRow>
           <FormRow label="Categories" id="diet-recipe-categories">
-            <CategoryEditor categories={recipe.categories} draft={draft} suggestions={data.categories} on_change={(categories) => change({ categories })} on_draft_change={set_draft} />
+            <CategoryEditor categories={data.categories} values={recipe.categories} on_change={(categories) => change({ categories })} />
           </FormRow>
           <FormRow label="Comment" id="diet-recipe-comment">
             <textarea id="diet-recipe-comment" rows={4} placeholder="Notes about this recipe" value={recipe.comment} onChange={(event) => change({ comment: event.currentTarget.value })} />
@@ -133,7 +133,7 @@ export function RecipesTab({ data, energy }: { data: DietData; energy: EnergyUni
     return [
       { label: "Name", id: "name", cell: (row) => row.item.name, sort: (row) => row.item.name.toLowerCase() },
       { label: "Comment", id: "comment", cell: (row) => row.item.comment, sort: (row) => row.item.comment.toLowerCase() },
-      { label: "Categories", id: "categories", cell: (row) => row.item.categories.join(", "), sort: (row) => row.item.categories.join(", ").toLowerCase() },
+      { label: "Categories", id: "categories", cell: (row) => <CategoryPaths ids={row.item.categories} categories={data.categories} />, sort: (row) => category_paths_text(row.item.categories, data.categories).toLowerCase() },
       { label: "Servings", id: "servings", cell: (row) => `${format_amount(row.item.servings)} ${row.item.serving_unit}`, sort: (row) => row.item.servings },
       { label: "Calories / serving", id: "calories", class: "number", cell: (row) => format_nutrient(energy_info, per_serving(row.item).calories, energy), sort: (row) => per_serving(row.item).calories },
       { label: "Protein / serving", id: "protein", class: "number", cell: (row) => format_nutrient(protein_info, per_serving(row.item).protein, energy), sort: (row) => per_serving(row.item).protein },
@@ -167,7 +167,7 @@ export function RecipesTab({ data, energy }: { data: DietData; energy: EnergyUni
         ),
       },
     ];
-  }, [foods, energy]);
+  }, [foods, energy, data.categories]);
 
   if (editing) return <RecipeForm initial={editing === "new" ? null : editing} data={data} energy={energy} on_done={() => set_editing(null)} />;
 
@@ -175,9 +175,9 @@ export function RecipesTab({ data, energy }: { data: DietData; energy: EnergyUni
     <div className="stack tight">
       <Toolbar>
         <button type="button" className="accent solid" onClick={() => set_editing("new")}>Add recipe</button>
-        <CategoryFilter categories={data.categories} value={view.filter} on_change={view.set_filter} />
         <GroupToggle checked={view.grouped} on_change={view.set_grouped} />
       </Toolbar>
+      <CategoryBrowser categories={data.categories} value={view.filter} on_change={view.set_filter} count_in={view.count_in} uncategorized_count={view.uncategorized_count} />
       {view.rows.length === 0 ? (
         <p className="muted">{view.filter ? "No recipes in this category." : "No recipes yet."}</p>
       ) : (

@@ -1,5 +1,5 @@
 // What workouts are made of: how an exercise is measured, the plan of programs, sessions and their exercises, logged
-// workouts with their sets, nested categories, and the sums every report is built from.
+// workouts with their sets, and the sums every report is built from.
 
 // ── Measurements ─────────────────────────────────────────────────────────────
 
@@ -122,6 +122,7 @@ export interface Workout {
 }
 
 // Everything an import brings, already in stored units, merged in by id.
+// Categories as "/" paths, here and on each exercise and session.
 export interface WorkoutsDocument {
   categories: string[];
   exercises: Exercise[];
@@ -206,45 +207,6 @@ export function normalize_names(raw: unknown): string[] {
     if (text && !by_lower.has(text.toLowerCase())) by_lower.set(text.toLowerCase(), text);
   }
   return [...by_lower.values()].sort((first, second) => first.localeCompare(second));
-}
-
-// ── Categories ───────────────────────────────────────────────────────────────
-
-// Categories nest by path: "Push/Chest" is Chest inside Push, and the path is the whole identity.
-export const category_separator = "/";
-
-export function normalize_category_name(raw: unknown): string {
-  if (typeof raw !== "string") return "";
-  return raw.split(category_separator).map((segment) => segment.trim()).filter(Boolean).join(category_separator);
-}
-
-// Sorted, which also puts every parent right before its children.
-export function normalize_categories(raw: unknown): string[] {
-  if (!Array.isArray(raw)) return [];
-  const by_lower = new Map<string, string>();
-  for (const tag of raw) {
-    const name = normalize_category_name(tag);
-    if (name && !by_lower.has(name.toLowerCase())) by_lower.set(name.toLowerCase(), name);
-  }
-  return [...by_lower.values()].sort((first, second) => first.localeCompare(second));
-}
-
-export function category_depth(name: string): number {
-  return name.split(category_separator).length - 1;
-}
-
-export function category_leaf(name: string): string {
-  return name.split(category_separator).at(-1) ?? name;
-}
-
-// "A/B/C" belongs to "A" and "A/B" too.
-export function category_ancestors(name: string): string[] {
-  const segments = name.split(category_separator);
-  return segments.slice(0, -1).map((_, index) => segments.slice(0, index + 1).join(category_separator));
-}
-
-export function is_in_category(tag: string, category: string): boolean {
-  return tag === category || tag.startsWith(`${category}${category_separator}`);
 }
 
 // ── Sums ─────────────────────────────────────────────────────────────────────
