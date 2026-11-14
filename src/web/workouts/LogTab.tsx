@@ -4,9 +4,8 @@
 // ── Imports ──────────────────────────────────────────────────────────────────
 
 import { useState } from "react";
-import { today } from "@x-tech-laboratories/x-libs/dates";
 import { format_number } from "@x-tech-laboratories/x-libs/units";
-import { CommitInput, NumberField, PeriodStepper, Select } from "@x-tech-laboratories/x-libs/web/react/controls";
+import { CommitInput, NumberField, Select } from "@x-tech-laboratories/x-libs/web/react/controls";
 import { confirm_dialog } from "@x-tech-laboratories/x-libs/web/react/dialog";
 import { Section, Stack, Toolbar } from "@x-tech-laboratories/x-libs/web/react/layout";
 import { Empty, Loaded } from "@x-tech-laboratories/x-libs/web/react/states";
@@ -15,6 +14,7 @@ import { Badge } from "@x-tech-laboratories/x-libs/web/react/badges";
 import { measurement_of, workout_totals, type Exercise, type WorkoutEntry } from "../../shared/workouts/model.ts";
 import type { LoggedWorkout, ProgressionReport, WorkoutLibrary } from "../../shared/workouts/store.ts";
 import { attempt, calls, succeeds, use_data } from "../api.ts";
+import { DayStepper, use_day } from "../day.tsx";
 import { HistoryButton } from "../history/HistoryView.tsx";
 import { confirm_delete } from "../rows.tsx";
 import { UnitNumber } from "../unit_field.tsx";
@@ -212,7 +212,7 @@ interface LogTabProps {
 }
 
 export function LogTab({ library, units, default_rest, rest_sound, initial_day }: LogTabProps) {
-  const [day, set_day] = useState(initial_day ?? today());
+  const [day, set_day] = use_day({ initial: initial_day });
   const [session_id, set_session_id] = useState("");
   const workouts = use_data((api) => api.list_workouts(day), [day]);
   const session_groups = library.programs.map((program) => ({ label: program.name, options: program.sessions.map((session): [string, string] => [session.id, session.name]) }));
@@ -224,7 +224,7 @@ export function LogTab({ library, units, default_rest, rest_sound, initial_day }
   return (
     <>
       <Toolbar>
-        <PeriodStepper label="Day" period="day" value={day} on_change={set_day} />
+        <DayStepper day={day} on_change={set_day} />
         <span className="inline-row">
           <Select label="Session" bare options={[["", session_groups.some((group) => group.options.length) ? "Start from a session…" : "No sessions yet"]]} groups={session_groups} value={session_id} on_change={set_session_id} />
           <button type="button" className="accent solid" disabled={!session_id} onClick={() => void start(session_id)}>

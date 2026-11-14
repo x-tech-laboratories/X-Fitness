@@ -13,6 +13,7 @@ import { body_setting_defaults } from "../../shared/body/settings.ts";
 import { shape_roles, shared_measures, type BodyFit, type BodyMeasures, type BodyModel, type FitLine } from "../../shared/body/shape.ts";
 import type { BodyShape } from "../../shared/body/store.ts";
 import { attempt, set_setting, use_data } from "../api.ts";
+import { use_day } from "../day.tsx";
 import type { ShownUnits } from "../units.ts";
 import { BodyViewer, create_view_link, load_body_model, type Look } from "./BodyViewer.tsx";
 import { format_value } from "./format.ts";
@@ -320,7 +321,7 @@ function ShapeView({ shape, units, saved_looks, playing, on_date, on_play }: Sha
 }
 
 export function ShapeTab({ units, settings }: { units: ShownUnits; settings: Record<string, unknown> }) {
-  const [date, set_date] = useState(today);
+  const [date, set_date] = use_day();
   const [playing, set_playing] = useState(false);
   const shape = use_data((api) => api.get_body_shape(date), [date]);
   // The last day loaded stays drawn while the next one loads, so the view keeps its place.

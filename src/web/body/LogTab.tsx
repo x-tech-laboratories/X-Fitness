@@ -2,16 +2,15 @@
 
 // ── Imports ──────────────────────────────────────────────────────────────────
 
-import { useState } from "react";
-import { today } from "@x-tech-laboratories/x-libs/dates";
 import { format_number } from "@x-tech-laboratories/x-libs/units";
-import { NumberField, PeriodStepper } from "@x-tech-laboratories/x-libs/web/react/controls";
+import { NumberField } from "@x-tech-laboratories/x-libs/web/react/controls";
 import { Toolbar } from "@x-tech-laboratories/x-libs/web/react/layout";
 import { Empty, Loaded } from "@x-tech-laboratories/x-libs/web/react/states";
 import { DataTable, type TableColumn } from "@x-tech-laboratories/x-libs/web/react/table";
 
 import type { DayRow } from "../../shared/body/store.ts";
 import { attempt, calls, use_data } from "../api.ts";
+import { DayStepper, use_day } from "../day.tsx";
 import { HistoryButton } from "../history/HistoryView.tsx";
 import { format_mass, type ShownUnits } from "../units.ts";
 import { format_change, format_value, to_shown_value, to_stored_value, unit_of } from "./format.ts";
@@ -62,13 +61,13 @@ const columns: TableColumn<LogRow>[] = [
 ];
 
 export function LogTab({ units }: { units: ShownUnits }) {
-  const [date, set_date] = useState(today);
+  const [date, set_date] = use_day();
   const day = use_data((api) => api.get_body_day(date), [date]);
 
   return (
     <div className="stack">
       <Toolbar>
-        <PeriodStepper label="Day" period="day" value={date} on_change={set_date} />
+        <DayStepper day={date} on_change={set_date} />
         <HistoryButton kind="body_day" item_id={date} name={`Body on ${date}`} />
       </Toolbar>
       <Loaded resource={day}>

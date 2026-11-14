@@ -4,12 +4,10 @@
 // ── Imports ──────────────────────────────────────────────────────────────────
 
 import { useMemo, useState } from "react";
-import { is_day, today } from "@x-tech-laboratories/x-libs/dates";
 import { format_measure, to_shown, type EnergyUnit } from "@x-tech-laboratories/x-libs/units";
 import { Donut, Meters, type Meter } from "@x-tech-laboratories/x-libs/web/react/charts";
-import { NumberField, PeriodStepper, Segmented, Select } from "@x-tech-laboratories/x-libs/web/react/controls";
+import { NumberField, Segmented, Select } from "@x-tech-laboratories/x-libs/web/react/controls";
 import { Section, Toolbar } from "@x-tech-laboratories/x-libs/web/react/layout";
-import { use_pref } from "@x-tech-laboratories/x-libs/web/react/prefs";
 import { Empty, Loaded } from "@x-tech-laboratories/x-libs/web/react/states";
 import { DataTable, type TableColumn } from "@x-tech-laboratories/x-libs/web/react/table";
 import { toast } from "@x-tech-laboratories/x-libs/web/react/toasts";
@@ -19,20 +17,10 @@ import { by_id, food_label, meal_at, normalize_meals, nutrient_groups, nutrients
 import type { DayEntry, DietData, MealMacros } from "../../shared/diet/store.ts";
 import { attempt, calls, succeeds, use_data } from "../api.ts";
 import { CategorizedSelect } from "../categories.tsx";
+import { DayStepper, use_day } from "../day.tsx";
 import { row_actions_column } from "../rows.tsx";
 import { format_amount, format_nutrient, shown_unit, to_shown_value } from "./format.ts";
 import { FoodUnitSelect } from "./widgets.tsx";
-
-// ── Dates ────────────────────────────────────────────────────────────────────
-
-// The day shown is kept for this tab's session, so it survives a visit to another tab and starts at today next time.
-function session_storage(): Storage | undefined {
-  try {
-    return globalThis.sessionStorage;
-  } catch {
-    return undefined;
-  }
-}
 
 // ── Totals ───────────────────────────────────────────────────────────────────
 
@@ -175,7 +163,7 @@ function entry_input({ id, date, kind, ref_id, amount, unit, logged_at, meal }: 
 // ── Tab ──────────────────────────────────────────────────────────────────────
 
 export function DiaryTab({ data, settings, energy }: { data: DietData; settings: Record<string, unknown>; energy: EnergyUnit }) {
-  const [date, set_date] = use_pref("x-fitness-diet-day", today(), is_day, session_storage());
+  const [date, set_date] = use_day({ remember: "x-fitness-diet-day" });
   const day = use_data((api) => api.get_diary_day(date), [date]);
   const eat_back = settings["calculators.eat_back_workouts"] === true;
   const workouts = use_data((api) => (eat_back ? api.list_workout_energy(date, date) : Promise.resolve([])), [date, eat_back]);
@@ -215,7 +203,7 @@ export function DiaryTab({ data, settings, energy }: { data: DietData; settings:
   return (
     <div className="stack">
       <Toolbar>
-        <PeriodStepper label="Day" period="day" value={date} on_change={set_date} />
+        <DayStepper day={date} on_change={set_date} />
       </Toolbar>
       <Loaded resource={day}>
         {(loaded) => (
