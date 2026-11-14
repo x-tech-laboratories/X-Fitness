@@ -2,6 +2,7 @@
 
 // ── Imports ──────────────────────────────────────────────────────────────────
 
+import { today } from "@x-tech-laboratories/x-libs/dates";
 import type { EnergyUnit } from "@x-tech-laboratories/x-libs/units";
 import { BarChart, Meters, Sparkline, Strip } from "@x-tech-laboratories/x-libs/web/react/charts";
 import { Card, Cards, PageHeading, Section, Stack, Tile, Tiles } from "@x-tech-laboratories/x-libs/web/react/layout";
@@ -12,10 +13,12 @@ import type { HistoryDay, MetricSummary } from "../../shared/body/store.ts";
 import type { DiaryDay } from "../../shared/diet/store.ts";
 import type { WorkoutReport } from "../../shared/workouts/store.ts";
 import { use_data, use_settings } from "../api.ts";
-import { format_change, format_value, shown_units, to_shown_value, type ShownUnits } from "../body/format.ts";
+import { format_change, format_value, to_shown_value } from "../body/format.ts";
 import { readings_of } from "../body/ReportsTab.tsx";
-import { target_meters, today } from "../diet/DiaryTab.tsx";
-import { energy_unit_of, format_nutrient } from "../diet/format.ts";
+import { epoch_of } from "../dates.ts";
+import { target_meters } from "../diet/DiaryTab.tsx";
+import { format_nutrient } from "../diet/format.ts";
+import { shown_units, type ShownUnits } from "../units.ts";
 import { target_of } from "../../shared/diet/labels.ts";
 import { nutrients, type NutrientKey } from "../../shared/diet/model.ts";
 
@@ -25,14 +28,12 @@ const weeks_shown = 8;
 const days_shown = 28;
 const body_days = 90;
 
-const epoch_of = (day: string) => Date.parse(`${day}T00:00:00Z`) / 1000;
-
 // ── Diet ─────────────────────────────────────────────────────────────────────
 
 function DietToday({ day, settings, energy }: { day: DiaryDay; settings: Record<string, unknown>; energy: EnergyUnit }) {
   return (
     <Section title="Eaten today" tools={<a href="#/diet/diary">Diary</a>}>
-      {day.entries.length === 0 ? <p className="muted">Nothing logged today.</p> : <Meters rows={target_meters(day.totals, settings, energy, nutrients.filter((info) => info.group === "macros"))} message="Nothing tracked." />}
+      {day.entries.length === 0 ? <Empty title="Nothing logged today." /> : <Meters rows={target_meters(day.totals, settings, energy, nutrients.filter((info) => info.group === "macros"))} message="Nothing tracked." />}
     </Section>
   );
 }
@@ -73,7 +74,7 @@ function Body({ metrics, history, units }: { metrics: MetricSummary[]; history: 
   return (
     <Section title="Body" tools={<a href="#/body/log">Log</a>}>
       {shown.length === 0 ? (
-        <p className="muted">{`No readings in the last ${body_days} days.`}</p>
+        <Empty title={`No readings in the last ${body_days} days.`} />
       ) : (
         <Cards>
           {shown.map((metric) => <MetricCard key={metric.id} metric={metric} history={history} units={units} />)}
@@ -138,8 +139,8 @@ function OverviewBody({ date, settings, day, metrics, history }: OverviewBodyPro
   const week_start = Number(settings.week_start ?? 1);
   const weekly_target = Number(settings["workouts.weekly_target"] ?? 0);
   const report = use_data((api) => api.get_workout_report({ weeks: weeks_shown, today: date, week_start }), [date, week_start]);
-  const energy = energy_unit_of(settings);
   const units = shown_units(settings);
+  const energy = units.energy;
 
   return (
     <Loaded resource={report}>

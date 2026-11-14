@@ -12,11 +12,11 @@ import { shown_nutrients } from "../../shared/diet/labels.ts";
 import { nutrient_groups } from "../../shared/diet/model.ts";
 import { use_data, use_settings } from "../api.ts";
 import type { FeaturePage, FeatureSettingsProps } from "../features.tsx";
+import { shown_units } from "../units.ts";
 import { CategoriesTab, UnitsTab } from "./CategoriesTab.tsx";
 import { GrocerySettings, LabelSettings, LookupSettings, MealSettings, NutrientSettings } from "./DietSettings.tsx";
 import { DiaryTab } from "./DiaryTab.tsx";
 import { FoodsTab } from "./FoodsTab.tsx";
-import { energy_unit_of } from "./format.ts";
 import { GroceryTab } from "./GroceryTab.tsx";
 import { RecipesTab } from "./RecipesTab.tsx";
 import { TrendsTab } from "./TrendsTab.tsx";
@@ -47,7 +47,7 @@ export function DietView({ parts }: { parts: string[] }) {
       <PageHeading title={page.label} subtitle="Diet" />
       <Loaded resource={settings}>
         {(values) => {
-          const energy = energy_unit_of(values);
+          const energy = shown_units(values).energy;
           if (tab === "trends") return <TrendsTab settings={values} energy={energy} />;
           return (
             <Loaded resource={data}>

@@ -4,14 +4,14 @@
 // ── Imports ──────────────────────────────────────────────────────────────────
 
 import { useMemo, useState } from "react";
+import { Empty } from "@x-tech-laboratories/x-libs/web/react/states";
 import { DataTable, type TableColumn } from "@x-tech-laboratories/x-libs/web/react/table";
 
 import type { PlacedCategory } from "../../shared/category_tree.ts";
 import { category_usage, unit_usage } from "../../shared/diet/model.ts";
 import type { DietData } from "../../shared/diet/store.ts";
-import { calls } from "../api.ts";
+import { attempt, calls, succeeds } from "../api.ts";
 import { CategoryManager, RenameField } from "../categories.tsx";
-import { attempt, succeeds } from "./format.ts";
 
 // ── Naming ───────────────────────────────────────────────────────────────────
 
@@ -114,7 +114,7 @@ export function UnitsTab({ data }: { data: DietData }) {
   return (
     <div className="stack tight">
       <NewName label="Unit" on_add={(name) => succeeds(() => calls().add_unit(name))} />
-      {data.units.length === 0 ? <p className="muted">No units yet.</p> : <DataTable caption="Units" columns={columns} rows={data.units} row_key={(unit) => unit} />}
+      {data.units.length === 0 ? <Empty title="No units yet." /> : <DataTable caption="Units" columns={columns} rows={data.units} row_key={(unit) => unit} />}
       <p className="muted small">
         Renaming updates every food, recipe and grocery line using the unit. Renaming onto an existing unit merges the two. A unit still in use cannot be deleted:
         rename it onto another unit first, which moves everything over.

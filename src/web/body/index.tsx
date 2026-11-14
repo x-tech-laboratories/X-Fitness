@@ -9,8 +9,8 @@ import { Loaded } from "@x-tech-laboratories/x-libs/web/react/states";
 
 import type { FeaturePage, FeatureSettingsProps } from "../features.tsx";
 import { use_settings } from "../api.ts";
+import { shown_units } from "../units.ts";
 import { BirthDateSetting, HeightSetting, SexSetting } from "./BodySettings.tsx";
-import { shown_units } from "./format.ts";
 import { LogTab } from "./LogTab.tsx";
 import { MetricsTab } from "./MetricsTab.tsx";
 import { ReportsTab } from "./ReportsTab.tsx";

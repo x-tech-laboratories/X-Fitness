@@ -4,14 +4,13 @@
 // ── Imports ──────────────────────────────────────────────────────────────────
 
 import { useState, type ReactNode } from "react";
-import { format_measure, type EnergyUnit } from "@x-tech-laboratories/x-libs/units";
-import { NumberField, Select } from "@x-tech-laboratories/x-libs/web/react/controls";
+import { today } from "@x-tech-laboratories/x-libs/dates";
+import { format_measure, format_number } from "@x-tech-laboratories/x-libs/units";
+import { Select } from "@x-tech-laboratories/x-libs/web/react/controls";
 import { Card, Cards, Facts, FormRow, Section, Toolbar, type Fact } from "@x-tech-laboratories/x-libs/web/react/layout";
 import { Loaded } from "@x-tech-laboratories/x-libs/web/react/states";
-import { toast } from "@x-tech-laboratories/x-libs/web/react/toasts";
 
 import {
-  activities,
   bmr_formulas,
   caliper_sites,
   calculate,
@@ -19,28 +18,21 @@ import {
   skinfolds,
   waist_to_height_category,
   waist_to_hip_category,
-  type Activity,
-  type BmrFormula,
   type BodyFatSource,
   type CaliperMethod,
   type Measures,
-  type Sex,
   type Skinfold,
 } from "../../shared/calculators/formulas.ts";
 import type { CalculationsReport } from "../../shared/calculators/store.ts";
-import { calls, use_data } from "../api.ts";
-import { format_change, format_number, to_shown_value, to_stored_value, type ShownUnits } from "../body/format.ts";
-import { today } from "../body/LogTab.tsx";
+import { calls, succeeds, use_data } from "../api.ts";
+import { body_measures, to_shown_value, to_stored_value } from "../body/format.ts";
+import { UnitNumber } from "../unit_field.tsx";
+import { format_mass, format_mass_change, type ShownUnits } from "../units.ts";
+import { activity_options, bmr_formula_options, sex_options } from "./options.ts";
 
 // ── Measures ─────────────────────────────────────────────────────────────────
 
-const mass = { kind: "weight", unit: "" } as const;
-const length = { kind: "length", unit: "" } as const;
-const skinfold = { kind: "length", unit: "", role: "skinfold_chest" } as const;
-
-type Measured = typeof mass | typeof length | typeof skinfold;
-
-const sex_options: [Sex, string][] = [["", "Not set"], ["female", "Female"], ["male", "Male"]];
+type Measured = (typeof body_measures)[keyof typeof body_measures];
 
 // The changes typed over the readings; a skinfold changed is kept apart so the rest still come from the readings.
 type Changes = Partial<Omit<Measures, "skinfolds">> & { skinfolds?: Partial<Record<Skinfold, number>> };
@@ -69,32 +61,25 @@ interface MeasureFieldProps {
 }
 
 function MeasureField({ id, label, measured, value, units, hint, on_change }: MeasureFieldProps) {
-  const unit = measured === mass ? units.mass : measured === length ? units.length : "mm";
-  const shown = value > 0 ? to_shown_value(measured, value, units) : null;
+  const unit = measured === body_measures.weight ? units.mass : measured === body_measures.length ? units.length : "mm";
   return (
-    <FormRow label={label} id={id} hint={hint}>
-      <NumberField
-        bare
-        label={label}
-        value={shown}
-        min={0}
-        step={0.1}
-        unit={unit}
-        on_change={(next) => {
-          if (next !== shown) on_change(next ? to_stored_value(measured, next, units) : 0);
-        }}
-      />
-    </FormRow>
+    <UnitNumber
+      form_row={id}
+      label={label}
+      hint={hint}
+      value={value}
+      to_shown={(stored) => to_shown_value(measured, stored, units)}
+      to_stored={(shown) => to_stored_value(measured, shown, units)}
+      min={0}
+      step={0.1}
+      unit={unit}
+      on_change={on_change}
+    />
   );
 }
 
 function PlainField({ id, label, value, unit, hint, on_change }: { id: string; label: string; value: number; unit: string; hint: string; on_change: (value: number) => void }) {
-  const shown = value > 0 ? Math.round(value * 10) / 10 : null;
-  return (
-    <FormRow label={label} id={id} hint={hint}>
-      <NumberField bare label={label} value={shown} min={0} step={unit === "years" ? 1 : 0.1} unit={unit} on_change={(next) => next !== shown && on_change(next ?? 0)} />
-    </FormRow>
-  );
+  return <UnitNumber form_row={id} label={label} hint={hint} value={value} to_shown={(stored) => Math.round(stored * 10) / 10} min={0} step={unit === "years" ? 1 : 0.1} unit={unit} on_change={on_change} />;
 }
 
 // ── Results ──────────────────────────────────────────────────────────────────
@@ -121,14 +106,7 @@ function LogBodyFat({ report, value, method }: { report: CalculationsReport; val
   const metric = report.sources.body_fat?.metric;
   if (!metric) return null;
   const rounded = Math.round(value * 10) / 10;
-  async function log(): Promise<void> {
-    try {
-      await calls().set_body_reading(metric!.id, today(), rounded);
-      toast(`Logged ${percent(rounded)} as today's ${metric!.name}.`, { tone: "good" });
-    } catch (error) {
-      toast(error instanceof Error ? error.message : String(error), { tone: "bad" });
-    }
-  }
+  const log = () => succeeds(() => calls().set_body_reading(metric.id, today(), rounded), `Logged ${percent(rounded)} as today's ${metric.name}.`);
   return <button type="button" aria-label={`Log the ${method} body fat as today's ${metric.name}`} onClick={() => void log()}>{`Log as today's ${metric.name}`}</button>;
 }
 
@@ -137,10 +115,10 @@ function caliper_needs(method: CaliperMethod, measures: Measures): string {
   return `Needs a sex, an age and the ${sites.join(", ")} skinfolds.`;
 }
 
-function Results({ report, measures, units, energy }: { report: CalculationsReport; measures: Measures; units: ShownUnits; energy: EnergyUnit }) {
+function Results({ report, measures, units }: { report: CalculationsReport; measures: Measures; units: ShownUnits }) {
   const results = calculate(measures);
-  const weight = (value: number) => `${format_number(to_shown_value(mass, value, units))} ${units.mass}`;
-  const kcal = (value: number) => `${format_measure(value, energy, 0)} a day`;
+  const weight = (value: number) => format_mass(value, units);
+  const kcal = (value: number) => `${format_measure(value, units.energy, 0)} a day`;
   const { composition } = results;
 
   return (
@@ -223,7 +201,7 @@ function Results({ report, measures, units, energy }: { report: CalculationsRepo
             rows={[
               ["TDEE, measured", kcal(report.measured.tdee)],
               ["Eaten a day", kcal(report.measured.average_intake)],
-              ["Weight trend", `${format_change(mass, report.measured.weekly_change, units)} a week`],
+              ["Weight trend", `${format_mass_change(report.measured.weekly_change, units)} a week`],
               ["Days in the diary", String(report.measured.days_logged)],
             ]}
           />
@@ -238,7 +216,7 @@ function Results({ report, measures, units, energy }: { report: CalculationsRepo
 
 // ── Tab ──────────────────────────────────────────────────────────────────────
 
-function Calculator({ report, units, energy }: { report: CalculationsReport; units: ShownUnits; energy: EnergyUnit }) {
+function Calculator({ report, units }: { report: CalculationsReport; units: ShownUnits }) {
   const [changes, set_changes] = useState<Changes>({});
   const measures = with_changes(report.measures, changes);
   const change = (next: Changes) => set_changes((current) => ({ ...current, ...next, skinfolds: { ...current.skinfolds, ...next.skinfolds } }));
@@ -257,17 +235,17 @@ function Calculator({ report, units, energy }: { report: CalculationsReport; uni
             <Select bare label="Sex" options={sex_options} value={measures.sex} on_change={(sex) => change({ sex })} />
           </FormRow>
           <PlainField id="calculator-age" label="Age" unit="years" value={measures.age} hint={setting_hint("age", report.birth_date ? `From the birth date ${report.birth_date}` : "Set a birth date under Settings → Body")} on_change={(age) => change({ age })} />
-          <MeasureField id="calculator-height" label="Height" measured={length} value={measures.height} units={units} hint={setting_hint("height", "From Settings → Body")} on_change={(height) => change({ height })} />
-          <MeasureField id="calculator-weight" label="Weight" measured={mass} value={measures.weight} units={units} hint={hint("weight", "weight")} on_change={(weight) => change({ weight })} />
+          <MeasureField id="calculator-height" label="Height" measured={body_measures.length} value={measures.height} units={units} hint={setting_hint("height", "From Settings → Body")} on_change={(height) => change({ height })} />
+          <MeasureField id="calculator-weight" label="Weight" measured={body_measures.weight} value={measures.weight} units={units} hint={hint("weight", "weight")} on_change={(weight) => change({ weight })} />
           <PlainField id="calculator-body-fat" label="Body fat" unit="%" value={measures.body_fat} hint={hint("body_fat", "body_fat")} on_change={(body_fat) => change({ body_fat })} />
-          <MeasureField id="calculator-neck" label="Neck" measured={length} value={measures.neck} units={units} hint={hint("neck", "neck")} on_change={(neck) => change({ neck })} />
-          <MeasureField id="calculator-waist" label="Waist" measured={length} value={measures.waist} units={units} hint={hint("waist", "waist")} on_change={(waist) => change({ waist })} />
-          <MeasureField id="calculator-hips" label="Hips" measured={length} value={measures.hips} units={units} hint={hint("hips", "hips")} on_change={(hips) => change({ hips })} />
+          <MeasureField id="calculator-neck" label="Neck" measured={body_measures.length} value={measures.neck} units={units} hint={hint("neck", "neck")} on_change={(neck) => change({ neck })} />
+          <MeasureField id="calculator-waist" label="Waist" measured={body_measures.length} value={measures.waist} units={units} hint={hint("waist", "waist")} on_change={(waist) => change({ waist })} />
+          <MeasureField id="calculator-hips" label="Hips" measured={body_measures.length} value={measures.hips} units={units} hint={hint("hips", "hips")} on_change={(hips) => change({ hips })} />
           <FormRow label="Activity" id="calculator-activity" hint={setting_hint("activity", "From Settings → Calculators")}>
-            <Select bare label="Activity" options={activities.map((activity): [Activity, string] => [activity.key, activity.label])} value={measures.activity} on_change={(activity) => change({ activity })} />
+            <Select bare label="Activity" options={activity_options} value={measures.activity} on_change={(activity) => change({ activity })} />
           </FormRow>
           <FormRow label="BMR formula" id="calculator-bmr-formula" hint={setting_hint("bmr_formula", "From Settings → Calculators")}>
-            <Select bare label="BMR formula" options={bmr_formulas.map((formula): [BmrFormula, string] => [formula.key, formula.label])} value={measures.bmr_formula} on_change={(bmr_formula) => change({ bmr_formula })} />
+            <Select bare label="BMR formula" options={bmr_formula_options} value={measures.bmr_formula} on_change={(bmr_formula) => change({ bmr_formula })} />
           </FormRow>
         </div>
       </Section>
@@ -278,7 +256,7 @@ function Calculator({ report, units, energy }: { report: CalculationsReport; uni
               key={fold.key}
               id={`calculator-skinfold-${fold.key}`}
               label={`${fold.label} skinfold`}
-              measured={skinfold}
+              measured={body_measures.skinfold}
               value={measures.skinfolds[fold.key] ?? 0}
               units={units}
               hint={source_hint(report, `skinfold_${fold.key}`, changes.skinfolds?.[fold.key] !== undefined)}
@@ -287,12 +265,12 @@ function Calculator({ report, units, energy }: { report: CalculationsReport; uni
           ))}
         </div>
       </Section>
-      <Results report={report} measures={measures} units={units} energy={energy} />
+      <Results report={report} measures={measures} units={units} />
     </div>
   );
 }
 
-export function CalculateTab({ units, energy }: { units: ShownUnits; energy: EnergyUnit }) {
+export function CalculateTab({ units }: { units: ShownUnits }) {
   const report = use_data((api) => api.get_calculations(today()));
-  return <Loaded resource={report}>{(loaded) => <Calculator report={loaded} units={units} energy={energy} />}</Loaded>;
+  return <Loaded resource={report}>{(loaded) => <Calculator report={loaded} units={units} />}</Loaded>;
 }

@@ -9,6 +9,7 @@ import { TreeChipField } from "@x-tech-laboratories/x-libs/web/react/chip_field"
 import { TreeSelect } from "@x-tech-laboratories/x-libs/web/react/controls";
 import { confirm_dialog, Dialog } from "@x-tech-laboratories/x-libs/web/react/dialog";
 import { Crumbs, PathText, type CrumbTarget } from "@x-tech-laboratories/x-libs/web/react/layout";
+import { Empty } from "@x-tech-laboratories/x-libs/web/react/states";
 import { DataTable, type TableColumn } from "@x-tech-laboratories/x-libs/web/react/table";
 import { move_for_drop } from "@x-tech-laboratories/x-libs/web/tree";
 
@@ -254,7 +255,7 @@ export function CategoryManager<Row extends PlacedCategory>({ categories, count_
         </button>
       </form>
       {rows.length === 0 ? (
-        <p className="muted">{open ? `Nothing inside ${open.name} yet.` : "No categories yet."}</p>
+        <Empty title={open ? `Nothing inside ${open.name} yet.` : "No categories yet."} />
       ) : (
         <DataTable
           caption={open ? `Categories in ${open.name}` : "Categories"}

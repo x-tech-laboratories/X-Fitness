@@ -3,18 +3,19 @@
 // ── Imports ──────────────────────────────────────────────────────────────────
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { add_months, format_local, parse_local, today } from "@x-tech-laboratories/x-libs/dates";
 import { ColorPicker, Segmented, Switch } from "@x-tech-laboratories/x-libs/web/react/controls";
 import { Toolbar } from "@x-tech-laboratories/x-libs/web/react/layout";
-import { Loaded } from "@x-tech-laboratories/x-libs/web/react/states";
+import { Empty, Loaded } from "@x-tech-laboratories/x-libs/web/react/states";
 import { DataTable, type TableColumn } from "@x-tech-laboratories/x-libs/web/react/table";
 
 import { body_setting_defaults } from "../../shared/body/settings.ts";
 import { shape_roles, shared_measures, type BodyFit, type BodyMeasures, type BodyModel, type FitLine } from "../../shared/body/shape.ts";
 import type { BodyShape } from "../../shared/body/store.ts";
-import { calls, use_data } from "../api.ts";
+import { attempt, set_setting, use_data } from "../api.ts";
+import type { ShownUnits } from "../units.ts";
 import { BodyViewer, create_view_link, load_body_model, type Look } from "./BodyViewer.tsx";
-import { format_value, type ShownUnits } from "./format.ts";
-import { today } from "./LogTab.tsx";
+import { format_value } from "./format.ts";
 import type { FitAnswer, FitRequest } from "./shape_worker.ts";
 
 // ── Fitting ──────────────────────────────────────────────────────────────────
@@ -146,7 +147,7 @@ function use_looks(saved: unknown): [Looks, (name: LayerName, look: Look) => voi
     () => () => {
       if (!pending.current) return;
       clearTimeout(pending.current);
-      void calls().set_setting(looks_key, latest.current);
+      void attempt(() => set_setting(looks_key, latest.current));
     },
     [],
   );
@@ -157,7 +158,7 @@ function use_looks(saved: unknown): [Looks, (name: LayerName, look: Look) => voi
     if (pending.current) clearTimeout(pending.current);
     pending.current = setTimeout(() => {
       pending.current = null;
-      void calls().set_setting(looks_key, latest.current);
+      void attempt(() => set_setting(looks_key, latest.current));
     }, save_delay);
   }
 
@@ -173,9 +174,7 @@ function days_of(shape: BodyShape): string[] {
 
 // The last day a month or more before the shown one, or the first day when none is that old.
 function month_before(days: string[], date: string): string {
-  const back = new Date(`${date}T00:00:00Z`);
-  back.setUTCMonth(back.getUTCMonth() - 1);
-  const limit = back.toISOString().slice(0, 10);
+  const limit = format_local(add_months(parse_local(date), -1), false);
   return days.findLast((day) => day <= limit) ?? days[0] ?? date;
 }
 
@@ -314,7 +313,7 @@ function ShapeView({ shape, units, saved_looks, playing, on_date, on_play }: Sha
       {now && now.lines.length > 0 ? (
         <DataTable caption="Readings the body is shaped to" columns={columns} rows={now.lines.map((line) => ({ ...line, other: other_of(line, other), units }))} row_key={(row) => row.name} />
       ) : (
-        <p className="muted">No readings shape the body yet. Log weight, body fat or girths, and pick what each metric shapes under Metrics.</p>
+        <Empty title="No readings shape the body yet." hint="Log weight, body fat or girths, and pick what each metric shapes under Metrics." />
       )}
     </div>
   );

@@ -5,10 +5,12 @@
 
 import { useMemo, useState } from "react";
 import type { EnergyUnit } from "@x-tech-laboratories/x-libs/units";
+import { describe_error } from "@x-tech-laboratories/x-libs/web/errors";
 import { NumberField, SearchBox, Select } from "@x-tech-laboratories/x-libs/web/react/controls";
 import { confirm_dialog } from "@x-tech-laboratories/x-libs/web/react/dialog";
 import { FormRow, PageHeading, Toolbar } from "@x-tech-laboratories/x-libs/web/react/layout";
 import { use_pref } from "@x-tech-laboratories/x-libs/web/react/prefs";
+import { Empty } from "@x-tech-laboratories/x-libs/web/react/states";
 import { DataTable, type TableColumn } from "@x-tech-laboratories/x-libs/web/react/table";
 import { ComboField } from "@x-tech-laboratories/x-libs/web/react/suggestions";
 
@@ -16,10 +18,10 @@ import type { PlacedCategory } from "../../shared/category_tree.ts";
 import { food_label, food_unit_problems, normalize_food, nutrients, serving_unit, type Food, type NutrientInfo, type Portion } from "../../shared/diet/model.ts";
 import type { LookupReply, LookupResult } from "../../shared/diet/lookup.ts";
 import type { DietData } from "../../shared/diet/store.ts";
-import { calls } from "../api.ts";
+import { attempt, calls } from "../api.ts";
 import { CategoryBrowser, CategoryEditor, CategoryPaths, category_paths_text } from "../categories.tsx";
 import { HistoryButton } from "../history/HistoryView.tsx";
-import { attempt, error_text, format_amount, format_nutrient } from "./format.ts";
+import { format_amount, format_nutrient } from "./format.ts";
 import { GroupToggle, NutrientFields, serving_label, use_category_view, type ListRow } from "./widgets.tsx";
 
 // ── Form ─────────────────────────────────────────────────────────────────────
@@ -46,7 +48,7 @@ function Lookup({ has_usda_key, on_use }: { has_usda_key: boolean; on_use: (resu
     try {
       set_reply(await calls().search_online_foods(query));
     } catch (error) {
-      set_failure(error_text(error));
+      set_failure(describe_error(error));
       set_reply(null);
     } finally {
       set_searching(false);
@@ -63,10 +65,10 @@ function Lookup({ has_usda_key, on_use }: { has_usda_key: boolean; on_use: (resu
         <p key={error} className="tone-bad" role="alert">{error}</p>
       ))}
       {reply && !searching && (
-        <ul className="plain-list diet-results" aria-label="Lookup results">
+        <ul className="plain-list result-list" aria-label="Lookup results">
           {reply.results.length === 0 && <li className="muted">No results.</li>}
           {reply.results.map((result) => (
-            <li key={result.key} className="diet-result">
+            <li key={result.key} className="result-row">
               <span>
                 {result.name}
                 <span className="muted small"> · {[result.brand, result.source].filter(Boolean).join(" · ")}</span>
@@ -98,7 +100,7 @@ function PortionRows({ food, units, on_change }: { food: Food; units: string[]; 
           ...food.portions.filter((other) => other.unit && other.unit !== portion.unit && other.unit !== food.serving_unit).map((other): [string, string] => [other.unit, other.unit]),
         ];
         return (
-          <div key={index} className="diet-inline diet-portion">
+          <div key={index} className="inline-row diet-portion">
             <NumberField label="How many" bare min={0.01} value={portion.amount} on_change={(amount) => set_portion(index, { amount: amount ?? 1 })} />
             <ComboField label="Unit" placeholder="tortilla" value={portion.unit} options={units} on_change={(unit) => set_portion(index, { unit })} />
             <span aria-hidden="true">=</span>
@@ -151,7 +153,7 @@ export function FoodForm({ initial, data, energy, shown, has_usda_key, on_done }
             <ComboField id="diet-food-brand" label="Brand" placeholder="Optional" value={food.brand} options={data.brands} on_change={(brand) => change({ brand })} />
           </FormRow>
           <FormRow label="Serving" id="diet-food-serving">
-            <div className="diet-inline">
+            <div className="inline-row">
               <NumberField label="Serving size" bare min={0.01} value={food.serving_size} on_change={(size) => change({ serving_size: size ?? 100 })} />
               <ComboField id="diet-food-serving" label="Serving unit" placeholder="g, ml, cup…" value={food.serving_unit} options={data.units} on_change={(serving_unit) => change({ serving_unit })} />
             </div>
@@ -167,7 +169,7 @@ export function FoodForm({ initial, data, energy, shown, has_usda_key, on_done }
           </FormRow>
         </div>
         <NutrientFields shown={shown} values={food.nutrients} energy={energy} on_change={(key, value) => set_food((current) => ({ ...current, nutrients: { ...current.nutrients, [key]: value } }))} />
-        <div className="form-actions diet-inline">
+        <div className="form-actions inline-row">
           <button type="submit" className="accent solid" disabled={!food.name.trim() || saving}>Save</button>
           <button type="button" onClick={on_done}>Cancel</button>
         </div>
@@ -243,7 +245,7 @@ export function FoodsTab({ data, energy, shown, has_usda_key }: { data: DietData
       </Toolbar>
       <CategoryBrowser categories={data.categories} value={view.filter} on_change={view.set_filter} count_in={view.count_in} uncategorized_count={view.uncategorized_count} />
       {view.rows.length === 0 ? (
-        <p className="muted">{view.filter ? "No foods in this category." : "No foods yet."}</p>
+        <Empty title={view.filter ? "No foods in this category." : "No foods yet."} />
       ) : (
         <DataTable
           caption="Foods"

@@ -3,7 +3,7 @@
 
 // ── Imports ──────────────────────────────────────────────────────────────────
 
-import { add_days, format_local, parse_local } from "@x-tech-laboratories/x-libs/dates";
+import { parse_local, shift_day, today } from "@x-tech-laboratories/x-libs/dates";
 import { to_shown, type EnergyUnit } from "@x-tech-laboratories/x-libs/units";
 import { Donut, LineChart, StackedBarChart, Strip } from "@x-tech-laboratories/x-libs/web/react/charts";
 import { Segmented } from "@x-tech-laboratories/x-libs/web/react/controls";
@@ -15,7 +15,7 @@ import { target_of } from "../../shared/diet/labels.ts";
 import { add_nutrients, empty_nutrients, normalize_meals, scale_nutrients, target_progress, type Nutrients } from "../../shared/diet/model.ts";
 import type { DayTotals } from "../../shared/diet/store.ts";
 import { use_data } from "../api.ts";
-import { MealSplit, NutrientTotals, today, type MealRow } from "./DiaryTab.tsx";
+import { MealSplit, NutrientTotals, type MealRow } from "./DiaryTab.tsx";
 
 // ── Figures ──────────────────────────────────────────────────────────────────
 
@@ -101,7 +101,7 @@ export function average_meals(days: DayTotals[], settings: Record<string, unknow
 export function TrendsTab({ settings, energy }: { settings: Record<string, unknown>; energy: EnergyUnit }) {
   const [range, set_range] = use_pref<Range>("x-fitness-diet-trend-days", "30", (value): value is Range => ranges.includes(value as Range));
   const to = today();
-  const from = format_local(add_days(parse_local(to), 1 - Number(range)), false);
+  const from = shift_day(to, 1 - Number(range));
   const days = use_data((api) => api.list_daily_totals(from, to), [from, to]);
 
   return (

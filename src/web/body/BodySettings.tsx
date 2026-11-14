@@ -3,42 +3,40 @@
 
 // ── Imports ──────────────────────────────────────────────────────────────────
 
-import { CommitInput, NumberField, Select } from "@x-tech-laboratories/x-libs/web/react/controls";
+import { CommitInput, Select } from "@x-tech-laboratories/x-libs/web/react/controls";
 import { SettingRow } from "@x-tech-laboratories/x-libs/web/react/layout";
 
-import { to_shown_value, to_stored_value, type ShownUnits } from "./format.ts";
+import type { Sex } from "../../shared/calculators/formulas.ts";
+import { sex_options } from "../calculators/options.ts";
+import { UnitNumber } from "../unit_field.tsx";
+import type { ShownUnits } from "../units.ts";
+import { body_measures, to_shown_value, to_stored_value } from "./format.ts";
 
 // ── Height ───────────────────────────────────────────────────────────────────
 
-const height_measure = { kind: "length", unit: "" } as const;
-
 export function HeightSetting({ height, units, set_setting }: { height: number; units: ShownUnits; set_setting: (key: string, value: unknown) => Promise<void> }) {
-  const shown = height > 0 ? to_shown_value(height_measure, height, units) : null;
   return (
-    <SettingRow label="Height" hint="Turns on BMI from the Weight metric. Leave empty to hide it.">
-      <NumberField
-        bare
-        label="Height"
-        value={shown}
-        min={0}
-        step={0.5}
-        unit={units.length}
-        on_change={(value) => {
-          if (value !== shown) void set_setting("body.height", value ? to_stored_value(height_measure, value, units) : 0);
-        }}
-      />
-    </SettingRow>
+    <UnitNumber
+      setting_row
+      label="Height"
+      hint="Turns on BMI from the Weight metric. Leave empty to hide it."
+      value={height}
+      to_shown={(value) => to_shown_value(body_measures.length, value, units)}
+      to_stored={(value) => to_stored_value(body_measures.length, value, units)}
+      min={0}
+      step={0.5}
+      unit={units.length}
+      on_change={(value) => void set_setting("body.height", value)}
+    />
   );
 }
 
 // ── Sex ──────────────────────────────────────────────────────────────────────
 
-const sex_options: [string, string][] = [["", "Not set"], ["female", "Female"], ["male", "Male"]];
-
 export function SexSetting({ sex, set_setting }: { sex: string; set_setting: (key: string, value: unknown) => Promise<void> }) {
   return (
     <SettingRow label="Sex" hint="The body the 3D tab starts from and the calculators use; not set mixes the two.">
-      <Select bare label="Sex" options={sex_options} value={sex} on_change={(value) => void set_setting("body.sex", value)} />
+      <Select bare label="Sex" options={sex_options} value={sex as Sex} on_change={(value) => void set_setting("body.sex", value)} />
     </SettingRow>
   );
 }

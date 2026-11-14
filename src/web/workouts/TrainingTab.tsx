@@ -4,10 +4,11 @@
 // ── Imports ──────────────────────────────────────────────────────────────────
 
 import { useState } from "react";
-import { format_measure, type EnergyUnit } from "@x-tech-laboratories/x-libs/units";
+import { today } from "@x-tech-laboratories/x-libs/dates";
+import { format_measure, format_number, type EnergyUnit } from "@x-tech-laboratories/x-libs/units";
 import { CommitInput, NumberField, Select, Switch } from "@x-tech-laboratories/x-libs/web/react/controls";
 import { Card, Cards, Facts, FormRow, Section, SettingRow } from "@x-tech-laboratories/x-libs/web/react/layout";
-import { Loaded } from "@x-tech-laboratories/x-libs/web/react/states";
+import { Empty, Loaded } from "@x-tech-laboratories/x-libs/web/react/states";
 import { DataTable, type TableColumn } from "@x-tech-laboratories/x-libs/web/react/table";
 
 import type { BigLift, TrainingReport, WorkoutEnergy } from "../../shared/calculators/store.ts";
@@ -20,16 +21,12 @@ import {
   type Lift,
   type PlateLoad,
 } from "../../shared/calculators/training.ts";
-import { calls, use_data } from "../api.ts";
-import { today } from "../body/LogTab.tsx";
-import type { FeatureSettingsProps } from "../features.tsx";
-import { field_to_shown, field_to_stored, format_field, format_number, format_rest, format_weight, type ShownUnits } from "./units.ts";
+import { set_setting, use_data } from "../api.ts";
+import { UnitNumber } from "../unit_field.tsx";
+import type { ShownUnits } from "../units.ts";
+import { field_to_shown, field_to_stored, format_field, format_rest, format_weight } from "./units.ts";
 
 // ── Shared ───────────────────────────────────────────────────────────────────
-
-type SetSetting = FeatureSettingsProps["set_setting"];
-
-const set_setting: SetSetting = async (key, value) => void (await calls().set_setting(key, value));
 
 // Plates such as 1.25 kg need their second decimal.
 function plate_text(plate: number, units: ShownUnits): string {
@@ -44,11 +41,19 @@ function plates_text(load: PlateLoad | null, units: ShownUnits): string {
 
 // A weight typed in the unit shown, kept in kg.
 function WeightField({ id, label, value, units, hint, on_change }: { id: string; label: string; value: number; units: ShownUnits; hint?: string; on_change: (kg: number) => void }) {
-  const shown = value > 0 ? field_to_shown("weight", value, units) : null;
   return (
-    <FormRow label={label} id={id} hint={hint}>
-      <NumberField bare label={label} value={shown} min={0} step={units.mass === "lb" ? 5 : 2.5} unit={units.mass} on_change={(next) => next !== shown && on_change(next ? field_to_stored("weight", next, units) : 0)} />
-    </FormRow>
+    <UnitNumber
+      form_row={id}
+      label={label}
+      hint={hint}
+      value={value}
+      to_shown={(kg) => field_to_shown("weight", kg, units)}
+      to_stored={(shown) => field_to_stored("weight", shown, units)}
+      min={0}
+      step={units.mass === "lb" ? 5 : 2.5}
+      unit={units.mass}
+      on_change={on_change}
+    />
   );
 }
 
@@ -198,7 +203,6 @@ function Heart({ report }: { report: TrainingReport }) {
 
 function Fitness({ report, units }: { report: TrainingReport; units: ShownUnits }) {
   const [cooper, set_cooper] = useState(0);
-  const cooper_shown = cooper > 0 ? field_to_shown("distance", cooper, units) : null;
   const from_cooper = vo2max_from_cooper(cooper);
   const { best } = report.running;
   return (
@@ -211,9 +215,18 @@ function Fitness({ report, units }: { report: TrainingReport; units: ShownUnits 
             from_cooper !== null && ["From the Cooper test", format_number(from_cooper)],
           ]}
         />
-        <FormRow label="Cooper test" id="training-cooper" hint="The distance you can run in 12 minutes.">
-          <NumberField bare label="Cooper test" value={cooper_shown} min={0} step={0.1} unit={units.distance} on_change={(value) => set_cooper(value ? field_to_stored("distance", value, units) : 0)} />
-        </FormRow>
+        <UnitNumber
+          form_row="training-cooper"
+          label="Cooper test"
+          hint="The distance you can run in 12 minutes."
+          value={cooper}
+          to_shown={(km) => field_to_shown("distance", km, units)}
+          to_stored={(shown) => field_to_stored("distance", shown, units)}
+          min={0}
+          step={0.1}
+          unit={units.distance}
+          on_change={set_cooper}
+        />
       </div>
     </Card>
   );
@@ -270,12 +283,12 @@ const met_rows: { key: string; label: string }[] = [
   { key: "calculators.met_cardio", label: "Cardio" },
 ];
 
-function WorkoutCalories({ report, settings, energy }: { report: TrainingReport; settings: Record<string, unknown>; energy: EnergyUnit }) {
+function WorkoutCalories({ report, settings, units }: { report: TrainingReport; settings: Record<string, unknown>; units: ShownUnits }) {
   return (
     <Section title="Workout energy">
       <p className="muted">Each exercise's MET, its work as a multiple of resting, times your weight and its time; a set of reps counts two minutes, and a workout with a start and finish takes its own length. Runs go by their pace.</p>
-      {report.workouts.length === 0 ? <p className="muted">No workouts in the last 30 days.</p> : (
-        <DataTable caption="Energy burned in the last 30 days" columns={energy_columns} rows={report.workouts.map((row) => ({ ...row, energy }))} row_key={(row) => row.workout_id} />
+      {report.workouts.length === 0 ? <Empty title="No workouts in the last 30 days." /> : (
+        <DataTable caption="Energy burned in the last 30 days" columns={energy_columns} rows={report.workouts.map((row) => ({ ...row, energy: units.energy }))} row_key={(row) => row.workout_id} />
       )}
       {met_rows.map((row) => {
         const value = Number(settings[row.key]) || null;
@@ -294,7 +307,7 @@ function WorkoutCalories({ report, settings, energy }: { report: TrainingReport;
 
 // ── Tab ──────────────────────────────────────────────────────────────────────
 
-export function TrainingTab({ settings, units, energy }: { settings: Record<string, unknown>; units: ShownUnits; energy: EnergyUnit }) {
+export function TrainingTab({ settings, units }: { settings: Record<string, unknown>; units: ShownUnits }) {
   const report = use_data((api) => api.get_training_calculations(today()));
   return (
     <Loaded resource={report}>
@@ -308,7 +321,7 @@ export function TrainingTab({ settings, units, energy }: { settings: Record<stri
             <Fitness report={loaded} units={units} />
           </Cards>
           <Races report={loaded} units={units} />
-          <WorkoutCalories report={loaded} settings={settings} energy={energy} />
+          <WorkoutCalories report={loaded} settings={settings} units={units} />
         </div>
       )}
     </Loaded>

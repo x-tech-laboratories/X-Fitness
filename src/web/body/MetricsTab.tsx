@@ -6,15 +6,15 @@ import { useState } from "react";
 import { NumberField, Select } from "@x-tech-laboratories/x-libs/web/react/controls";
 import { confirm_dialog, Dialog, open_dialog } from "@x-tech-laboratories/x-libs/web/react/dialog";
 import { FormRow, RowActions, Toolbar } from "@x-tech-laboratories/x-libs/web/react/layout";
-import { Loaded } from "@x-tech-laboratories/x-libs/web/react/states";
+import { Empty, Loaded } from "@x-tech-laboratories/x-libs/web/react/states";
 import { DataTable, type TableColumn } from "@x-tech-laboratories/x-libs/web/react/table";
-import { toast } from "@x-tech-laboratories/x-libs/web/react/toasts";
 
 import { metric_kinds, metric_roles, type BodyMetric, type MetricKind, type MetricRole } from "../../shared/body/readings.ts";
 import type { MetricSummary } from "../../shared/body/store.ts";
-import { calls, use_data } from "../api.ts";
+import { calls, succeeds, use_data } from "../api.ts";
 import { HistoryButton } from "../history/HistoryView.tsx";
-import { format_value, to_shown_value, to_stored_value, unit_of, type ShownUnits } from "./format.ts";
+import type { ShownUnits } from "../units.ts";
+import { format_value, to_shown_value, to_stored_value, unit_of } from "./format.ts";
 
 // ── Form ─────────────────────────────────────────────────────────────────────
 
@@ -58,12 +58,7 @@ function MetricDialog({ metric, units, on_close }: { metric: BodyMetric | null; 
     // A goal kept as it was is not converted back, so switching units never nudges it.
     const kept = metric && metric.kind === draft.kind && metric.role === role && draft.goal === (metric.goal > 0 ? to_shown_value(metric, metric.goal, units) : null);
     const goal = kept ? metric.goal : draft.goal ? to_stored_value({ ...draft, role }, draft.goal, units) : 0;
-    try {
-      await calls().save_body_metric({ id: metric?.id, name: draft.name, kind: draft.kind, unit: draft.unit, goal, comment: draft.comment, role });
-      on_close();
-    } catch (error) {
-      toast(error instanceof Error ? error.message : String(error), { tone: "bad" });
-    }
+    if (await succeeds(() => calls().save_body_metric({ id: metric?.id, name: draft.name, kind: draft.kind, unit: draft.unit, goal, comment: draft.comment, role }))) on_close();
   }
 
   return (
@@ -107,7 +102,7 @@ function delete_metric(metric: MetricSummary): void {
     message: metric.readings > 0 ? `Its ${metric.readings} reading${metric.readings === 1 ? " is" : "s are"} deleted with it.` : "It has no readings.",
     confirm_label: "Delete",
     danger: true,
-    run: async () => void (await calls().delete_body_metric(metric.id)),
+    run: async () => void (await succeeds(() => calls().delete_body_metric(metric.id))),
   });
 }
 
@@ -140,7 +135,7 @@ const columns: TableColumn<MetricRow>[] = [
         <RowActions
           index={row.index}
           count={row.count}
-          on_move={(from, to) => void calls().move_body_metric(row.id, to - from)}
+          on_move={(from, to) => void succeeds(() => calls().move_body_metric(row.id, to - from))}
           on_remove={() => delete_metric(row)}
           remove_label={`Delete ${row.name}`}
         />
@@ -160,7 +155,7 @@ export function MetricsTab({ units }: { units: ShownUnits }) {
       <Loaded resource={metrics}>
         {(list) =>
           list.length === 0 ? (
-            <p className="muted">No metrics.</p>
+            <Empty title="No metrics." />
           ) : (
             <DataTable caption="Metrics" columns={columns} rows={list.map((metric, index) => ({ ...metric, index, count: list.length, units }))} row_key={(row) => row.id} />
           )

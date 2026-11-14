@@ -11,6 +11,7 @@ import { FormRow, Toolbar } from "@x-tech-laboratories/x-libs/web/react/layout";
 import { MediaGrid, MediaTile } from "@x-tech-laboratories/x-libs/web/react/media";
 import { MenuButton } from "@x-tech-laboratories/x-libs/web/react/menu_button";
 import { use_pref } from "@x-tech-laboratories/x-libs/web/react/prefs";
+import { describe_error } from "@x-tech-laboratories/x-libs/web/errors";
 import { shrink_picture } from "@x-tech-laboratories/x-libs/web/pictures";
 import { Empty } from "@x-tech-laboratories/x-libs/web/react/states";
 import { DataTable, type TableColumn } from "@x-tech-laboratories/x-libs/web/react/table";
@@ -21,7 +22,7 @@ import { is_in_category, uncategorized } from "../../shared/category_tree.ts";
 import { measurement_of, measurements, type Exercise, type Measurement } from "../../shared/workouts/model.ts";
 import type { LibraryExercise, WorkoutLibrary } from "../../shared/workouts/store.ts";
 import type { WgerResult } from "../../shared/workouts/wger.ts";
-import { calls, use_data } from "../api.ts";
+import { calls, succeeds, use_data } from "../api.ts";
 import { CategoryBrowser, CategoryEditor, CategoryPaths, category_paths_text } from "../categories.tsx";
 import { HistoryButton, open_item_history } from "../history/HistoryView.tsx";
 
@@ -45,7 +46,7 @@ function WgerLookup({ on_pick }: { on_pick: (result: WgerResult) => void }) {
       set_results(await calls().search_wger_exercises(term));
     } catch (failure) {
       set_results([]);
-      set_error(failure instanceof Error ? failure.message : String(failure));
+      set_error(describe_error(failure));
     } finally {
       set_searching(false);
     }
@@ -57,12 +58,12 @@ function WgerLookup({ on_pick }: { on_pick: (result: WgerResult) => void }) {
       {error && <p className="tone-bad small">{`wger could not be reached: ${error}. You can still fill the form in by hand.`}</p>}
       {results && results.length === 0 && !searching && !error && <p className="muted small">No matches.</p>}
       {results && results.length > 0 && (
-        <ul className="plain-list workouts-results" aria-label="wger results">
+        <ul className="plain-list result-list" aria-label="wger results">
           {results.map((result) => (
             <li key={result.wger_id}>
               <button
                 type="button"
-                className="workouts-result"
+                className="result-row"
                 onClick={() => {
                   on_pick(result);
                   set_results(null);
@@ -79,10 +80,6 @@ function WgerLookup({ on_pick }: { on_pick: (result: WgerResult) => void }) {
   );
 }
 
-function failure_text(failure: unknown): string {
-  return failure instanceof Error ? failure.message : String(failure);
-}
-
 // The picture beside a button to choose a file and one to remove it; a chosen file is shrunk before it is shown.
 function PictureField({ picture, busy, on_change }: { picture: string; busy: boolean; on_change: (picture: string) => void }) {
   const picker = useRef<HTMLInputElement>(null);
@@ -93,7 +90,7 @@ function PictureField({ picture, busy, on_change }: { picture: string; busy: boo
     try {
       on_change(await shrink_picture(file));
     } catch (failure) {
-      toast(`Could not use that picture: ${failure_text(failure)}`, { tone: "bad" });
+      toast(`Could not use that picture: ${describe_error(failure)}`, { tone: "bad" });
     }
   }
 
@@ -130,7 +127,7 @@ export function ExerciseDialog({ initial, library, on_close }: { initial: Exerci
       const full = await calls().lookup_wger_picture(wger_id);
       if (full) set_picture(await shrink_picture(full));
     } catch (failure) {
-      toast(`Could not fetch wger's picture: ${failure_text(failure)}`, { tone: "bad" });
+      toast(`Could not fetch wger's picture: ${describe_error(failure)}`, { tone: "bad" });
     } finally {
       set_fetching(false);
     }
@@ -153,8 +150,7 @@ export function ExerciseDialog({ initial, library, on_close }: { initial: Exerci
       toast("An exercise needs a name.", { tone: "bad" });
       return;
     }
-    await calls().save_exercise({ ...exercise, id: exercise.id || undefined, muscles: with_draft(exercise.muscles, muscle_draft), categories: exercise.categories, picture });
-    on_close();
+    if (await succeeds(() => calls().save_exercise({ ...exercise, id: exercise.id || undefined, muscles: with_draft(exercise.muscles, muscle_draft), categories: exercise.categories, picture }))) on_close();
   }
 
   return (
@@ -293,7 +289,7 @@ export function ExercisesTab({ library, open_id }: { library: WorkoutLibrary; op
       message: "Workouts already logged keep their sets, shown as a deleted exercise.",
       confirm_label: "Delete",
       danger: true,
-      run: () => calls().delete_exercise(exercise.id),
+      run: async () => void (await succeeds(() => calls().delete_exercise(exercise.id))),
     });
   }
 

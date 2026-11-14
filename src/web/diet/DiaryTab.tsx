@@ -4,33 +4,25 @@
 // ── Imports ──────────────────────────────────────────────────────────────────
 
 import { useMemo, useState } from "react";
-import { format_local } from "@x-tech-laboratories/x-libs/dates";
+import { is_day, today } from "@x-tech-laboratories/x-libs/dates";
 import { format_measure, to_shown, type EnergyUnit } from "@x-tech-laboratories/x-libs/units";
 import { Donut, Meters, type Meter } from "@x-tech-laboratories/x-libs/web/react/charts";
 import { NumberField, PeriodStepper, Segmented, Select } from "@x-tech-laboratories/x-libs/web/react/controls";
 import { Section, Toolbar } from "@x-tech-laboratories/x-libs/web/react/layout";
 import { use_pref } from "@x-tech-laboratories/x-libs/web/react/prefs";
-import { Loaded } from "@x-tech-laboratories/x-libs/web/react/states";
+import { Empty, Loaded } from "@x-tech-laboratories/x-libs/web/react/states";
 import { DataTable, type TableColumn } from "@x-tech-laboratories/x-libs/web/react/table";
 import { toast } from "@x-tech-laboratories/x-libs/web/react/toasts";
 
 import { shown_nutrients, target_of } from "../../shared/diet/labels.ts";
 import { by_id, meal_at, normalize_meals, nutrient_groups, nutrients, serving_unit, target_key, target_progress, type EntryKind, type Meal, type NutrientInfo, type Nutrients } from "../../shared/diet/model.ts";
 import type { DayEntry, DietData, MealMacros } from "../../shared/diet/store.ts";
-import { calls, use_data } from "../api.ts";
+import { attempt, calls, succeeds, use_data } from "../api.ts";
 import { HistoryButton } from "../history/HistoryView.tsx";
-import { attempt, format_amount, format_nutrient, shown_unit, succeeds, to_shown_value } from "./format.ts";
+import { format_amount, format_nutrient, shown_unit, to_shown_value } from "./format.ts";
 import { FoodUnitSelect, ItemSelect } from "./widgets.tsx";
 
 // ── Dates ────────────────────────────────────────────────────────────────────
-
-export function today(): string {
-  return format_local(new Date(), false);
-}
-
-function is_date(value: unknown): value is string {
-  return typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value);
-}
 
 // The day shown is kept for this tab's session, so it survives a visit to another tab and starts at today next time.
 function session_storage(): Storage | undefined {
@@ -66,7 +58,7 @@ export function target_meters(totals: Nutrients, settings: Record<string, unknow
 export function NutrientTotals({ totals, settings, energy }: { totals: Nutrients; settings: Record<string, unknown>; energy: EnergyUnit }) {
   const shown = shown_nutrients(settings);
   const groups = nutrient_groups.map((group) => ({ ...group, infos: shown.filter((info) => info.group === group.id) })).filter((group) => group.infos.length > 0);
-  if (groups.length === 0) return <p className="muted">No nutrients are shown; switch some on in Settings.</p>;
+  if (groups.length === 0) return <Empty title="No nutrients are shown." hint="Switch some on in Settings." />;
   return (
     <div className="stack">
       {groups.map((group, index) => (
@@ -182,7 +174,7 @@ function entry_input({ id, date, kind, ref_id, amount, unit, logged_at, meal }: 
 // ── Tab ──────────────────────────────────────────────────────────────────────
 
 export function DiaryTab({ data, settings, energy }: { data: DietData; settings: Record<string, unknown>; energy: EnergyUnit }) {
-  const [date, set_date] = use_pref("x-fitness-diet-day", today(), is_date, session_storage());
+  const [date, set_date] = use_pref("x-fitness-diet-day", today(), is_day, session_storage());
   const day = use_data((api) => api.get_diary_day(date), [date]);
   const eat_back = settings["calculators.eat_back_workouts"] === true;
   const workouts = use_data((api) => (eat_back ? api.list_workout_energy(date, date) : Promise.resolve([])), [date, eat_back]);
@@ -250,7 +242,7 @@ export function DiaryTab({ data, settings, energy }: { data: DietData; settings:
             <Section title="Eaten">
               <div className="stack tight">
                 {loaded.entries.length === 0 ? (
-                  <p className="muted">Nothing logged for this day.</p>
+                  <Empty title="Nothing logged for this day." />
                 ) : (
                   <DataTable
                     caption="Eaten"

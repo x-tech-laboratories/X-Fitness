@@ -11,10 +11,9 @@ import { confirm_dialog, Dialog, open_dialog } from "@x-tech-laboratories/x-libs
 import { PageHeading, Toolbar } from "@x-tech-laboratories/x-libs/web/react/layout";
 import { Empty, Loaded } from "@x-tech-laboratories/x-libs/web/react/states";
 import { DataTable, type TableColumn } from "@x-tech-laboratories/x-libs/web/react/table";
-import { toast } from "@x-tech-laboratories/x-libs/web/react/toasts";
 
 import type { ItemChange } from "../../shared/history/store.ts";
-import { calls, use_data } from "../api.ts";
+import { calls, succeeds, use_data } from "../api.ts";
 
 // ── Wording ──────────────────────────────────────────────────────────────────
 
@@ -37,13 +36,7 @@ function restore(change: ItemChange, on_done?: () => void): void {
     message: change.change === "deleted" ? "It comes back as it was when deleted, with what was deleted along with it." : `It goes back to how it was on ${when(change.changed_at)}; the way it is now stays in its history.`,
     confirm_label: change.change === "deleted" ? "Bring back" : "Restore",
     run: async () => {
-      try {
-        await calls().restore_item_version(change.kind, change.id);
-        toast(`${change.item_name} is back as it was`, { tone: "good" });
-        on_done?.();
-      } catch (error) {
-        toast(error instanceof Error ? error.message : String(error), { tone: "bad" });
-      }
+      if (await succeeds(() => calls().restore_item_version(change.kind, change.id), `${change.item_name} is back as it was`)) on_done?.();
     },
   });
 }

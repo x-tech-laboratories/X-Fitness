@@ -3,34 +3,29 @@
 
 // ── Imports ──────────────────────────────────────────────────────────────────
 
-import { format_local } from "@x-tech-laboratories/x-libs/dates";
-import { convert, format_measure, type EnergyUnit } from "@x-tech-laboratories/x-libs/units";
+import { shift_day, today } from "@x-tech-laboratories/x-libs/dates";
+import { convert, format_measure, format_number, to_stored } from "@x-tech-laboratories/x-libs/units";
 import { NumberField, Select, Switch } from "@x-tech-laboratories/x-libs/web/react/controls";
 import { Facts, Section, SettingRow, Toolbar } from "@x-tech-laboratories/x-libs/web/react/layout";
 import { Loaded } from "@x-tech-laboratories/x-libs/web/react/states";
 import { DataTable, type TableColumn } from "@x-tech-laboratories/x-libs/web/react/table";
 import { toast } from "@x-tech-laboratories/x-libs/web/react/toasts";
 
-import { activities, bmr_formulas, type Activity, type BmrFormula, type GoalKey } from "../../shared/calculators/formulas.ts";
+import type { Activity, BmrFormula, GoalKey } from "../../shared/calculators/formulas.ts";
 import type { CalculatedGoal, CalculationsReport } from "../../shared/calculators/store.ts";
-import { calls, use_data } from "../api.ts";
-import { format_change, format_number, to_shown_value, to_stored_value, type ShownUnits } from "../body/format.ts";
-import { today } from "../body/LogTab.tsx";
+import { attempt, calls, set_setting, use_data } from "../api.ts";
+import { activity_options, bmr_formula_options } from "../calculators/options.ts";
 import type { FeatureSettingsProps } from "../features.tsx";
+import { UnitNumber } from "../unit_field.tsx";
+import { format_length, format_mass, format_mass_change, to_shown_tenth, type ShownUnits } from "../units.ts";
 
 // ── Plan ─────────────────────────────────────────────────────────────────────
 
-const mass = { kind: "weight", unit: "" } as const;
-
 type SetSetting = FeatureSettingsProps["set_setting"];
 
+// A plan figure in a setting row, empty when 0, with float noise rounded off.
 function PlanNumber({ label, hint, value, unit, step, on_change }: { label: string; hint: string; value: number; unit: string; step: number; on_change: (value: number) => void }) {
-  const shown = value !== 0 ? Number(value.toFixed(3)) : null;
-  return (
-    <SettingRow label={label} hint={hint}>
-      <NumberField bare label={label} value={shown} step={step} unit={unit} on_change={(next) => next !== shown && on_change(next ?? 0)} />
-    </SettingRow>
-  );
+  return <UnitNumber setting_row label={label} hint={hint} value={value} to_shown={(stored) => Number(stored.toFixed(3))} step={step} unit={unit} on_change={on_change} />;
 }
 
 const energy_sources: ["formula" | "measured", string][] = [["formula", "The BMR formula and activity"], ["measured", "The diary and the weight trend"]];
@@ -40,10 +35,10 @@ export function EnergySettings({ settings, set_setting }: { settings: Record<str
   return (
     <>
       <SettingRow label="Activity" hint="Multiplies the basal rate into the energy burned a day.">
-        <Select bare label="Activity" options={activities.map((activity): [Activity, string] => [activity.key, activity.label])} value={String(settings["calculators.activity"]) as Activity} on_change={(value) => void set_setting("calculators.activity", value)} />
+        <Select bare label="Activity" options={activity_options} value={String(settings["calculators.activity"]) as Activity} on_change={(value) => void set_setting("calculators.activity", value)} />
       </SettingRow>
       <SettingRow label="BMR formula" hint="Katch-McArdle works from lean mass, so it needs a body fat; without one Mifflin-St Jeor is used.">
-        <Select bare label="BMR formula" options={bmr_formulas.map((formula): [BmrFormula, string] => [formula.key, formula.label])} value={String(settings["calculators.bmr_formula"]) as BmrFormula} on_change={(value) => void set_setting("calculators.bmr_formula", value)} />
+        <Select bare label="BMR formula" options={bmr_formula_options} value={String(settings["calculators.bmr_formula"]) as BmrFormula} on_change={(value) => void set_setting("calculators.bmr_formula", value)} />
       </SettingRow>
       <SettingRow label="Daily energy from" hint="Measured takes what you ate less what your weight trend stored, once the diary has a week of days and the scales two weights a week apart; until then the formula is used.">
         <Select bare label="Daily energy from" options={energy_sources} value={String(settings["calculators.energy_source"]) === "measured" ? "measured" : "formula"} on_change={(value) => void set_setting("calculators.energy_source", value)} />
@@ -60,7 +55,7 @@ function Plan({ settings, units, set_setting }: { settings: Record<string, unkno
   // A rate per kg shown per pound is that much smaller.
   const per_mass = units.mass === "lb" ? convert(1, "lb", "kg") : 1;
   const weekly = number("calculators.weekly_change");
-  const weekly_shown = weekly === 0 ? 0 : to_shown_value(mass, Math.abs(weekly), units) * Math.sign(weekly);
+  const weekly_shown = weekly === 0 ? 0 : to_shown_tenth(Math.abs(weekly), units.mass) * Math.sign(weekly);
 
   return (
     <Section title="Plan">
@@ -73,7 +68,7 @@ function Plan({ settings, units, set_setting }: { settings: Record<string, unkno
         step={0.1}
         value={weekly_shown}
         hint="Below 0 to lose weight, above to gain; a kilogram of fat is about 7700 kcal."
-        on_change={(value) => void set_setting("calculators.weekly_change", value === 0 ? 0 : to_stored_value(mass, Math.abs(value), units) * Math.sign(value))}
+        on_change={(value) => void set_setting("calculators.weekly_change", value === 0 ? 0 : to_stored(Math.abs(value), units.mass) * Math.sign(value))}
       />
       <PlanNumber
         label="Protein"
@@ -103,14 +98,13 @@ const goal_labels: Record<GoalKey, string> = {
 
 interface GoalRow extends CalculatedGoal {
   units: ShownUnits;
-  energy: EnergyUnit;
 }
 
 function format_goal(row: GoalRow, value: number): string {
-  if (row.key === "weight") return `${format_number(to_shown_value(mass, value, row.units))} ${row.units.mass}`;
-  if (row.key === "waist") return `${format_number(to_shown_value({ kind: "length", unit: "" }, value, row.units))} ${row.units.length}`;
+  if (row.key === "weight") return format_mass(value, row.units);
+  if (row.key === "waist") return format_length(value, row.units);
   if (row.key === "body_fat") return `${format_number(value)}%`;
-  if (row.key === "calories") return format_measure(value, row.energy, 0);
+  if (row.key === "calories") return format_measure(value, row.units.energy, 0);
   return `${format_number(value)} g`;
 }
 
@@ -121,12 +115,9 @@ function holder_text(row: GoalRow): string {
 }
 
 async function apply(keys: GoalKey[]): Promise<void> {
-  try {
-    const changed = await calls().apply_calculated_goals(keys, today());
-    toast(changed === 0 ? "The goals already match the plan." : `Set ${changed} goal${changed === 1 ? "" : "s"} from the plan.`, { tone: "good" });
-  } catch (error) {
-    toast(error instanceof Error ? error.message : String(error), { tone: "bad" });
-  }
+  const changed = await attempt(() => calls().apply_calculated_goals(keys, today()));
+  if (changed === undefined) return;
+  toast(changed === 0 ? "The goals already match the plan." : `Set ${changed} goal${changed === 1 ? "" : "s"} from the plan.`, { tone: "good" });
 }
 
 function can_apply(row: CalculatedGoal): boolean {
@@ -148,8 +139,8 @@ const columns: TableColumn<GoalRow>[] = [
   },
 ];
 
-function Goals({ report, units, energy, set_setting }: { report: CalculationsReport; units: ShownUnits; energy: EnergyUnit; set_setting: SetSetting }) {
-  const rows = report.goals.map((goal) => ({ ...goal, units, energy }));
+function Goals({ report, units }: { report: CalculationsReport; units: ShownUnits }) {
+  const rows = report.goals.map((goal) => ({ ...goal, units }));
   const ready = report.goals.filter(can_apply).map((goal) => goal.key);
 
   return (
@@ -175,26 +166,19 @@ function Goals({ report, units, energy, set_setting }: { report: CalculationsRep
 
 // ── Time to goal ─────────────────────────────────────────────────────────────
 
-// The day a number of weeks from today lands on.
-function weeks_from(date: string, weeks: number): string {
-  const day = new Date(`${date}T12:00:00`);
-  day.setDate(day.getDate() + Math.round(weeks * 7));
-  return format_local(day, false);
-}
-
 function TimeToGoal({ report, units }: { report: CalculationsReport; units: ShownUnits }) {
   const { progress } = report;
   if (progress === null) return <p className="muted">Needs a weight reading and a goal on the weight metric; Use above sets one from the plan.</p>;
-  const weight = (value: number) => `${format_number(to_shown_value(mass, value, units))} ${units.mass}`;
-  const when = (weeks: number | null, why: string) => (weeks === null ? why : weeks === 0 ? "Reached" : `${weeks_from(report.date, weeks)}, in ${format_number(weeks)} weeks`);
+  const weight = (value: number) => format_mass(value, units);
+  const when = (weeks: number | null, why: string) => (weeks === null ? why : weeks === 0 ? "Reached" : `${shift_day(report.date, Math.round(weeks * 7))}, in ${format_number(weeks)} weeks`);
   const trend = progress.trend_weekly_change;
   return (
     <Facts
       rows={[
         ["Weight now", weight(progress.weight)],
         ["Goal", weight(progress.goal)],
-        ["To go", format_change(mass, progress.goal - progress.weight, units)],
-        ["Trend", trend === null ? "Needs two weights a week apart" : `${format_change(mass, trend, units)} a week`],
+        ["To go", format_mass_change(progress.goal - progress.weight, units)],
+        ["Trend", trend === null ? "Needs two weights a week apart" : `${format_mass_change(trend, units)} a week`],
         ["At the trend", when(progress.trend_weeks, trend === null ? "—" : "Not heading there")],
         ["At the plan's rate", when(progress.plan_weeks, report.plan.weekly_change === 0 ? "The plan keeps the weight" : "The plan heads the other way")],
       ]}
@@ -204,16 +188,15 @@ function TimeToGoal({ report, units }: { report: CalculationsReport; units: Show
 
 // ── Tab ──────────────────────────────────────────────────────────────────────
 
-export function GoalsTab({ settings, units, energy }: { settings: Record<string, unknown>; units: ShownUnits; energy: EnergyUnit }) {
+export function GoalsTab({ settings, units }: { settings: Record<string, unknown>; units: ShownUnits }) {
   const report = use_data((api) => api.get_calculations(today()));
-  const set_setting: SetSetting = async (key, value) => void (await calls().set_setting(key, value));
 
   return (
     <div className="stack">
       <Loaded resource={report}>
         {(loaded) => (
           <>
-            <Goals report={loaded} units={units} energy={energy} set_setting={set_setting} />
+            <Goals report={loaded} units={units} />
             <Section title="Time to goal">
               <TimeToGoal report={loaded} units={units} />
             </Section>

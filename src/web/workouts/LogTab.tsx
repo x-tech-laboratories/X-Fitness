@@ -4,7 +4,8 @@
 // ── Imports ──────────────────────────────────────────────────────────────────
 
 import { useState } from "react";
-import { format_local } from "@x-tech-laboratories/x-libs/dates";
+import { today } from "@x-tech-laboratories/x-libs/dates";
+import { format_number } from "@x-tech-laboratories/x-libs/units";
 import { CommitInput, NumberField, PeriodStepper, Select } from "@x-tech-laboratories/x-libs/web/react/controls";
 import { confirm_dialog } from "@x-tech-laboratories/x-libs/web/react/dialog";
 import { Section, Stack, Toolbar } from "@x-tech-laboratories/x-libs/web/react/layout";
@@ -13,11 +14,13 @@ import { Badge } from "@x-tech-laboratories/x-libs/web/react/badges";
 
 import { measurement_of, workout_totals, type Exercise, type WorkoutEntry } from "../../shared/workouts/model.ts";
 import type { LoggedWorkout, ProgressionReport, WorkoutLibrary } from "../../shared/workouts/store.ts";
-import { calls, use_data } from "../api.ts";
+import { attempt, calls, succeeds, use_data } from "../api.ts";
 import { HistoryButton } from "../history/HistoryView.tsx";
+import { UnitNumber } from "../unit_field.tsx";
+import type { ShownUnits } from "../units.ts";
 import { ExerciseSelect } from "./controls.tsx";
 import { RestTimerBar, use_rest_timer } from "./rest_timer.tsx";
-import { field_labels, field_to_shown, field_to_stored, field_unit, format_number, format_rest, format_weight, type ShownUnits } from "./units.ts";
+import { field_labels, field_to_shown, field_to_stored, field_unit, format_rest, format_weight } from "./units.ts";
 
 // ── Entry ────────────────────────────────────────────────────────────────────
 
@@ -35,42 +38,44 @@ function WorkoutEntryBlock({ entry, exercise, units, rest, on_rest }: EntryProps
   const name = exercise?.name ?? "Deleted exercise";
   return (
     <section className="workouts-entry" aria-label={name}>
-      <div className="workouts-spread">
-        <span className="workouts-inline">
+      <div className="spread-row">
+        <span className="inline-row">
           <strong>{name}</strong>
           {exercise && <span className="muted small">{measurement_of(exercise.measurement).label}</span>}
           {rest !== null && <span className="muted small">{`${format_rest(rest)} rest`}</span>}
         </span>
-        <button type="button" className="icon remove" aria-label={`Remove ${name}`} onClick={() => void calls().delete_workout_exercise(entry.id)}>
+        <button type="button" className="icon remove" aria-label={`Remove ${name}`} onClick={() => void succeeds(() => calls().delete_workout_exercise(entry.id))}>
           ×
         </button>
       </div>
-      <CommitInput type="text" aria-label={`Notes for ${name}`} placeholder="Notes…" value={entry.notes} on_commit={(event) => void calls().update_workout_exercise(entry.id, { notes: event.currentTarget.value })} />
+      <CommitInput type="text" aria-label={`Notes for ${name}`} placeholder="Notes…" value={entry.notes} on_commit={(event) => void succeeds(() => calls().update_workout_exercise(entry.id, { notes: event.currentTarget.value }))} />
       {entry.sets.length === 0 && <p className="muted small">No sets recorded.</p>}
       <ol className="workouts-sets">
         {entry.sets.map((set, index) => (
           <li key={set.id} className="workouts-set" aria-label={`${name} set ${index + 1}`}>
             <span className="workouts-set-number">{index + 1}</span>
             {fields.map((field) => (
-              <NumberField
+              <UnitNumber
                 key={field}
                 label={field_labels[field]}
                 bare
                 unit={field_unit(field, units)}
-                value={set[field] ? field_to_shown(field, set[field], units) : null}
+                value={set[field]}
+                to_shown={(value) => field_to_shown(field, value, units)}
+                to_stored={(value) => field_to_stored(field, value, units)}
                 min={0}
                 step={field === "reps" ? 1 : field === "weight" ? 2.5 : 0.5}
-                on_change={(value) => void calls().update_workout_set(set.id, { [field]: field_to_stored(field, value ?? 0, units) })}
+                on_change={(value) => void succeeds(() => calls().update_workout_set(set.id, { [field]: value }))}
               />
             ))}
-            <NumberField label="RPE" bare unit="RPE" value={set.rpe || null} min={0} max={10} step={0.5} on_change={(rpe) => void calls().update_workout_set(set.id, { rpe: rpe ?? 0 })} />
+            <NumberField label="RPE" bare unit="RPE" value={set.rpe || null} min={0} max={10} step={0.5} on_change={(rpe) => void succeeds(() => calls().update_workout_set(set.id, { rpe: rpe ?? 0 }))} />
             <span className="row-actions">
               {rest !== null && rest > 0 && (
                 <button type="button" onClick={() => on_rest(rest)} aria-label={`Rest ${format_rest(rest)}`}>
                   {`Rest ${format_rest(rest)}`}
                 </button>
               )}
-              <button type="button" className="icon remove" aria-label={`Remove set ${index + 1}`} onClick={() => void calls().delete_workout_set(set.id)}>
+              <button type="button" className="icon remove" aria-label={`Remove set ${index + 1}`} onClick={() => void succeeds(() => calls().delete_workout_set(set.id))}>
                 ×
               </button>
             </span>
@@ -78,7 +83,7 @@ function WorkoutEntryBlock({ entry, exercise, units, rest, on_rest }: EntryProps
         ))}
       </ol>
       <p>
-        <button type="button" onClick={() => void calls().add_workout_set(entry.id)} aria-label={`Add set to ${name}`}>
+        <button type="button" onClick={() => void succeeds(() => calls().add_workout_set(entry.id))} aria-label={`Add set to ${name}`}>
           Add Set
         </button>
       </p>
@@ -119,7 +124,9 @@ function WorkoutCard({ workout, library, units, default_rest, rest_sound }: Work
       message: "Its progressions move the session's targets, which deleting the workout does not undo.",
       confirm_label: "Finish",
       run: async () => {
-        set_reports(await calls().finish_workout(workout.id, new Date().toISOString()));
+        const finished = await attempt(() => calls().finish_workout(workout.id, new Date().toISOString()));
+        if (!finished) return;
+        set_reports(finished);
         timer.stop();
       },
     });
@@ -131,7 +138,7 @@ function WorkoutCard({ workout, library, units, default_rest, rest_sound }: Work
       message: `It was logged on ${workout.date}.`,
       confirm_label: "Delete",
       danger: true,
-      run: () => calls().delete_workout(workout.id),
+      run: async () => void (await succeeds(() => calls().delete_workout(workout.id))),
     });
   }
 
@@ -144,7 +151,7 @@ function WorkoutCard({ workout, library, units, default_rest, rest_sound }: Work
 
   return (
     <Section
-      title={<CommitInput type="text" className="workouts-name" aria-label="Workout name" value={workout.name} on_commit={(event) => void calls().update_workout(workout.id, { name: event.currentTarget.value })} />}
+      title={<CommitInput type="text" className="workouts-name" aria-label="Workout name" value={workout.name} on_commit={(event) => void succeeds(() => calls().update_workout(workout.id, { name: event.currentTarget.value }))} />}
       tools={
         <>
           <span className="muted small">{summary.join(" · ")}</span>
@@ -161,16 +168,16 @@ function WorkoutCard({ workout, library, units, default_rest, rest_sound }: Work
         </>
       }
     >
-      <CommitInput type="text" aria-label="How did it go?" placeholder="How did it go?" value={workout.notes} on_commit={(event) => void calls().update_workout(workout.id, { notes: event.currentTarget.value })} />
+      <CommitInput type="text" aria-label="How did it go?" placeholder="How did it go?" value={workout.notes} on_commit={(event) => void succeeds(() => calls().update_workout(workout.id, { notes: event.currentTarget.value }))} />
       {reports &&
         (reports.length > 0 ? (
-          <ul className="workouts-report" aria-label="Progression">
+          <ul className="close-list" aria-label="Progression">
             {reports.map((report) => (
               <li key={report.entry_id}>{report_line(report, units)}</li>
             ))}
           </ul>
         ) : (
-          <p className="muted">Nothing in this session has a progression.</p>
+          <Empty title="Nothing in this session has a progression." />
         ))}
       {workout.entries.map((entry) => (
         <WorkoutEntryBlock
@@ -190,7 +197,7 @@ function WorkoutCard({ workout, library, units, default_rest, rest_sound }: Work
         value=""
         placeholder="Add an exercise…"
         on_change={(exercise_id) => {
-          if (exercise_id) void calls().add_workout_exercise(workout.id, exercise_id);
+          if (exercise_id) void succeeds(() => calls().add_workout_exercise(workout.id, exercise_id));
         }}
       />
       {is_open && <RestTimerBar timer={timer} />}
@@ -210,22 +217,20 @@ interface LogTabProps {
 }
 
 export function LogTab({ library, units, default_rest, rest_sound, initial_day }: LogTabProps) {
-  const today = () => format_local(new Date(), false);
   const [day, set_day] = useState(initial_day ?? today());
   const [session_id, set_session_id] = useState("");
   const workouts = use_data((api) => api.list_workouts(day), [day]);
   const session_groups = library.programs.map((program) => ({ label: program.name, options: program.sessions.map((session): [string, string] => [session.id, session.name]) }));
 
   async function start(chosen: string | null): Promise<void> {
-    await calls().start_workout(day, chosen, new Date().toISOString());
-    set_session_id("");
+    if (await succeeds(() => calls().start_workout(day, chosen, new Date().toISOString()))) set_session_id("");
   }
 
   return (
     <>
       <Toolbar>
         <PeriodStepper label="Day" period="day" value={day} on_change={set_day} />
-        <span className="workouts-inline">
+        <span className="inline-row">
           <Select label="Session" bare options={[["", session_groups.some((group) => group.options.length) ? "Start from a session…" : "No sessions yet"]]} groups={session_groups} value={session_id} on_change={set_session_id} />
           <button type="button" className="accent solid" disabled={!session_id} onClick={() => void start(session_id)}>
             Start

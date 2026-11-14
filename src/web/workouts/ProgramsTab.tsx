@@ -4,7 +4,8 @@
 // ── Imports ──────────────────────────────────────────────────────────────────
 
 import { Fragment, useState } from "react";
-import { format_local } from "@x-tech-laboratories/x-libs/dates";
+import { today } from "@x-tech-laboratories/x-libs/dates";
+import { format_number } from "@x-tech-laboratories/x-libs/units";
 import { NumberField, Select } from "@x-tech-laboratories/x-libs/web/react/controls";
 import { confirm_dialog, Dialog } from "@x-tech-laboratories/x-libs/web/react/dialog";
 import { Card, Cards, FormRow, RowActions, Section, Stack } from "@x-tech-laboratories/x-libs/web/react/layout";
@@ -27,11 +28,13 @@ import {
   type SessionEntry,
 } from "../../shared/workouts/model.ts";
 import type { WorkoutLibrary } from "../../shared/workouts/store.ts";
-import { calls } from "../api.ts";
+import { calls, succeeds } from "../api.ts";
 import { CategoryEditor } from "../categories.tsx";
 import { HistoryButton } from "../history/HistoryView.tsx";
+import { UnitNumber } from "../unit_field.tsx";
+import type { ShownUnits } from "../units.ts";
 import { ExerciseSelect } from "./controls.tsx";
-import { field_labels, field_to_shown, field_to_stored, field_unit, format_field, format_number, type ShownUnits } from "./units.ts";
+import { field_labels, field_to_shown, field_to_stored, field_unit, format_field } from "./units.ts";
 
 // ── Progression ──────────────────────────────────────────────────────────────
 
@@ -59,15 +62,17 @@ function ProgressionEditor({ progression, exercise, units, on_change }: { progre
         const percent_key = field.percent_key;
         const is_percent = percent_key ? progression[percent_key] : false;
         const is_weight = Boolean(percent_key) && !is_percent;
-        const shown = is_weight ? field_to_shown("weight", progression[key], units) : progression[key];
         return (
-          <div key={key} className="workouts-inline">
-            <NumberField
+          <div key={key} className="inline-row">
+            <UnitNumber
               label={field.label}
-              value={shown}
+              value={progression[key]}
+              to_shown={is_weight ? (value) => field_to_shown("weight", value, units) : undefined}
+              to_stored={is_weight ? (value) => field_to_stored("weight", value, units) : undefined}
+              show_zero
               min={0}
               step={field.step}
-              on_change={(value) => on_change(normalize_progression({ ...progression, [key]: is_weight ? field_to_stored("weight", value ?? 0, units) : (value ?? 0) }))}
+              on_change={(value) => on_change(normalize_progression({ ...progression, [key]: value }))}
             />
             {percent_key && (
               <Select<string>
@@ -123,8 +128,7 @@ export function SessionDialog({ program, initial, library, units, default_rest, 
       toast("A session needs a name.", { tone: "bad" });
       return;
     }
-    await calls().save_program_session(program.id, { ...session, id: session.id || undefined, categories: session.categories });
-    on_close();
+    if (await succeeds(() => calls().save_program_session(program.id, { ...session, id: session.id || undefined, categories: session.categories }))) on_close();
   }
 
   return (
@@ -157,14 +161,14 @@ export function SessionDialog({ program, initial, library, units, default_rest, 
       </div>
 
       <h3>Exercises</h3>
-      {session.entries.length === 0 && <p className="muted">No exercises in this session yet.</p>}
+      {session.entries.length === 0 && <Empty title="No exercises in this session yet." />}
       <Stack tight>
         {session.entries.map((entry, index) => {
           const exercise = exercises.get(entry.exercise_id);
           const label = exercise?.name ?? `Exercise ${index + 1}`;
           return (
             <fieldset key={entry.id} className="card workouts-entry-form" aria-label={label}>
-              <div className="workouts-spread">
+              <div className="spread-row">
                 <ExerciseSelect label={`Exercise ${index + 1}`} exercises={library.exercises} categories={library.categories} value={entry.exercise_id} placeholder="Pick an exercise…" on_change={(exercise_id) => change_entry(entry.id, { exercise_id })} />
                 <RowActions index={index} count={session.entries.length} on_move={move} on_remove={() => set_session({ ...session, entries: session.entries.filter((item) => item.id !== entry.id) })} remove_label={`Remove ${label}`} />
               </div>
@@ -172,14 +176,17 @@ export function SessionDialog({ program, initial, library, units, default_rest, 
                 <NumberField label="Sets" value={entry.sets} min={1} on_change={(sets) => change_entry(entry.id, { sets: sets ?? 1 })} />
                 {exercise &&
                   measurement_of(exercise.measurement).fields.map((field) => (
-                    <NumberField
+                    <UnitNumber
                       key={field}
                       label={`Target ${field_labels[field].toLowerCase()}`}
                       unit={field_unit(field, units)}
-                      value={field_to_shown(field, entry[field], units)}
+                      value={entry[field]}
+                      to_shown={(value) => field_to_shown(field, value, units)}
+                      to_stored={(value) => field_to_stored(field, value, units)}
+                      show_zero
                       min={0}
                       step={field === "reps" ? 1 : 0.5}
-                      on_change={(value) => change_entry(entry.id, { [field]: field_to_stored(field, value ?? 0, units) })}
+                      on_change={(value) => change_entry(entry.id, { [field]: value })}
                     />
                   ))}
                 <NumberField label="Rest" unit="s" value={entry.rest} min={0} step={15} on_change={(rest) => change_entry(entry.id, { rest: rest ?? 0 })} />
@@ -224,13 +231,11 @@ export function ProgramsTab({ library, units, default_rest }: ProgramsTabProps) 
 
   async function add_program(): Promise<void> {
     if (!draft.trim()) return;
-    await calls().save_program({ name: draft });
-    set_draft("");
+    if (await succeeds(() => calls().save_program({ name: draft }))) set_draft("");
   }
 
   async function start(session: Session): Promise<void> {
-    await calls().start_workout(format_local(new Date(), false), session.id, new Date().toISOString());
-    location.hash = "#/workouts/log";
+    if (await succeeds(() => calls().start_workout(today(), session.id, new Date().toISOString()))) location.hash = "#/workouts/log";
   }
 
   function delete_program(program: Program): void {
@@ -240,7 +245,7 @@ export function ProgramsTab({ library, units, default_rest }: ProgramsTabProps) 
       message: `${count > 0 ? `Its ${count} session(s) go with it. ` : ""}Workouts already logged are kept.`,
       confirm_label: "Delete",
       danger: true,
-      run: () => calls().delete_program(program.id),
+      run: async () => void (await succeeds(() => calls().delete_program(program.id))),
     });
   }
 
@@ -250,7 +255,7 @@ export function ProgramsTab({ library, units, default_rest }: ProgramsTabProps) 
       message: "Workouts logged from it are kept.",
       confirm_label: "Delete",
       danger: true,
-      run: () => calls().delete_program_session(session.id),
+      run: async () => void (await succeeds(() => calls().delete_program_session(session.id))),
     });
   }
 
@@ -291,19 +296,19 @@ export function ProgramsTab({ library, units, default_rest }: ProgramsTabProps) 
             }
           >
             {program.notes && <p className="muted">{program.notes}</p>}
-            {program.sessions.length === 0 && <p className="muted">No sessions in this program yet.</p>}
+            {program.sessions.length === 0 && <Empty title="No sessions in this program yet." />}
             <Cards>
               {program.sessions.map((session, index) => (
                 <Card key={session.id} title={session.name} subtitle={[`${session.entries.length} exercise(s)`, ...session.categories.map((id) => category_path_text(id, library.categories))].join(" · ")}>
                   {session.notes && <p className="muted small">{session.notes}</p>}
-                  <ul className="workouts-plan">
+                  <ul className="close-list">
                     {session.entries.map((entry) => {
                       const exercise = exercises.get(entry.exercise_id);
                       return exercise ? <li key={entry.id}>{plan_line(entry, exercise, units)}</li> : <Fragment key={entry.id} />;
                     })}
                   </ul>
-                  <div className="workouts-spread">
-                    <span className="workouts-inline">
+                  <div className="spread-row">
+                    <span className="inline-row">
                       <button type="button" className="accent solid" onClick={() => void start(session)} aria-label={`Start ${session.name} today`}>
                         Start Today
                       </button>
@@ -314,7 +319,7 @@ export function ProgramsTab({ library, units, default_rest }: ProgramsTabProps) 
                     <RowActions
                       index={index}
                       count={program.sessions.length}
-                      on_move={(from, to) => void calls().move_program_session(session.id, to > from ? 1 : -1)}
+                      on_move={(from, to) => void succeeds(() => calls().move_program_session(session.id, to > from ? 1 : -1))}
                       on_remove={() => delete_session(session)}
                       remove_label={`Delete ${session.name}`}
                     />
@@ -332,9 +337,9 @@ export function ProgramsTab({ library, units, default_rest }: ProgramsTabProps) 
           on_close={() => set_renaming(null)}
           form={{
             on_submit: () => {
-              void calls()
-                .save_program({ id: renaming.program.id, name: renaming.name.trim() || renaming.program.name, notes: renaming.program.notes })
-                .then(() => set_renaming(null));
+              void succeeds(() => calls().save_program({ id: renaming.program.id, name: renaming.name.trim() || renaming.program.name, notes: renaming.program.notes })).then(
+                (saved) => saved && set_renaming(null),
+              );
             },
             submit_label: "Rename",
           }}

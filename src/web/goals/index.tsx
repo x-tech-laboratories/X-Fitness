@@ -6,9 +6,8 @@ import { PageHeading } from "@x-tech-laboratories/x-libs/web/react/layout";
 import { Loaded } from "@x-tech-laboratories/x-libs/web/react/states";
 
 import { use_settings } from "../api.ts";
-import { shown_units } from "../body/format.ts";
-import { energy_unit_of } from "../diet/format.ts";
 import type { FeaturePage } from "../features.tsx";
+import { shown_units } from "../units.ts";
 import { GoalsTab } from "./GoalsTab.tsx";
 
 // ── View ─────────────────────────────────────────────────────────────────────
@@ -23,7 +22,7 @@ export function GoalsView() {
       <PageHeading title="Goals" />
       <div className="stack">
         <Loaded resource={settings}>
-          {(values) => <GoalsTab settings={values} units={shown_units(values)} energy={energy_unit_of(values)} />}
+          {(values) => <GoalsTab settings={values} units={shown_units(values)} />}
         </Loaded>
       </div>
     </>

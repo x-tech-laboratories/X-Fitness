@@ -7,13 +7,13 @@ import { useMemo, useState } from "react";
 import { CommitInput, NumberField } from "@x-tech-laboratories/x-libs/web/react/controls";
 import { Toolbar } from "@x-tech-laboratories/x-libs/web/react/layout";
 import { use_pref } from "@x-tech-laboratories/x-libs/web/react/prefs";
+import { Empty } from "@x-tech-laboratories/x-libs/web/react/states";
 import { DataTable, type TableColumn } from "@x-tech-laboratories/x-libs/web/react/table";
 import { ComboField } from "@x-tech-laboratories/x-libs/web/react/suggestions";
 
 import { by_id, food_units, normalize_names, type Food, type GroceryItem } from "../../shared/diet/model.ts";
 import type { DietData, GroceryChanges } from "../../shared/diet/store.ts";
-import { calls } from "../api.ts";
-import { attempt } from "./format.ts";
+import { attempt, calls } from "../api.ts";
 import { GroupToggle, ItemSelect, category_groups, type ListRow } from "./widgets.tsx";
 
 // ── Lines ────────────────────────────────────────────────────────────────────
@@ -134,7 +134,7 @@ export function GroceryTab({ data, settings }: { data: DietData; settings: Recor
         <GroupToggle checked={grouped} on_change={set_grouped} />
         <button type="button" disabled={done_count === 0} onClick={() => void attempt(() => calls().clear_bought_groceries())}>Clear checked ({done_count})</button>
       </Toolbar>
-      {data.grocery.length === 0 ? <p className="muted">Nothing on the list.</p> : <DataTable caption="Grocery list" columns={columns} rows={rows} groups={groups} row_key={(row) => row.key} wrap_class="fit" />}
+      {data.grocery.length === 0 ? <Empty title="Nothing on the list." /> : <DataTable caption="Grocery list" columns={columns} rows={rows} groups={groups} row_key={(row) => row.key} wrap_class="fit" />}
     </div>
   );
 }

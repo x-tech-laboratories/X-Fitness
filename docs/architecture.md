@@ -63,7 +63,8 @@ offline. On first connecting, the user chooses whether the server's copy or the 
 ## Units
 
 Every measure is stored in metric (kg, cm, km, kcal) and shown in the units set under Settings, converted with X-Libs
-`units`.
+`units`. The page reads the four units once with `shown_units` from `src/web/units.ts` and hands views one `units`
+object; `src/web/unit_field.tsx` is the number field that shows a stored value in them.
 
 ## Nutrients, labels and targets
 

@@ -5,13 +5,13 @@ import { DatabaseSync } from "node:sqlite";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { today } from "@x-tech-laboratories/x-libs/dates";
 import type { Client } from "@x-tech-laboratories/x-libs/electron/bridge";
 import { Dialogs } from "@x-tech-laboratories/x-libs/web/react/dialog";
 import { Toasts } from "@x-tech-laboratories/x-libs/web/react/toasts";
 
 import { bind_methods, open_store, type FitnessMethods } from "../src/shared/store.ts";
 import { set_page_api } from "../src/web/api.ts";
-import { today } from "../src/web/diet/DiaryTab.tsx";
 import { DietView } from "../src/web/diet/index.tsx";
 import { SettingsView } from "../src/web/settings/SettingsView.tsx";
 

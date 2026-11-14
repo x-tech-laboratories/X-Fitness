@@ -21,7 +21,8 @@ import {
 } from "../../shared/diet/labels.ts";
 import { normalize_meals, nutrient_keys, nutrients, target_key, type Meal, type NutrientGroup } from "../../shared/diet/model.ts";
 import type { FeatureSettingsProps } from "../features.tsx";
-import { energy_unit_of, field_value, format_amount, format_nutrient, shown_unit, to_shown_value, to_stored_value } from "./format.ts";
+import { shown_units } from "../units.ts";
+import { field_value, format_amount, format_nutrient, shown_unit, to_shown_value, to_stored_value } from "./format.ts";
 
 // ── Label and targets ────────────────────────────────────────────────────────
 
@@ -35,7 +36,7 @@ export function LabelSettings({ settings, set_setting }: FeatureSettingsProps) {
         label="Nutrition label"
         hint={changed_shown ? `Custom: ${changed_shown} nutrient(s) switched by hand.` : "Which nutrients the diary and the food editor show; the rest are still kept and can be switched on below."}
       >
-        <div className="diet-inline">
+        <div className="inline-row">
           <Select label="Nutrition label" bare options={label_presets.map((preset): [string, string] => [preset.id, preset.label])} value={label_preset_of(settings).id} on_change={(id) => void set_setting("diet.label", id)} />
           {changed_shown > 0 && <button type="button" onClick={() => void set_setting("diet.shown", {})}>Reset to label</button>}
         </div>
@@ -44,7 +45,7 @@ export function LabelSettings({ settings, set_setting }: FeatureSettingsProps) {
         label="Targets"
         hint={changed_targets.length ? `Custom: ${changed_targets.length} target(s) set by hand.` : "Which region's reference amounts each day is measured against; any target can be set by hand below."}
       >
-        <div className="diet-inline">
+        <div className="inline-row">
           <Select label="Targets" bare options={target_presets.map((preset): [string, string] => [preset.id, preset.label])} value={target_preset_of(settings).id} on_change={(id) => void set_setting("diet.targets", id)} />
           {changed_targets.length > 0 && (
             <button type="button" onClick={() => void Promise.all(changed_targets.map((key) => set_setting(target_key(key), null)))}>Reset to preset</button>
@@ -57,7 +58,7 @@ export function LabelSettings({ settings, set_setting }: FeatureSettingsProps) {
 
 // One row per nutrient in a group: whether it shows, and its target, 0 meaning none.
 export function NutrientSettings({ settings, set_setting, group }: FeatureSettingsProps & { group: NutrientGroup }) {
-  const energy = energy_unit_of(settings);
+  const energy = shown_units(settings).energy;
   return (
     <>
       {nutrients.filter((info) => info.group === group).map((info) => {
@@ -109,7 +110,7 @@ export function MealSettings({ settings, set_setting }: FeatureSettingsProps) {
     <>
       {meals.map((meal, index) => (
         <SettingRow key={meal.id} label={meal.name} hint={meal.start ? `New entries from ${meal.start} fall in it.` : "Only picked by hand."}>
-          <div className="diet-inline">
+          <div className="inline-row">
             <CommitInput
               aria-label={`${meal.name} name`}
               value={meal.name}

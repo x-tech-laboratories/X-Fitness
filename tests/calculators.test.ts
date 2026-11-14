@@ -113,7 +113,7 @@ describe("the fitness formulas", () => {
 describe("skinfold metrics", () => {
   it("are shown in mm and kept in cm, whatever the length unit", () => {
     const fold = { kind: "length", unit: "", role: "skinfold_thigh" } as const;
-    const units = { mass: "lb", length: "in" } as const;
+    const units = { mass: "lb", length: "in", distance: "mi", energy: "kcal" } as const;
     expect(unit_of(fold, units)).toBe("mm");
     expect(to_stored_value(fold, 12, units)).toBeCloseTo(1.2);
     expect(format_change(fold, -0.15, units)).toBe("-1.5 mm");

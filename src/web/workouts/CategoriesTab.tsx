@@ -7,7 +7,7 @@ import { Loaded } from "@x-tech-laboratories/x-libs/web/react/states";
 import type { TableColumn } from "@x-tech-laboratories/x-libs/web/react/table";
 
 import type { CategoryUsage } from "../../shared/workouts/store.ts";
-import { calls, use_data } from "../api.ts";
+import { attempt, calls, succeeds, use_data } from "../api.ts";
 import { CategoryManager } from "../categories.tsx";
 
 // ── Tab ──────────────────────────────────────────────────────────────────────
@@ -39,10 +39,10 @@ export function CategoriesTab() {
           count_columns={count_columns}
           describe_delete={describe_delete}
           calls={{
-            add: (name, parent_id) => calls().add_workout_category(name, parent_id),
-            rename: (id, name) => calls().rename_workout_category(id, name),
-            move: (id, parent_id, position) => calls().move_workout_category(id, parent_id, position),
-            remove: (id) => calls().delete_workout_category(id),
+            add: (name, parent_id) => succeeds(() => calls().add_workout_category(name, parent_id)),
+            rename: (id, name) => attempt(() => calls().rename_workout_category(id, name)),
+            move: (id, parent_id, position) => attempt(() => calls().move_workout_category(id, parent_id, position)),
+            remove: (id) => attempt(() => calls().delete_workout_category(id)),
           }}
         >
           <p className="muted small">Exercises and sessions share these. Open one to see what is inside it; drag rows to reorder them or onto one another to nest them.</p>

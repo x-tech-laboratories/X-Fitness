@@ -7,10 +7,9 @@ import { PageHeading } from "@x-tech-laboratories/x-libs/web/react/layout";
 import { Loaded } from "@x-tech-laboratories/x-libs/web/react/states";
 
 import { use_settings } from "../api.ts";
-import { shown_units } from "../body/format.ts";
-import { energy_unit_of } from "../diet/format.ts";
 import type { FeaturePage, FeatureSettingsProps } from "../features.tsx";
 import { EnergySettings } from "../goals/GoalsTab.tsx";
+import { shown_units } from "../units.ts";
 import { CalculateTab } from "./CalculateTab.tsx";
 
 // ── View ─────────────────────────────────────────────────────────────────────
@@ -25,7 +24,7 @@ export function CalculatorsView() {
       <PageHeading title="Calculators" />
       <div className="stack">
         <Loaded resource={settings}>
-          {(values) => <CalculateTab units={shown_units(values)} energy={energy_unit_of(values)} />}
+          {(values) => <CalculateTab units={shown_units(values)} />}
         </Loaded>
       </div>
     </>
