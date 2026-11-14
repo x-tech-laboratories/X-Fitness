@@ -138,6 +138,7 @@ export const diet_diary = sqliteTable(
     amount: real().notNull(),
     unit: text().notNull().default(""),
     logged_at: text().notNull(),
+    meal: text().notNull().default(""),
   },
   (table) => [index("diet_diary_date").on(table.date), check("diet_diary_kind", sql`${table.kind} IN ('food', 'recipe')`)],
 );

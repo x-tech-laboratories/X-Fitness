@@ -18,10 +18,13 @@ import {
   day_totals,
   drop_from_categories,
   empty_nutrients,
+  entry_meal,
   entry_nutrients,
   food_label,
+  meal_at,
   normalize_category_name,
   normalize_food,
+  normalize_meals,
   normalize_names,
   normalize_recipe,
   nutrient_keys,
@@ -191,13 +194,27 @@ export interface DayEntry extends DiaryEntry {
   nutrients: Nutrients;
 }
 
+export interface MealTotals {
+  id: string;
+  name: string;
+  // The meal's share of the day's energy target, in percent; 0 means none.
+  share: number;
+  totals: Nutrients;
+}
+
 export interface DiaryDay {
   date: string;
+  // Each entry's meal is the one it falls in, by its own or by the time it was logged.
   entries: DayEntry[];
   totals: Nutrients;
   // The targets in force, 0 meaning none.
   targets: Nutrients;
+  // Every meal in Settings' order, those with nothing eaten as zero.
+  meals: MealTotals[];
 }
+
+// Energy and the macros of one meal, for the days a trend covers.
+export type MealMacros = Pick<Nutrients, "calories" | "protein" | "carbs" | "fat">;
 
 export interface NutrientTarget {
   key: NutrientKey;
@@ -227,6 +244,8 @@ export interface DayTotals {
   date: string;
   entries: number;
   totals: Nutrients;
+  // By meal id, only the meals with anything eaten.
+  meal_totals: Record<string, MealMacros>;
 }
 
 export interface ImportCounts {
@@ -266,6 +285,8 @@ export interface EntryInput {
   amount: number;
   unit?: string;
   logged_at?: string;
+  // A meal's id from Settings; left out, the meal the time logged falls in.
+  meal?: string;
 }
 
 export interface GroceryInput {
@@ -355,7 +376,16 @@ export const diet_feature = define_feature({
           nutrients: entry_nutrients(entry, foods, recipes),
         };
       });
-      return { date, entries, totals: day_totals(entries, foods, recipes), targets: day_targets(read_settings(database)) };
+      const settings = read_settings(database);
+      const meals = normalize_meals(settings["diet.meals"]);
+      const placed = entries.map((entry) => ({ ...entry, meal: entry_meal(entry, meals) }));
+      return {
+        date,
+        entries: placed,
+        totals: day_totals(entries, foods, recipes),
+        targets: day_targets(settings),
+        meals: meals.map((meal) => ({ id: meal.id, name: meal.name, share: meal.share, totals: day_totals(placed.filter((entry) => entry.meal === meal.id), foods, recipes) })),
+      };
     },
     get_diet_targets: (database: SqlDatabase): DietTargets => {
       const settings = read_settings(database);
@@ -384,11 +414,21 @@ export const diet_feature = define_feature({
       const foods = by_id(read_foods(database));
       const recipes = by_id(read_recipes(database));
       const entries = read_diary(database, from, to);
+      const meals = normalize_meals(read_setting(database, "diet.meals"));
       const days: DayTotals[] = [];
       for (let day = parse_local(from); format_local(day, false) <= to; day = add_days(day, 1)) {
         const date = format_local(day, false);
         const logged = entries.filter((entry) => entry.date === date);
-        days.push({ date, entries: logged.length, totals: logged.length ? day_totals(logged, foods, recipes) : empty_nutrients() });
+        const meal_totals: Record<string, MealMacros> = {};
+        for (const entry of logged) {
+          const { calories, protein, carbs, fat } = entry_nutrients(entry, foods, recipes);
+          const sum = (meal_totals[entry_meal(entry, meals)] ??= { calories: 0, protein: 0, carbs: 0, fat: 0 });
+          sum.calories += calories;
+          sum.protein += protein;
+          sum.carbs += carbs;
+          sum.fat += fat;
+        }
+        days.push({ date, entries: logged.length, totals: logged.length ? day_totals(logged, foods, recipes) : empty_nutrients(), meal_totals });
       }
       return days;
     },
@@ -404,9 +444,17 @@ export const diet_feature = define_feature({
         amount: positive(input.amount, "The amount"),
         unit: kind === "food" ? (input.unit ?? "").trim() || serving_unit : "",
         logged_at: input.logged_at || new Date().toISOString(),
+        meal: "",
       };
+      const meals = normalize_meals(read_setting(database, "diet.meals"));
+      if (input.meal && !meals.some((meal) => meal.id === input.meal)) throw new Error(`No meal ${input.meal}.`);
+      entry.meal = input.meal || meal_at(meals, entry.logged_at);
       insert_entry(database, entry);
       return entry.id;
+    },
+    move_diary_entry: (database: SqlDatabase, id: string, meal: string): void => {
+      if (!normalize_meals(read_setting(database, "diet.meals")).some((item) => item.id === meal)) throw new Error(`No meal ${meal}.`);
+      drizzle_of(database).update(diet_diary).set({ meal }).where(eq(diet_diary.id, id)).run();
     },
     remove_diary_entry: (database: SqlDatabase, id: string): void => {
       drizzle_of(database).delete(diet_diary).where(eq(diet_diary.id, id)).run();

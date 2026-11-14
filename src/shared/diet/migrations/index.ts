@@ -95,5 +95,11 @@ export const migrations: DrizzleMigration[] = [
       "ALTER TABLE `diet_foods` ADD `oxalate` real DEFAULT 0 NOT NULL;",
       "ALTER TABLE `diet_foods` ADD `phytate` real DEFAULT 0 NOT NULL;"
     ]
+  },
+  {
+    "name": "20261114021333_diary_meals",
+    "statements": [
+      "ALTER TABLE `diet_diary` ADD `meal` text DEFAULT '' NOT NULL;"
+    ]
   }
 ];

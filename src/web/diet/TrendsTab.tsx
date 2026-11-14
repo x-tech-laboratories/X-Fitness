@@ -1,5 +1,5 @@
 // The Trends tab: energy and macros per day over the last weeks, the days kept within the energy target, where the
-// energy came from, and the average logged day against the targets.
+// energy came from by macro and by meal, and the average logged day against the targets.
 
 // ── Imports ──────────────────────────────────────────────────────────────────
 
@@ -12,10 +12,10 @@ import { use_pref } from "@x-tech-laboratories/x-libs/web/react/prefs";
 import { Empty, Loaded } from "@x-tech-laboratories/x-libs/web/react/states";
 
 import { target_of } from "../../shared/diet/labels.ts";
-import { add_nutrients, empty_nutrients, scale_nutrients, target_progress, type Nutrients } from "../../shared/diet/model.ts";
+import { add_nutrients, empty_nutrients, normalize_meals, scale_nutrients, target_progress, type Nutrients } from "../../shared/diet/model.ts";
 import type { DayTotals } from "../../shared/diet/store.ts";
 import { use_data } from "../api.ts";
-import { NutrientTotals, today } from "./DiaryTab.tsx";
+import { MealSplit, NutrientTotals, today, type MealRow } from "./DiaryTab.tsx";
 
 // ── Figures ──────────────────────────────────────────────────────────────────
 
@@ -77,11 +77,23 @@ function Charts({ days, settings, energy }: { days: DayTotals[]; settings: Recor
           message="No macros logged in these days."
         />
       </Section>
+      <Section title="Energy by meal">
+        <MealSplit rows={average_meals(days, settings)} target={target} energy={energy} title={`Energy from each meal, ${count} logged day${count === 1 ? "" : "s"}`} />
+      </Section>
       <Section title={`Average of ${count} logged day${count === 1 ? "" : "s"}`}>
         <NutrientTotals totals={average} settings={settings} energy={energy} />
       </Section>
     </>
   );
+}
+
+// Each meal's average over the days with anything logged, in Settings' order.
+export function average_meals(days: DayTotals[], settings: Record<string, unknown>): MealRow[] {
+  const logged = days.filter((day) => day.entries > 0);
+  return normalize_meals(settings["diet.meals"]).map((meal) => {
+    const sum = (key: "calories" | "protein" | "carbs" | "fat") => logged.reduce((total, day) => total + (day.meal_totals[meal.id]?.[key] ?? 0), 0) / Math.max(1, logged.length);
+    return { id: meal.id, name: meal.name, share: meal.share, calories: sum("calories"), protein: sum("protein"), carbs: sum("carbs"), fat: sum("fat") };
+  });
 }
 
 // ── Tab ──────────────────────────────────────────────────────────────────────

@@ -92,7 +92,8 @@ export const diet_api = {
   },
   delete_recipe: { description: "Deletes a recipe.", params: [{ name: "id", schema: id_of("recipe") }] },
   get_diary_day: {
-    description: "One day's diary: each entry with its food or recipe, amount and nutrients, the day's totals, and the targets in force, 0 meaning none; calories in kcal and the rest in grams.",
+    description:
+      "One day's diary: each entry with its food or recipe, amount, meal and nutrients, the day's totals, each meal's totals with its share of the energy target in percent (in the order Settings lists the meals), and the targets in force, 0 meaning none; calories in kcal and the rest in grams.",
     params: [{ name: "date", schema: day }],
   },
   get_diet_targets: {
@@ -101,7 +102,7 @@ export const diet_api = {
     params: [],
   },
   list_daily_totals: {
-    description: "Each day's nutrient totals from one day to another, days with nothing logged as zero.",
+    description: "Each day's nutrient totals from one day to another, days with nothing logged as zero, with each meal's calories, protein, carbs and fat by meal id.",
     params: [{ name: "from", schema: day }, { name: "to", schema: day }],
   },
   add_diary_entry: {
@@ -118,6 +119,7 @@ export const diet_api = {
             amount,
             unit: text("For a food, the unit the amount is in, one of its portions or serving; recipes are always in servings."),
             logged_at: moment,
+            meal: text("The meal's id from the diet.meals setting, such as breakfast; left out, the meal the time logged falls in."),
           },
           required: ["date", "kind", "ref_id", "amount"],
         },
@@ -125,6 +127,10 @@ export const diet_api = {
     ],
   },
   remove_diary_entry: { description: "Removes a diary entry.", params: [{ name: "id", schema: id_of("diary entry") }] },
+  move_diary_entry: {
+    description: "Moves a diary entry to another meal.",
+    params: [{ name: "id", schema: id_of("diary entry") }, { name: "meal", schema: text("The meal's id from the diet.meals setting, such as dinner.") }],
+  },
   add_category: { description: "Adds a diet category.", params: [{ name: "name", schema: text('The category path, such as "Protein/Meat".') }] },
   rename_category: {
     description: "Renames a diet category with its subcategories on every food and recipe; a name already in use merges the two.",

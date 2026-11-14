@@ -371,6 +371,8 @@ export interface DiaryEntry {
   // For a food, the unit the amount is in, "serving" when empty; for a recipe, always servings.
   unit: string;
   logged_at: string;
+  // The meal's id from Settings; empty, or a meal since deleted, goes by the time it was logged.
+  meal: string;
 }
 
 export interface GroceryItem {
@@ -508,6 +510,55 @@ function unit_size(food: Food, unit: string): number | undefined {
 export function servings_for(food: Food, amount: number, unit: string, fallback_unit: string): number {
   const size = (unit ? unit_size(food, unit) : undefined) ?? unit_size(food, fallback_unit) ?? 1;
   return (amount * size) / food.serving_size;
+}
+
+// ── Meals ────────────────────────────────────────────────────────────────────
+
+export interface Meal {
+  id: string;
+  name: string;
+  // "HH:MM" from which a new entry falls in this meal; empty for one only picked by hand, such as snacks.
+  start: string;
+  // The meal's share of the day's energy target, in percent; 0 means none.
+  share: number;
+}
+
+export const default_meals: Meal[] = [
+  { id: "breakfast", name: "Breakfast", start: "04:00", share: 25 },
+  { id: "lunch", name: "Lunch", start: "11:00", share: 35 },
+  { id: "dinner", name: "Dinner", start: "17:00", share: 30 },
+  { id: "snacks", name: "Snacks", start: "", share: 10 },
+];
+
+// Each with an id and a name, one per id; none at all gives the defaults back.
+export function normalize_meals(raw: unknown): Meal[] {
+  if (!Array.isArray(raw)) return default_meals;
+  const seen = new Set<string>();
+  const meals: Meal[] = [];
+  for (const item of raw) {
+    const meal = (item ?? {}) as Record<string, unknown>;
+    const id = text(meal.id);
+    const name = text(meal.name);
+    if (!id || !name || seen.has(id)) continue;
+    seen.add(id);
+    const start = text(meal.start);
+    const share = Number(meal.share);
+    meals.push({ id, name, start: /^\d{2}:\d{2}$/.test(start) ? start : "", share: Number.isFinite(share) && share > 0 ? share : 0 });
+  }
+  return meals.length ? meals : default_meals;
+}
+
+// The meal a moment falls in by the local time: the one started last before it, or before midnight for the small hours.
+export function meal_at(meals: Meal[], moment: string | Date): string {
+  const date = new Date(moment);
+  const time = `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
+  const timed = meals.filter((meal) => meal.start).sort((first, second) => first.start.localeCompare(second.start));
+  if (timed.length === 0 || Number.isNaN(date.getTime())) return meals[0]!.id;
+  return (timed.findLast((meal) => meal.start <= time) ?? timed.at(-1)!).id;
+}
+
+export function entry_meal(entry: Pick<DiaryEntry, "meal" | "logged_at">, meals: Meal[]): string {
+  return meals.some((meal) => meal.id === entry.meal) ? entry.meal : meal_at(meals, entry.logged_at);
 }
 
 // ── Sums ─────────────────────────────────────────────────────────────────────

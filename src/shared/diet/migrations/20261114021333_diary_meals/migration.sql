@@ -1,0 +1,1 @@
+ALTER TABLE `diet_diary` ADD `meal` text DEFAULT '' NOT NULL;

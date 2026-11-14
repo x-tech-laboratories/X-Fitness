@@ -5,7 +5,7 @@
 
 import { useRef, useState } from "react";
 import { CommitInput, NumberField, Select, Switch } from "@x-tech-laboratories/x-libs/web/react/controls";
-import { SettingRow } from "@x-tech-laboratories/x-libs/web/react/layout";
+import { moved, RowActions, SettingRow } from "@x-tech-laboratories/x-libs/web/react/layout";
 import { toast } from "@x-tech-laboratories/x-libs/web/react/toasts";
 
 import {
@@ -22,10 +22,10 @@ import {
   target_source,
   with_shown,
 } from "../../shared/diet/labels.ts";
-import { nutrient_keys, nutrients, target_key, type NutrientGroup } from "../../shared/diet/model.ts";
+import { normalize_meals, nutrient_keys, nutrients, target_key, type Meal, type NutrientGroup } from "../../shared/diet/model.ts";
 import { calls } from "../api.ts";
 import type { FeatureSettingsProps } from "../features.tsx";
-import { energy_unit_of, error_text, field_value, format_nutrient, shown_unit, to_shown_value, to_stored_value } from "./format.ts";
+import { energy_unit_of, error_text, field_value, format_amount, format_nutrient, shown_unit, to_shown_value, to_stored_value } from "./format.ts";
 
 // ── Label and targets ────────────────────────────────────────────────────────
 
@@ -96,6 +96,47 @@ export function NutrientSettings({ settings, set_setting, group }: FeatureSettin
           </SettingRow>
         );
       })}
+    </>
+  );
+}
+
+// ── Meals ────────────────────────────────────────────────────────────────────
+
+// The meals in order, each with the time a new entry starts falling in it and its share of the energy target; an entry
+// in a meal removed goes by the time it was logged.
+export function MealSettings({ settings, set_setting }: FeatureSettingsProps) {
+  const meals = normalize_meals(settings["diet.meals"]);
+  const save = (next: Meal[]) => void set_setting("diet.meals", next);
+  const change = (index: number, changes: Partial<Meal>) => save(meals.map((meal, position) => (position === index ? { ...meal, ...changes } : meal)));
+  const shares = meals.reduce((sum, meal) => sum + meal.share, 0);
+  return (
+    <>
+      {meals.map((meal, index) => (
+        <SettingRow key={meal.id} label={meal.name} hint={meal.start ? `New entries from ${meal.start} fall in it.` : "Only picked by hand."}>
+          <div className="diet-inline">
+            <CommitInput
+              aria-label={`${meal.name} name`}
+              value={meal.name}
+              on_commit={(event) => {
+                const name = event.currentTarget.value.trim();
+                if (name && name !== meal.name) change(index, { name });
+              }}
+            />
+            <CommitInput aria-label={`${meal.name} starts at`} type="time" value={meal.start} on_commit={(event) => change(index, { start: event.currentTarget.value })} />
+            <NumberField label={`${meal.name} share`} bare min={0} max={100} step={5} unit="%" value={meal.share} on_change={(share) => change(index, { share: share ?? 0 })} />
+            <RowActions
+              index={index}
+              count={meals.length}
+              on_move={(from, to) => save(moved(meals, from, to))}
+              on_remove={meals.length > 1 ? () => save(meals.filter((_, position) => position !== index)) : undefined}
+              remove_label={`Remove ${meal.name}`}
+            />
+          </div>
+        </SettingRow>
+      ))}
+      <SettingRow label="Add a meal" hint={`The shares add up to ${format_amount(shares)}% of the day's energy target.`}>
+        <button type="button" onClick={() => save([...meals, { id: crypto.randomUUID(), name: `Meal ${meals.length + 1}`, start: "", share: 0 }])}>Add meal</button>
+      </SettingRow>
     </>
   );
 }

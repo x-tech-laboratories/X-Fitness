@@ -3,7 +3,7 @@ import { DatabaseSync } from "node:sqlite";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { shown_nutrients, target_of, with_shown } from "../src/shared/diet/labels.ts";
-import { empty_nutrients, food_units, food_unit_problems, normalize_food, nutrients, target_progress } from "../src/shared/diet/model.ts";
+import { default_meals, empty_nutrients, entry_meal, food_units, food_unit_problems, meal_at, normalize_food, normalize_meals, nutrients, target_progress } from "../src/shared/diet/model.ts";
 import { bind_methods, open_store, setting_defaults, sync_engine } from "../src/shared/store.ts";
 
 afterEach(() => {
@@ -180,6 +180,41 @@ describe("diet store", () => {
     expect(day.targets.protein).toBe(140);
     expect(day.targets.vitamin_c).toBeCloseTo(0.08);
     expect(day.targets.leucine).toBe(0);
+  });
+
+  it("picks a meal by the local time, wrapping the small hours to the last meal", () => {
+    const at = (hours: number, minutes = 0) => new Date(2026, 10, 13, hours, minutes);
+    expect(meal_at(default_meals, at(7))).toBe("breakfast");
+    expect(meal_at(default_meals, at(10, 59))).toBe("breakfast");
+    expect(meal_at(default_meals, at(11))).toBe("lunch");
+    expect(meal_at(default_meals, at(23))).toBe("dinner");
+    expect(meal_at(default_meals, at(2))).toBe("dinner");
+    // A meal gone, or none stored, goes by the time logged.
+    expect(entry_meal({ meal: "brunch", logged_at: at(12).toISOString() }, default_meals)).toBe("lunch");
+    expect(entry_meal({ meal: "snacks", logged_at: at(12).toISOString() }, default_meals)).toBe("snacks");
+    expect(normalize_meals([])).toEqual(default_meals);
+    expect(normalize_meals([{ id: "a", name: " Only ", start: "9am", share: -1 }, { id: "a", name: "Twice" }])).toEqual([{ id: "a", name: "Only", start: "", share: 0 }]);
+  });
+
+  it("keeps each entry's meal, totals each meal, and moves an entry", () => {
+    const { methods } = open_methods();
+    const id = methods.save_food(oats);
+    const first = methods.add_diary_entry({ date: "2026-11-13", kind: "food", ref_id: id, amount: 1, meal: "breakfast" });
+    methods.add_diary_entry({ date: "2026-11-13", kind: "food", ref_id: id, amount: 2, meal: "dinner" });
+    methods.add_diary_entry({ date: "2026-11-13", kind: "food", ref_id: id, amount: 1, logged_at: new Date(2026, 10, 13, 12).toISOString() });
+    expect(() => methods.add_diary_entry({ date: "2026-11-13", kind: "food", ref_id: id, amount: 1, meal: "brunch" })).toThrow("No meal brunch.");
+
+    const day = methods.get_diary_day("2026-11-13");
+    expect(day.entries.map((entry) => entry.meal).sort()).toEqual(["breakfast", "dinner", "lunch"]);
+    expect(day.meals.map((meal) => [meal.id, meal.totals.calories, meal.share])).toEqual([["breakfast", 380, 25], ["lunch", 380, 35], ["dinner", 760, 30], ["snacks", 0, 10]]);
+
+    methods.move_diary_entry(first, "snacks");
+    expect(methods.get_diary_day("2026-11-13").meals.find((meal) => meal.id === "snacks")!.totals.calories).toBe(380);
+    expect(() => methods.move_diary_entry(first, "brunch")).toThrow("No meal brunch.");
+
+    const [trend] = methods.list_daily_totals("2026-11-13", "2026-11-13");
+    expect(trend!.meal_totals.dinner).toEqual({ calories: 760, protein: 26, carbs: 120, fat: 14 });
+    expect(trend!.meal_totals.breakfast).toBeUndefined();
   });
 
   it("replaces a recipe's ingredients and drops them with the recipe", () => {

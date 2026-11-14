@@ -1,12 +1,13 @@
-// The Diary tab: one day's foods and recipes, their totals against the day's targets, and logging what was eaten.
+// The Diary tab: one day's foods and recipes by meal, their totals against the day's targets, how the day's energy split
+// between its meals, and logging what was eaten.
 
 // ── Imports ──────────────────────────────────────────────────────────────────
 
 import { useMemo, useState } from "react";
 import { format_local } from "@x-tech-laboratories/x-libs/dates";
-import { format_measure, type EnergyUnit } from "@x-tech-laboratories/x-libs/units";
-import { Meters, type Meter } from "@x-tech-laboratories/x-libs/web/react/charts";
-import { NumberField, PeriodStepper, Segmented } from "@x-tech-laboratories/x-libs/web/react/controls";
+import { format_measure, to_shown, type EnergyUnit } from "@x-tech-laboratories/x-libs/units";
+import { Donut, Meters, type Meter } from "@x-tech-laboratories/x-libs/web/react/charts";
+import { NumberField, PeriodStepper, Segmented, Select } from "@x-tech-laboratories/x-libs/web/react/controls";
 import { Section, Toolbar } from "@x-tech-laboratories/x-libs/web/react/layout";
 import { use_pref } from "@x-tech-laboratories/x-libs/web/react/prefs";
 import { Loaded } from "@x-tech-laboratories/x-libs/web/react/states";
@@ -14,8 +15,8 @@ import { DataTable, type TableColumn } from "@x-tech-laboratories/x-libs/web/rea
 import { toast } from "@x-tech-laboratories/x-libs/web/react/toasts";
 
 import { shown_nutrients, target_of } from "../../shared/diet/labels.ts";
-import { by_id, nutrient_groups, nutrients, serving_unit, target_key, target_progress, type EntryKind, type NutrientInfo, type Nutrients } from "../../shared/diet/model.ts";
-import type { DayEntry, DietData } from "../../shared/diet/store.ts";
+import { by_id, meal_at, normalize_meals, nutrient_groups, nutrients, serving_unit, target_key, target_progress, type EntryKind, type Meal, type NutrientInfo, type Nutrients } from "../../shared/diet/model.ts";
+import type { DayEntry, DietData, MealMacros } from "../../shared/diet/store.ts";
 import { calls, use_data } from "../api.ts";
 import { HistoryButton } from "../history/HistoryView.tsx";
 import { attempt, format_amount, format_nutrient, shown_unit, succeeds, to_shown_value } from "./format.ts";
@@ -78,9 +79,56 @@ export function NutrientTotals({ totals, settings, energy }: { totals: Nutrients
   );
 }
 
+// ── Meals ────────────────────────────────────────────────────────────────────
+
+export interface MealRow extends MealMacros {
+  id: string;
+  name: string;
+  share: number;
+}
+
+// The meal list as Select options.
+export function meal_options(meals: Meal[]): [string, string][] {
+  return meals.map((meal): [string, string] => [meal.id, meal.name]);
+}
+
+// How the energy split between the meals: a ring of each meal's part, and each meal's energy against its share of the
+// target with its macros.
+export function MealSplit({ rows, target, energy, title }: { rows: MealRow[]; target: number; energy: EnergyUnit; title: string }) {
+  const total = rows.reduce((sum, row) => sum + row.calories, 0);
+  const grams = (value: number) => `${format_amount(Number(value.toFixed(1)))} g`;
+  const columns: TableColumn<MealRow>[] = [
+    { label: "Meal", id: "name", cell: (row) => row.name },
+    { label: "Energy", id: "calories", class: "number", cell: (row) => format_measure(row.calories, energy, 0) },
+    { label: "Of the day", id: "part", class: "number", cell: (row) => (total > 0 ? `${Math.round((row.calories / total) * 100)}%` : "—") },
+    {
+      label: "Target",
+      id: "target",
+      class: "number",
+      cell: (row) => (row.share > 0 && target > 0 ? `${format_measure((target * row.share) / 100, energy, 0)} (${format_amount(row.share)}%)` : "—"),
+    },
+    { label: "Protein", id: "protein", class: "number", cell: (row) => grams(row.protein) },
+    { label: "Carbs", id: "carbs", class: "number", cell: (row) => grams(row.carbs) },
+    { label: "Fat", id: "fat", class: "number", cell: (row) => grams(row.fat) },
+  ];
+  return (
+    <div className="stack">
+      <Donut
+        title={title}
+        parts={rows.map((row, index) => ({ label: row.name, value: Math.round(row.calories), color: `var(--series-${(index % 6) + 1})` }))}
+        center={Math.round(to_shown(total, energy)).toLocaleString()}
+        center_label={energy}
+        message="Nothing eaten yet."
+      />
+      <DataTable caption="Each meal" columns={columns} rows={rows} row_key={(row) => row.id} />
+    </div>
+  );
+}
+
 // ── Logging ──────────────────────────────────────────────────────────────────
 
-function LogForm({ date, data }: { date: string; data: DietData }) {
+function LogForm({ date, data, meals }: { date: string; data: DietData; meals: Meal[] }) {
+  const [meal, set_meal] = useState(() => meal_at(meals, new Date()));
   const [kind, set_kind] = useState<EntryKind>("food");
   const [ref_id, set_ref_id] = useState("");
   const [amount, set_amount] = useState<number | null>(1);
@@ -93,7 +141,7 @@ function LogForm({ date, data }: { date: string; data: DietData }) {
   }
 
   async function log(): Promise<void> {
-    const id = await attempt(() => calls().add_diary_entry({ date, kind, ref_id, amount: amount ?? 1, unit: kind === "food" ? unit : "" }));
+    const id = await attempt(() => calls().add_diary_entry({ date, kind, ref_id, amount: amount ?? 1, unit: kind === "food" ? unit : "", meal }));
     if (!id) return;
     set_ref_id("");
     set_amount(1);
@@ -108,6 +156,7 @@ function LogForm({ date, data }: { date: string; data: DietData }) {
         void log();
       }}
     >
+      <Select label="Meal" bare options={meal_options(meals)} value={meals.some((item) => item.id === meal) ? meal : meals[0]!.id} on_change={set_meal} />
       <Segmented
         label="Log a"
         choices={[{ value: "food", label: "Food" }, { value: "recipe", label: "Recipe" }]}
@@ -126,8 +175,8 @@ function LogForm({ date, data }: { date: string; data: DietData }) {
 }
 
 // Only what an entry is made of, so putting it back after a remove keeps its id and time.
-function entry_input({ id, date, kind, ref_id, amount, unit, logged_at }: DayEntry) {
-  return { id, date, kind, ref_id, amount, unit, logged_at };
+function entry_input({ id, date, kind, ref_id, amount, unit, logged_at, meal }: DayEntry) {
+  return { id, date, kind, ref_id, amount, unit, logged_at, meal };
 }
 
 // ── Tab ──────────────────────────────────────────────────────────────────────
@@ -140,6 +189,7 @@ export function DiaryTab({ data, settings, energy }: { data: DietData; settings:
   const burned = (workouts.data ?? []).reduce((sum, workout) => sum + (workout.calories ?? 0), 0);
   // The day's workouts raise its calorie target when Calculators says to eat them back.
   const day_settings = burned > 0 ? { ...settings, [target_key("calories")]: target_of(settings, "calories") + burned } : settings;
+  const meals = useMemo(() => normalize_meals(settings["diet.meals"]), [settings]);
 
   async function remove(entry: DayEntry): Promise<void> {
     if (!(await succeeds(() => calls().remove_diary_entry(entry.id)))) return;
@@ -163,16 +213,17 @@ export function DiaryTab({ data, settings, energy }: { data: DietData; settings:
         id: "actions",
         header: <span className="visually-hidden">Actions</span>,
         class: "actions-cell",
-        width: 200,
+        width: 330,
         cell: (entry) => (
           <div className="row-actions">
+            <Select label={`Meal of ${entry.label}`} bare options={meal_options(meals)} value={entry.meal} on_change={(meal) => void attempt(() => calls().move_diary_entry(entry.id, meal))} />
             <HistoryButton kind="diary" item_id={entry.id} name={entry.label} />
             <button type="button" className="danger" aria-label={`Remove ${entry.label}`} onClick={() => void remove(entry)}>Remove</button>
           </div>
         ),
       },
     ];
-  }, [energy]);
+  }, [energy, meals]);
 
   return (
     <div className="stack">
@@ -186,10 +237,32 @@ export function DiaryTab({ data, settings, energy }: { data: DietData; settings:
               {burned > 0 && <p className="muted">{`The calorie target includes ${format_measure(burned, energy, 0)} burned in workouts.`}</p>}
               <NutrientTotals totals={loaded.totals} settings={day_settings} energy={energy} />
             </Section>
+            {loaded.entries.length > 0 && (
+              <Section title="Meals">
+                <MealSplit
+                  rows={loaded.meals.map((meal) => ({ id: meal.id, name: meal.name, share: meal.share, calories: meal.totals.calories, protein: meal.totals.protein, carbs: meal.totals.carbs, fat: meal.totals.fat }))}
+                  target={target_of(day_settings, "calories")}
+                  energy={energy}
+                  title="Energy from each meal"
+                />
+              </Section>
+            )}
             <Section title="Eaten">
               <div className="stack tight">
-                {loaded.entries.length === 0 ? <p className="muted">Nothing logged for this day.</p> : <DataTable caption="Eaten" columns={columns} rows={loaded.entries} row_key={(entry) => entry.id} />}
-                <LogForm date={date} data={data} />
+                {loaded.entries.length === 0 ? (
+                  <p className="muted">Nothing logged for this day.</p>
+                ) : (
+                  <DataTable
+                    caption="Eaten"
+                    columns={columns}
+                    rows={loaded.entries}
+                    groups={loaded.meals
+                      .map((meal) => ({ key: meal.id, label: `${meal.name} · ${format_measure(meal.totals.calories, energy, 0)}`, rows: loaded.entries.filter((entry) => entry.meal === meal.id) }))
+                      .filter((group) => group.rows.length > 0)}
+                    row_key={(entry) => entry.id}
+                  />
+                )}
+                <LogForm date={date} data={data} meals={meals} />
               </div>
             </Section>
           </>

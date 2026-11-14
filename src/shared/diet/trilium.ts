@@ -102,6 +102,7 @@ function read_entry(date: string, raw: unknown, fallback_time: string): DiaryEnt
     amount: Number.isFinite(amount) && amount > 0 ? amount : 1,
     unit: kind === "food" ? text(entry.unit) || serving_unit : "",
     logged_at: text(entry.loggedAt) || fallback_time,
+    meal: text(entry.meal),
   };
 }
 
@@ -160,7 +161,7 @@ function write_nutrients(values: Nutrients): Json {
 export function write_trilium_diet(document: DietDocument): string {
   const diary: Record<string, Json[]> = {};
   for (const entry of document.diary) {
-    (diary[entry.date] ??= []).push({ id: entry.id, kind: entry.kind, refId: entry.ref_id, servings: entry.amount, unit: entry.unit, loggedAt: entry.logged_at });
+    (diary[entry.date] ??= []).push({ id: entry.id, kind: entry.kind, refId: entry.ref_id, servings: entry.amount, unit: entry.unit, loggedAt: entry.logged_at, meal: entry.meal });
   }
   return JSON.stringify(
     {

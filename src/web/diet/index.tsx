@@ -13,7 +13,7 @@ import { nutrient_groups } from "../../shared/diet/model.ts";
 import { use_data, use_settings } from "../api.ts";
 import type { FeaturePage, FeatureSettingsProps } from "../features.tsx";
 import { CategoriesTab, UnitsTab } from "./CategoriesTab.tsx";
-import { DataSettings, GrocerySettings, LabelSettings, LookupSettings, NutrientSettings } from "./DietSettings.tsx";
+import { DataSettings, GrocerySettings, LabelSettings, LookupSettings, MealSettings, NutrientSettings } from "./DietSettings.tsx";
 import { DiaryTab } from "./DiaryTab.tsx";
 import { FoodsTab } from "./FoodsTab.tsx";
 import { energy_unit_of } from "./format.ts";
@@ -74,6 +74,12 @@ export function DietView({ parts }: { parts: string[] }) {
 export function diet_settings(props: FeatureSettingsProps): SettingsSection[] {
   return [
     { id: "diet-label", heading: "Nutrition label and targets", content: <LabelSettings {...props} /> },
+    {
+      id: "diet-meals",
+      heading: "Meals",
+      hint: "Each diary entry falls in a meal, picked by the time it is logged and changeable on the entry. A meal's share sets its part of the day's energy target.",
+      content: <MealSettings {...props} />,
+    },
     ...nutrient_groups.map((group) => ({
       id: `diet-nutrients-${group.id}`,
       heading: group.label,

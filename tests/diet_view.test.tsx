@@ -69,7 +69,7 @@ describe("diet diary", () => {
     fireEvent.click(screen.getByRole("button", { name: "Log" }));
 
     expect(await screen.findByText("285 kcal / 300 kcal")).toBeTruthy();
-    expect(calls.add_diary_entry).toHaveBeenCalledWith({ date: today(), kind: "food", ref_id: id, amount: 25, unit: "g" });
+    expect(calls.add_diary_entry).toHaveBeenCalledWith({ date: today(), kind: "food", ref_id: id, amount: 25, unit: "g", meal: expect.any(String) });
 
     methods.add_diary_entry({ date: today(), kind: "food", ref_id: id, amount: 1 });
     fireEvent.click(screen.getByRole("button", { name: "Next day" }));
@@ -100,6 +100,33 @@ describe("diet diary", () => {
     expect(screen.queryByText("Sodium")).toBeNull();
   });
 
+  it("groups the day by meal with each meal's part of the energy, logs into the meal picked and moves an entry", async () => {
+    const { methods, calls } = start({ "diet.target_calories": 2000 });
+    const id = methods.save_food(oats);
+    methods.add_diary_entry({ date: today(), kind: "food", ref_id: id, amount: 1, meal: "breakfast" });
+    methods.add_diary_entry({ date: today(), kind: "food", ref_id: id, amount: 2, meal: "dinner" });
+    show(["diary"]);
+
+    expect(await screen.findByRole("heading", { name: "Meals" })).toBeTruthy();
+    const table = screen.getByRole("table", { name: "Each meal" });
+    // Breakfast's 380 kcal is a third of the day and its target is 25% of 2000 kcal.
+    const breakfast = within(table).getByRole("row", { name: /Breakfast/ });
+    expect(within(breakfast).getByText("33%")).toBeTruthy();
+    expect(within(breakfast).getByText("500 kcal (25%)")).toBeTruthy();
+    expect(screen.getByText("Dinner · 760 kcal")).toBeTruthy();
+
+    fireEvent.change(screen.getByRole("combobox", { name: "Meal" }), { target: { value: "snacks" } });
+    fireEvent.change(screen.getByRole("combobox", { name: "Food" }), { target: { value: id } });
+    fireEvent.click(screen.getByRole("button", { name: "Log" }));
+    expect(await screen.findByText("Snacks · 380 kcal")).toBeTruthy();
+    expect(calls.add_diary_entry).toHaveBeenLastCalledWith(expect.objectContaining({ meal: "snacks" }));
+
+    const [dinner_entry] = methods.get_diary_day(today()).entries.filter((entry) => entry.meal === "dinner");
+    fireEvent.change(screen.getAllByRole("combobox", { name: "Meal of Oats (Quaker)" })[1]!, { target: { value: "lunch" } });
+    await waitFor(() => expect(calls.move_diary_entry).toHaveBeenCalledWith(dinner_entry!.id, "lunch"));
+    expect(await screen.findByText("Lunch · 760 kcal")).toBeTruthy();
+  });
+
   it("removes an entry with an Undo that puts it back", async () => {
     const { methods } = start();
     const id = methods.save_food(oats);
@@ -118,8 +145,8 @@ describe("diet diary", () => {
     const id = methods.save_food(oats);
     methods.add_diary_entry({ date: today(), kind: "food", ref_id: id, amount: 1 });
     show(["diary"]);
-    // The day's meter and the entry's row.
-    expect(await screen.findAllByText("1,590 kJ")).toHaveLength(2);
+    // The day's meter, its meal's row and the entry's row.
+    expect(await screen.findAllByText("1,590 kJ")).toHaveLength(3);
   });
 });
 
@@ -260,6 +287,21 @@ describe("diet grocery, categories and units", () => {
 });
 
 describe("diet settings", () => {
+  it("renames, reorders, adds and removes meals", async () => {
+    const { methods } = start();
+    render(<SettingsView />);
+
+    const name = await screen.findByRole("textbox", { name: "Snacks name" });
+    fireEvent.change(name, { target: { value: "Treats" } });
+    fireEvent.blur(name);
+    await waitFor(() => expect((methods.get_settings()["diet.meals"] as { name: string }[]).map((meal) => meal.name)).toEqual(["Breakfast", "Lunch", "Dinner", "Treats"]));
+
+    fireEvent.click(screen.getByRole("button", { name: "Add meal" }));
+    await waitFor(() => expect(methods.get_settings()["diet.meals"]).toHaveLength(5));
+    fireEvent.click(await screen.findByRole("button", { name: "Remove Meal 5" }));
+    await waitFor(() => expect(methods.get_settings()["diet.meals"]).toHaveLength(4));
+  });
+
   it("leaves the targets the plan follows to the plan, with no reset", async () => {
     start({ "calculators.follow_diet_targets": true, "diet.target_protein": 140, "diet.target_iron": 0.02 });
     render(<SettingsView />);
