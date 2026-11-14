@@ -1,0 +1,50 @@
+/* Layout only; the skinfold pictures take their colours from the text colour and Halon's tokens. */
+
+.skinfold-diagram {
+  display: grid;
+  gap: var(--space-3);
+  justify-items: center;
+  margin: 0;
+}
+
+.skinfold-diagram svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.skinfold-one {
+  max-width: 18rem;
+}
+
+.skinfold-many {
+  max-width: 30rem;
+}
+
+.skinfold-diagram figcaption {
+  justify-self: stretch;
+}
+
+.skinfold-diagram figcaption p {
+  margin: 0 0 var(--space-2);
+}
+
+/* The numbered list of sites runs in columns under the picture. */
+.skinfold-legend {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(9rem, 1fr));
+  gap: var(--space-1) var(--space-5);
+  margin: 0;
+  padding-left: var(--space-6);
+}
+
+/* The popover holding one site keeps to a phone's width. */
+.skinfold-where {
+  width: min(18rem, calc(100vw - 4 * var(--space-4)));
+}
+
+@media (max-width: 640px) {
+  .popover.anchored:has(> .skinfold-where) {
+    left: var(--space-4);
+  }
+}

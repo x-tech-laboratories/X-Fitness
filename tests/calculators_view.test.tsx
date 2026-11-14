@@ -94,6 +94,20 @@ describe("calculators", () => {
   });
 });
 
+describe("skinfold sites", () => {
+  it("shows every site numbered above the skinfold fields, each field carrying its number", async () => {
+    fake_page();
+    show("calculators");
+
+    const group = (await screen.findByText("Skinfolds")).closest("details")!;
+    expect(within(group).getByRole("img", { name: /^Where to pinch each skinfold on your right side/ })).toBeTruthy();
+    const legend = within(group).getAllByRole("listitem") as HTMLLIElement[];
+    expect(legend.map((item) => `${item.value} ${item.textContent}`)).toEqual(["1 Chest", "2 Belly", "3 Thigh", "4 Back of arm", "5 Above hip", "6 Side of ribs", "7 Shoulder blade"]);
+    expect(within(group).getByRole("textbox", { name: "2. Belly skinfold" })).toBeTruthy();
+    expect(within(group).getByRole("textbox", { name: "7. Shoulder blade skinfold" })).toBeTruthy();
+  });
+});
+
 describe("goals", () => {
   it("lays the page out as where I am, where I want to be and how I get there, reading sex and age only", async () => {
     fake_page();

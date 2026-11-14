@@ -11,7 +11,7 @@ import { FormRow, RowActions, Toolbar } from "@x-tech-laboratories/x-libs/web/re
 import { Empty, Loaded } from "@x-tech-laboratories/x-libs/web/react/states";
 import { DataTable, type TableColumn } from "@x-tech-laboratories/x-libs/web/react/table";
 
-import { metric_kinds, metric_roles, type BodyMetric, type MetricKind, type MetricRole } from "../../shared/body/readings.ts";
+import { metric_kinds, metric_roles, skinfold_of, type BodyMetric, type MetricKind, type MetricRole } from "../../shared/body/readings.ts";
 import type { DayRow, MetricSummary } from "../../shared/body/store.ts";
 import { attempt, calls, succeeds, use_data } from "../api.ts";
 import { DayStepper, use_day } from "../day.tsx";
@@ -19,6 +19,7 @@ import { HistoryButton } from "../history/HistoryView.tsx";
 import { confirm_delete, row_actions_column } from "../rows.tsx";
 import { format_mass, type ShownUnits } from "../units.ts";
 import { format_change, format_value, to_shown_value, to_stored_value, unit_of } from "./format.ts";
+import { SkinfoldDiagram, SkinfoldWhere } from "./SkinfoldDiagram.tsx";
 
 // ── Form ─────────────────────────────────────────────────────────────────────
 
@@ -72,6 +73,7 @@ function MetricDialog({ metric, units, on_close }: { metric: BodyMetric | null; 
   const role = roles.some(([key]) => key === draft.role) ? draft.role : "";
   const unit = unit_of({ ...draft, role }, units);
   // The list is read afresh, so moving the metric from here shows at once.
+  const fold = skinfold_of(role);
   const metrics = use_data((api) => api.list_body_metrics());
   const list = metrics.data ?? [];
   const index = metric ? list.findIndex((each) => each.id === metric.id) : -1;
@@ -121,6 +123,11 @@ function MetricDialog({ metric, units, on_close }: { metric: BodyMetric | null; 
       <FormRow label="Stands for" id="body-metric-role" hidden={roles.length < 2} hint="Body fat and girths shape the 3D body, and every role feeds the calculators; weight always does both. Skinfolds are shown in mm.">
         <Select label="Stands for" bare options={roles} value={role} on_change={(value) => update({ role: value })} />
       </FormRow>
+      {fold && (
+        <FormRow label="Where to pinch" id="body-metric-where">
+          <SkinfoldDiagram folds={[fold]} />
+        </FormRow>
+      )}
       <FormRow label="Note" id="body-metric-note">
         <textarea id="body-metric-note" rows={2} value={draft.comment} onChange={(event) => update({ comment: event.currentTarget.value })} />
       </FormRow>
@@ -150,8 +157,20 @@ function save_reading(row: ReadingRow, shown: number | null): void {
 // Previous and Goal hide on a phone, leaving each metric one line of its name, reading and Edit.
 const wide_only = "body-wide-only";
 
+// A skinfold's name carries a Where button showing the site to pinch, flowing on with the name as one line of text.
+function MetricName({ metric }: { metric: BodyMetric }) {
+  const fold = skinfold_of(metric.role);
+  const name = <span title={metric.comment || undefined}>{metric.name}</span>;
+  if (!fold) return name;
+  return (
+    <span>
+      {name} <SkinfoldWhere fold={fold} name={metric.name} />
+    </span>
+  );
+}
+
 const columns: TableColumn<ReadingRow>[] = [
-  { label: "Metric", cell: (row) => <span title={row.metric.comment || undefined}>{row.metric.name}</span> },
+  { label: "Metric", text: (row) => row.metric.name, cell: (row) => <MetricName metric={row.metric} /> },
   {
     label: "Reading",
     cell: (row) => (

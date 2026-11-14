@@ -84,6 +84,40 @@ describe("body metrics page", () => {
   });
 });
 
+describe("where to pinch a skinfold", () => {
+  it("offers the site's picture beside a skinfold metric's name, and nothing beside other metrics", async () => {
+    fake_page();
+    show(["metrics"]);
+
+    const belly = await screen.findByRole("row", { name: /Belly Skinfold/ });
+    const where = within(belly).getByRole("button", { name: "Where to pinch for Belly Skinfold" });
+    expect(where.getAttribute("aria-expanded")).toBe("false");
+    fireEvent.click(where);
+    const popover = await screen.findByRole("dialog", { name: "Where to pinch for Belly Skinfold" });
+    expect(within(popover).getByRole("img", { name: "Where to pinch the belly skinfold: a vertical fold 2 cm to the right of the navel." })).toBeTruthy();
+    expect(within(popover).getByText("Seen from the front, so your right side is on the left.")).toBeTruthy();
+    expect(where.getAttribute("aria-expanded")).toBe("true");
+    expect(within(screen.getByRole("row", { name: /Weight/ })).queryByRole("button", { name: /^Where/ })).toBeNull();
+    expect(within(screen.getByRole("row", { name: /Waist/ })).queryByRole("button", { name: /^Where/ })).toBeNull();
+  });
+
+  it("shows the site in a skinfold metric's dialog, following the role picked there", async () => {
+    fake_page();
+    show(["metrics"]);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Edit Chest Skinfold" }));
+    const dialog = await screen.findByRole("dialog", { name: "Edit Chest Skinfold" });
+    expect(within(dialog).getByRole("img", { name: /^Where to pinch the chest skinfold: a diagonal fold/ })).toBeTruthy();
+    fireEvent.change(within(dialog).getByLabelText("Stands for"), { target: { value: "skinfold_subscapular" } });
+    expect(await within(dialog).findByRole("img", { name: /^Where to pinch the shoulder blade skinfold/ })).toBeTruthy();
+    expect(within(dialog).getByText("Seen from behind, so your right side is on the right.")).toBeTruthy();
+    fireEvent.change(within(dialog).getByLabelText("Stands for"), { target: { value: "" } });
+    await waitFor(() => expect(within(dialog).queryByRole("img")).toBeNull());
+    fireEvent(dialog, new Event("cancel"));
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+  });
+});
+
 describe("body reports", () => {
   it("shows the figures, the trend chart with its goal and the history", async () => {
     const store = fake_page();

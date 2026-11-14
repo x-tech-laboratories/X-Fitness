@@ -29,6 +29,7 @@ import {
 import type { CalculationsReport } from "../../shared/calculators/store.ts";
 import { calls, succeeds, use_data } from "../api.ts";
 import { body_measures, to_shown_value, to_stored_value } from "../body/format.ts";
+import { skinfold_number, SkinfoldDiagram } from "../body/SkinfoldDiagram.tsx";
 import { UnitNumber } from "../unit_field.tsx";
 import { format_mass, type ShownUnits } from "../units.ts";
 import { activity_options, bmr_formula_options, sex_options } from "./options.ts";
@@ -381,12 +382,13 @@ function Inputs({ report, measures, changes, set_changes, units }: { report: Cal
         </div>
       </div>
       <FormGroup summary={<h3>Skinfolds</h3>} open={any_fold}>
+        <SkinfoldDiagram folds={skinfolds.map((fold) => fold.key)} />
         <div className="form-rows">
           {skinfolds.map((fold) => (
             <MeasureField
               key={fold.key}
               id={`calculator-skinfold-${fold.key}`}
-              label={`${fold.label} skinfold`}
+              label={`${skinfold_number(fold.key)}. ${fold.label} skinfold`}
               measured={body_measures.skinfold}
               value={measures.skinfolds[fold.key] ?? 0}
               units={units}
