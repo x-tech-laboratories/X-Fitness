@@ -187,7 +187,7 @@ export function DiaryTab({ data, settings, energy }: { data: DietData; settings:
   const eat_back = settings["calculators.eat_back_workouts"] === true;
   const workouts = use_data((api) => (eat_back ? api.list_workout_energy(date, date) : Promise.resolve([])), [date, eat_back]);
   const burned = (workouts.data ?? []).reduce((sum, workout) => sum + (workout.calories ?? 0), 0);
-  // The day's workouts raise its calorie target when Calculators says to eat them back.
+  // The day's workouts raise its calorie target when Workouts → Training says to eat them back.
   const day_settings = burned > 0 ? { ...settings, [target_key("calories")]: target_of(settings, "calories") + burned } : settings;
   const meals = useMemo(() => normalize_meals(settings["diet.meals"]), [settings]);
 

@@ -70,7 +70,7 @@ export function NutrientSettings({ settings, set_setting, group }: FeatureSettin
           <SettingRow
             key={info.id}
             label={`${info.label} (${unit})`}
-            hint={by_plan ? "Set by the plan on Calculators → Goals." : override === null ? undefined : `Set by hand; the preset's is ${preset_text}.`}
+            hint={by_plan ? "Set by the plan on Goals." : override === null ? undefined : `Set by hand; the preset's is ${preset_text}.`}
           >
             <div className="diet-target">
               <Switch label={`Show ${info.label}`} checked={is_shown(settings, info)} on_change={(on) => set_setting("diet.shown", with_shown(settings, info, on))} />

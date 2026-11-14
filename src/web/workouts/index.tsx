@@ -1,5 +1,5 @@
-// The Workouts section: the log, programs, the exercise library, reports and categories as pages, and its own settings
-// with the import from Liftosaur.
+// The Workouts section: the log, programs, the exercise library, reports, the training calculators and categories as
+// pages, and its own settings with the import from Liftosaur.
 
 // ── Imports ──────────────────────────────────────────────────────────────────
 
@@ -13,24 +13,27 @@ import { toast } from "@x-tech-laboratories/x-libs/web/react/toasts";
 import { workout_setting_defaults } from "../../shared/workouts/settings.ts";
 import type { WorkoutLibrary } from "../../shared/workouts/store.ts";
 import { calls, use_data, use_settings } from "../api.ts";
+import { energy_unit_of } from "../diet/format.ts";
 import type { FeaturePage, FeatureSettingsProps } from "../features.tsx";
 import { CategoriesTab } from "./CategoriesTab.tsx";
 import { ExercisesTab } from "./ExercisesTab.tsx";
 import { LogTab } from "./LogTab.tsx";
 import { ProgramsTab } from "./ProgramsTab.tsx";
 import { ReportsTab } from "./ReportsTab.tsx";
+import { TrainingTab } from "./TrainingTab.tsx";
 import { units_of } from "./units.ts";
 import "./workouts.css";
 
 // ── View ─────────────────────────────────────────────────────────────────────
 
-type TabId = "log" | "programs" | "exercises" | "reports" | "categories";
+type TabId = "log" | "programs" | "exercises" | "reports" | "training" | "categories";
 
 export const workouts_pages: (FeaturePage & { id: TabId })[] = [
   { id: "log", label: "Log" },
   { id: "programs", label: "Programs" },
   { id: "exercises", label: "Exercises" },
   { id: "reports", label: "Reports" },
+  { id: "training", label: "Training" },
   { id: "categories", label: "Categories" },
 ];
 
@@ -67,6 +70,7 @@ function tab_view(tab: TabId, data: WorkoutLibrary, values: Record<string, unkno
   if (tab === "programs") return <ProgramsTab library={data} units={units} default_rest={default_rest} />;
   if (tab === "exercises") return <ExercisesTab library={data} open_id={rest[0] && decodeURIComponent(rest[0])} />;
   if (tab === "reports") return <ReportsTab library={data} units={units} weekly_target={setting_number(values, "workouts.weekly_target")} week_start={Number(values.week_start ?? 1)} />;
+  if (tab === "training") return <TrainingTab settings={values} units={units} energy={energy_unit_of(values)} />;
   if (tab === "categories") return <CategoriesTab />;
   return <LogTab library={data} units={units} default_rest={default_rest} rest_sound={values["workouts.rest_sound"] !== false} />;
 }

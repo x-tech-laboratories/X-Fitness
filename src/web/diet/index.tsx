@@ -87,7 +87,7 @@ export function diet_settings(props: FeatureSettingsProps): SettingsSection[] {
         group.id !== "macros"
           ? undefined
           : props.settings["calculators.follow_diet_targets"] === true
-            ? "Switch a nutrient on to show it in the diary and the food editor. Calories, protein, fat and carbs follow the plan on Calculators → Goals, which sets them again after every change; the rest follow the preset unless set by hand."
+            ? "Switch a nutrient on to show it in the diary and the food editor. Calories, protein, fat and carbs follow the plan on Goals, which sets them again after every change; the rest follow the preset unless set by hand."
             : "Switch a nutrient on to show it in the diary and the food editor. A target of 0 means none; Reset goes back to the preset's.",
       content: <NutrientSettings {...props} group={group.id} />,
     })),

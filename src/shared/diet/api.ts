@@ -98,7 +98,7 @@ export const diet_api = {
   },
   get_diet_targets: {
     description:
-      "Each nutrient's daily target in force, in kcal for calories and grams for the rest, 0 meaning none: whether the page shows it, whether it is a goal to reach or a limit, what the target preset gives, and whether the target comes from the plan on Calculators → Goals, was set by hand (a diet.target_<nutrient> setting, which set_setting to null hands back to the preset) or follows the preset. Also names the nutrition label and the target preset chosen in Settings.",
+      "Each nutrient's daily target in force, in kcal for calories and grams for the rest, 0 meaning none: whether the page shows it, whether it is a goal to reach or a limit, what the target preset gives, and whether the target comes from the plan on Goals, was set by hand (a diet.target_<nutrient> setting, which set_setting to null hands back to the preset) or follows the preset. Also names the nutrition label and the target preset chosen in Settings.",
     params: [],
   },
   list_daily_totals: {

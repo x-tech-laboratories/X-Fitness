@@ -10,6 +10,7 @@ import type { PageFeature } from "./features.tsx";
 // ── Rows ─────────────────────────────────────────────────────────────────────
 
 // A feature's row has no parent; a page's row names its feature as parent and has the id "<feature>/<page>".
+// A feature with one page is only its own row.
 interface SidebarRow {
   id: string;
   parent_id: string | null;
@@ -21,7 +22,7 @@ interface SidebarRow {
 function rows_of(features: PageFeature[]): SidebarRow[] {
   return features.flatMap((feature, feature_index) => [
     { id: feature.id, parent_id: null, position: feature_index, label: feature.label, href: `#/${feature.id}` },
-    ...feature.pages.map((page, page_index) => ({ id: `${feature.id}/${page.id}`, parent_id: feature.id, position: page_index, label: page.label, href: `#/${feature.id}/${page.id}` })),
+    ...(feature.pages.length < 2 ? [] : feature.pages).map((page, page_index) => ({ id: `${feature.id}/${page.id}`, parent_id: feature.id, position: page_index, label: page.label, href: `#/${feature.id}/${page.id}` })),
   ]);
 }
 
@@ -42,8 +43,9 @@ interface SidebarProps {
 export function Sidebar({ features, section, page }: SidebarProps) {
   const [collapsed_ids, set_collapsed_ids] = use_pref("x-fitness-sidebar-collapsed", [] as string[], is_id_list);
   const collapsed = new Set(collapsed_ids);
-  // A folded feature lights up itself in place of its hidden page.
-  const selected_id = collapsed.has(section) ? section : `${section}/${page}`;
+  // A folded feature, or one with a single page, lights up itself in place of its page.
+  const single = (features.find((feature) => feature.id === section)?.pages.length ?? 0) < 2;
+  const selected_id = collapsed.has(section) || single ? section : `${section}/${page}`;
 
   return (
     <>
