@@ -28,6 +28,14 @@
   padding-inline-start: calc(var(--space-5) * var(--depth, 0));
 }
 
+/* A nutrient's switch, target and Reset in fixed columns, so every row of a settings section lines up. */
+.diet-target {
+  display: grid;
+  grid-template-columns: auto 14rem 4.5rem;
+  align-items: center;
+  gap: var(--space-3);
+}
+
 .diet-nutrient-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr));

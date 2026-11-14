@@ -76,7 +76,7 @@ export function NutrientSettings({ settings, set_setting, group }: FeatureSettin
             label={`${info.label} (${unit})`}
             hint={by_plan ? "Set by the plan on Calculators → Goals." : override === null ? undefined : `Set by hand; the preset's is ${preset_text}.`}
           >
-            <div className="diet-inline">
+            <div className="diet-target">
               <Switch label={`Show ${info.label}`} checked={is_shown(settings, info)} on_change={(on) => set_setting("diet.shown", with_shown(settings, info, on))} />
               <NumberField
                 label={`${info.label} target`}
@@ -87,7 +87,11 @@ export function NutrientSettings({ settings, set_setting, group }: FeatureSettin
                 value={field_value(to_shown_value(info, target_of(settings, info.key), energy))}
                 on_change={(shown) => void set_setting(target_key(info.key), to_stored_value(info, shown ?? 0, energy))}
               />
-              {override !== null && !by_plan && <button type="button" aria-label={`Reset ${info.label} target`} onClick={() => void set_setting(target_key(info.key), null)}>Reset</button>}
+              {override !== null && !by_plan ? (
+                <button type="button" aria-label={`Reset ${info.label} target`} onClick={() => void set_setting(target_key(info.key), null)}>Reset</button>
+              ) : (
+                <span />
+              )}
             </div>
           </SettingRow>
         );
