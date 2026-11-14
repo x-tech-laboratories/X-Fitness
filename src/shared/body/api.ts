@@ -63,7 +63,7 @@ export const body_api = {
   },
   get_body_shape: {
     description:
-      "What the 3D body is drawn from on a day: the sex from the body.sex setting, the latest height, weight, body fat and girths by role on or before the day in kg, percent and cm, the same at the body goals (each goal in place of its reading where one is set), and every day with such a reading.",
+      "What the 3D body is drawn from on a day: the sex from the body.sex setting, the latest height, weight, body fat and girths by role on or before the day in kg, percent and cm, the body at the body goals (the goal weight and body fat, or today's where there is none, and only the girths that have a goal), and every day with such a reading.",
     params: [{ name: "date", schema: day }],
   },
   list_body_goals: {

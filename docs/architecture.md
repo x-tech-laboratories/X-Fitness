@@ -106,7 +106,8 @@ logged and each metric is added or opened to edit, move or delete it; `#/body/lo
 `src/shared/body/shape.ts` morphs MakeHuman's CC0 body mesh with its sex, muscle, weight and height targets and its girth
 targets. `fit_shape` halves each slider in turn until the model's height, mass (its volume times a density from body
 fat) and girths, measured round the same vertices as MakeHuman's tape, match the readings. The muscle slider comes from
-the lean mass for the height, less the lean mass that extra fat brings with it, and is softened as body fat rises; the weight slider goes on past MakeHuman's heaviest target for a mass that needs it. Each metric's `role` says which
+the lean mass for the height, less the lean mass that extra fat brings with it, and is softened as body fat rises; the weight slider goes on past MakeHuman's heaviest target for a mass that needs it. The goal body is fitted to the goals
+alone; a girth with no goal keeps today's body's slider, so it stays as far from the usual as it is now. Each metric's `role` says which
 reading it is. The Body page's 3D tab loads the model and three.js only when opened, and fits in a Web Worker.
 It shows the body now beside the body at the goals, or the body on another day (a month back to begin with), side by
 side sharing one camera, or as an overlay where each layer has its own colour and opacity. Those looks are saved in the

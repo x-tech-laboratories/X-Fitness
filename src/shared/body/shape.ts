@@ -305,6 +305,8 @@ export interface BodyMeasures {
   body_fat: number;
   // In cm.
   girths: Partial<Record<Girth, number>>;
+  // The body whose build the girths left out here keep, as the goal body keeps today's.
+  like?: BodyMeasures;
 }
 
 // Both sets of measures, each taking a reading only the other holds as unchanged, so two days differ only where both were measured.
@@ -381,9 +383,12 @@ function solve(low: number, high: number, measure: (value: number) => number, go
 // The shape whose height, mass and girths come nearest the measures, each pass refining the others' fit.
 export function fit_shape(model: BodyModel, measures: BodyMeasures): BodyFit {
   const sex = measures.sex === "female" ? 0 : measures.sex === "male" ? 1 : 0.5;
-  const parameters: ShapeParameters = { sex, muscle: muscle_from(measures, sex), weight: 0.5, height: 0.5, girths: {} };
-  const positions = new Float32Array(model.positions.length);
   const wanted_girths = (Object.entries(measures.girths) as [Girth, number][]).filter(([, value]) => value > 0);
+  // A girth kept from the other body stays as far from the usual as it is there, whatever the weight here makes of it.
+  const like = measures.like ? fit_shape(model, { ...measures.like, like: undefined }).parameters.girths : {};
+  const kept_girths = Object.fromEntries(Object.entries(like).filter(([girth]) => !(measures.girths[girth as Girth]! > 0)));
+  const parameters: ShapeParameters = { sex, muscle: muscle_from(measures, sex), weight: 0.5, height: 0.5, girths: kept_girths };
+  const positions = new Float32Array(model.positions.length);
   const loops = new Map(wanted_girths.map(([girth]) => [girth, part_of(model, loop_vertices(girth))]));
   const density = body_density(measures.body_fat > 0 ? measures.body_fat : usual_body_fat(sex));
   const height_at = () => height_of_positions(shape_positions(model, parameters, positions));

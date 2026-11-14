@@ -169,7 +169,7 @@ describe("the 3D body's readings", () => {
 
     const shape = body.get_body_shape("2026-11-04");
     expect(shape.measures).toEqual({ sex: "male", height: 180, mass: 85, body_fat: 0, girths: { neck: 0, chest: 0, waist: 92, hips: 0, upper_arm: 0, thigh: 0 } });
-    expect(shape.goal).toMatchObject({ mass: 85, girths: { waist: 84 } });
+    expect(shape.goal).toEqual({ sex: "male", height: 180, mass: 85, body_fat: 0, girths: { waist: 84 } });
     expect(shape.days).toEqual(["2026-11-01", "2026-11-05"]);
   });
 });

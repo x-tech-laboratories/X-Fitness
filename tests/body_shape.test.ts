@@ -53,6 +53,18 @@ describe("the 3D body", () => {
     expect(fit.lines.find((line) => line.name === "mass")!.reached).toBeCloseTo(108.86, 0);
   });
 
+  it("keeps another body's build for the girths it is not given, in place of that body's centimetres", () => {
+    const now = { sex: "male", height: 186.69, mass: 108.86, body_fat: 28, girths: { waist: 110.5, hips: 115.6, neck: 43.2 } } as const;
+    const now_fit = fit_shape(model, now);
+    const goal_fit = fit_shape(model, { sex: "male", height: 186.69, mass: 95, body_fat: 15, girths: { waist: 82 }, like: now });
+
+    expect(goal_fit.parameters.girths.hips).toBe(now_fit.parameters.girths.hips);
+    expect(goal_fit.parameters.girths.neck).toBe(now_fit.parameters.girths.neck);
+    expect(goal_fit.lines.map((line) => line.name)).toEqual(["height", "mass", "waist"]);
+    expect(girth_of_positions(shape_positions(model, goal_fit.parameters), "hips")).toBeLessThan(110);
+    expect(goal_fit.lines.find((line) => line.name === "waist")!.reached).toBeCloseTo(82, 0);
+  });
+
   it("stops at the furthest shape it can make and says how near it came", () => {
     const fit = fit_shape(model, { sex: "female", height: 165, mass: 0, body_fat: 0, girths: { wrist: 40 } });
     const wrist = fit.lines.find((line) => line.name === "wrist")!;

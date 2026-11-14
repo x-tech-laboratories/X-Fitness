@@ -66,7 +66,8 @@ describe("body goals", () => {
 
     const shape = store.get_body_shape("2026-11-10");
     expect(shape.measures).toMatchObject({ mass: 80, girths: { waist: 90, upper_arm: 35 } });
-    expect(shape.goal).toMatchObject({ mass: 75, girths: { waist: 84, upper_arm: 38, chest: 0 } });
+    expect(shape.goal).toMatchObject({ mass: 75, girths: { waist: 84, upper_arm: 38 } });
+    expect(shape.goal.girths.chest).toBeUndefined();
   });
 
   it("puts a goal with no metric for it into the 3D goal body", () => {

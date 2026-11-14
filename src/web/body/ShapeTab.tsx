@@ -231,7 +231,9 @@ function ShapeView({ shape, units, saved_looks, playing, on_date, on_play }: Sha
   const then_measures = then_last.current?.measures ?? null;
   const [now_measures, day_measures] = compared === "day" && then_measures ? shared_measures(shape.measures, then_measures) : [shape.measures, then_measures];
   const now = use_fit(now_measures);
-  const other = use_fit(compared === "day" ? day_measures : shape.goal);
+  // The goal body keeps today's build wherever a girth has no goal.
+  const goal_measures = useMemo(() => ({ ...shape.goal, like: shape.measures }), [shape]);
+  const other = use_fit(compared === "day" ? day_measures : goal_measures);
   const missing = [shape.measures.height > 0 ? "" : "log a height on the metric with the Height role", shape.measures.sex ? "" : "set your sex"].filter(Boolean);
 
   // The second body is the goal body or the body on the compared day, each with its own look.

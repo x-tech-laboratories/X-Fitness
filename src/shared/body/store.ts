@@ -192,18 +192,18 @@ function body_shape(database: SqlDatabase, date: string): BodyShape {
   const measures: BodyMeasures = { sex, height, mass: 0, body_fat: 0, girths: {} };
   const goal: BodyMeasures = { sex, height, mass: 0, body_fat: 0, girths: {} };
   const shaping: string[] = [];
-  // A goal shapes the goal body even without a metric; the reading fills in where there is no goal.
-  const take = (metric: BodyMetric | undefined, key: BodyGoalKey, put: (into: BodyMeasures, value: number) => void) => {
+  // A goal shapes the goal body even without a metric; today's weight and body fat fill in for theirs, a girth without a goal is left out.
+  const take = (metric: BodyMetric | undefined, key: BodyGoalKey, kept_without_goal: boolean, put: (into: BodyMeasures, value: number) => void) => {
     if (metric) shaping.push(metric.id);
     const latest = metric ? (latest_on_or_before(database, metric.id, date)?.value ?? 0) : 0;
     if (metric) put(measures, latest);
-    const target = goals[key] ?? latest;
-    if (metric || target > 0) put(goal, target);
+    const target = goals[key] ?? (kept_without_goal ? latest : 0);
+    if (target > 0 || (metric && kept_without_goal)) put(goal, target);
   };
-  take(weight_metric(metrics), "weight", (into, value) => (into.mass = value));
-  take(metrics.find((metric) => metric.role === "body_fat"), "body_fat", (into, value) => (into.body_fat = value));
+  take(weight_metric(metrics), "weight", true, (into, value) => (into.mass = value));
+  take(metrics.find((metric) => metric.role === "body_fat"), "body_fat", true, (into, value) => (into.body_fat = value));
   for (const girth of girths) {
-    take(metrics.find((metric) => metric.role === girth && metric.kind === "length"), girth, (into, value) => (into.girths[girth as Girth] = value));
+    take(metrics.find((metric) => metric.role === girth && metric.kind === "length"), girth, false, (into, value) => (into.girths[girth as Girth] = value));
   }
   const days = shaping.length
     ? drizzle_of(database).selectDistinct({ date: body_readings.date }).from(body_readings).where(inArray(body_readings.metric_id, shaping)).orderBy(asc(body_readings.date)).all()
