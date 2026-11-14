@@ -66,25 +66,40 @@ export function NutrientSettings({ settings, set_setting, group }: FeatureSettin
         const override = target_override(settings, info.key);
         const preset = preset_target(settings, info.key);
         const by_plan = target_source(settings, info.key) === "plan";
+        // A target the plan follows is set again after every change, so it is shown but not edited here.
+        const follows_plan = plan_keys(settings).includes(info.key);
         const preset_text = preset > 0 ? format_nutrient(info, preset, energy) : "none";
+        const target = target_of(settings, info.key);
         return (
           <SettingRow
             key={info.id}
             label={`${info.label} (${unit})`}
-            hint={by_plan ? "Set by the plan on Goals." : override === null ? undefined : `Set by hand; the preset's is ${preset_text}.`}
+            hint={
+              follows_plan ? (
+                <>
+                  Follows the plan on <a href="#/goals">Goals</a>.{by_plan ? "" : ` Until the plan has the readings it needs, the preset's ${preset_text}.`}
+                </>
+              ) : override === null ? undefined : (
+                `Set by hand; the preset's is ${preset_text}.`
+              )
+            }
           >
             <div className="diet-target">
               <Switch label={`Show ${info.label}`} checked={is_shown(settings, info)} on_change={(on) => set_setting("diet.shown", with_shown(settings, info, on))} />
-              <NumberField
-                label={`${info.label} target`}
-                bare
-                min={0}
-                step={info.shown === "g" ? 5 : info.shown === "energy" ? 50 : 1}
-                unit={unit}
-                value={field_value(to_shown_value(info, target_of(settings, info.key), energy))}
-                on_change={(shown) => void set_setting(target_key(info.key), to_stored_value(info, shown ?? 0, energy))}
-              />
-              {override !== null && !by_plan ? (
+              {follows_plan ? (
+                <span className="number" aria-label={`${info.label} target`}>{target > 0 ? format_nutrient(info, target, energy) : "None"}</span>
+              ) : (
+                <NumberField
+                  label={`${info.label} target`}
+                  bare
+                  min={0}
+                  step={info.shown === "g" ? 5 : info.shown === "energy" ? 50 : 1}
+                  unit={unit}
+                  value={field_value(to_shown_value(info, target, energy))}
+                  on_change={(shown) => void set_setting(target_key(info.key), to_stored_value(info, shown ?? 0, energy))}
+                />
+              )}
+              {override !== null && !follows_plan ? (
                 <button type="button" aria-label={`Reset ${info.label} target`} onClick={() => void set_setting(target_key(info.key), null)}>Reset</button>
               ) : (
                 <span />

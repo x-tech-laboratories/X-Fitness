@@ -105,7 +105,7 @@ describe("the training store", () => {
     open_store(database);
     const store = bind_methods(() => database, () => undefined);
     store.set_setting("body.sex", "male");
-    store.set_setting("body.height", 180);
+    store.set_body_reading("height", "2026-01-01", 180);
     store.set_setting("body.birth_date", "1996-01-01");
     store.set_body_reading("weight", "2026-11-01", 80);
     store.set_body_reading("restinghr", "2026-11-01", 60);

@@ -333,13 +333,17 @@ describe("diet settings", () => {
     await waitFor(() => expect(methods.get_settings()["diet.meals"]).toHaveLength(4));
   });
 
-  it("leaves the targets the plan follows to the plan, with no reset", async () => {
+  it("shows the targets the plan follows without a field or a reset, pointing at Goals", async () => {
     start({ "calculators.follow_diet_targets": true, "diet.target_protein": 140, "diet.target_iron": 0.02 });
     render(<SettingsView />);
 
-    expect(((await screen.findByRole("textbox", { name: "Protein target" })) as HTMLInputElement).value).toBe("140");
+    expect((await screen.findByLabelText("Protein target")).textContent).toBe("140 g");
+    expect(screen.queryByRole("textbox", { name: "Protein target" })).toBeNull();
+    expect(screen.queryByRole("textbox", { name: "Calories target" })).toBeNull();
+    expect(screen.getByRole("textbox", { name: "Iron target" })).toBeTruthy();
+    expect(screen.getAllByRole("link", { name: "Goals" }).filter((link) => link.getAttribute("href") === "#/goals")).toHaveLength(4);
     // Only protein has a value from the plan; without body readings the rest still follow the preset.
-    expect(screen.getAllByText("Set by the plan on Goals.")).toHaveLength(1);
+    expect(screen.getAllByText(/Until the plan has the readings it needs/)).toHaveLength(3);
     expect(screen.queryByRole("button", { name: "Reset Protein target" })).toBeNull();
     expect(screen.getByRole("button", { name: "Reset Iron target" })).toBeTruthy();
     expect(screen.getByText("Custom: 1 target(s) set by hand.")).toBeTruthy();

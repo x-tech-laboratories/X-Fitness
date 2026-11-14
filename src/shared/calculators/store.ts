@@ -1,12 +1,12 @@
 // Calculators: BMI, body fat, lean mass and daily energy worked out from the latest body readings, the diary and settings,
-// the goals a plan gives, written once or kept following it into the body metrics' goals and the diet's targets, and
-// the training numbers from the workout log: one-rep maxes, strength scores, heart zones, runs and workout energy.
+// the daily targets a plan gives, written once or kept following it into the diet's targets, and the training numbers
+// from the workout log: one-rep maxes, strength scores, heart zones, runs and workout energy.
 
 // ── Imports ──────────────────────────────────────────────────────────────────
 
 import { format_local } from "@x-tech-laboratories/x-libs/dates";
 import { between, eq } from "@x-tech-laboratories/x-libs/drizzle";
-import type { SqlDatabase } from "@x-tech-laboratories/x-libs/sql";
+import { in_transaction, type SqlDatabase } from "@x-tech-laboratories/x-libs/sql";
 
 import { shift_day, skinfold_of, type BodyMetric, type MetricRole, type Point } from "../body/readings.ts";
 import { body_metrics } from "../body/schema.ts";
@@ -24,7 +24,6 @@ import { calculators_api } from "./api.ts";
 import {
   activity_of,
   age_on,
-  body_goal_keys,
   bmr_formula_of,
   calculate,
   change_per_day,
@@ -32,7 +31,10 @@ import {
   goal_progress,
   measured_energy,
   plan_goals,
+  round_to,
   sex_of,
+  weight_at_bmi,
+  weight_at_body_fat,
   type Calculations,
   type GoalProgress,
   type MeasuredEnergy,
@@ -43,6 +45,7 @@ import {
 } from "./formulas.ts";
 import { calculators_setting_defaults } from "./settings.ts";
 import {
+  bar_and_plates,
   karvonen_zones,
   max_heart_rate,
   one_rep_maxes,
@@ -64,28 +67,30 @@ export interface MeasureSource {
   reading: Point | null;
 }
 
-// A goal from the plan beside the one set now, and where it is kept.
+// A daily target from the plan beside the one in force now.
 export interface CalculatedGoal extends PlannedGoal {
-  // The goal or target set now, null when there is none.
+  // The target in force now, null when there is none.
   current: number | null;
-  // The metric whose goal it is, or "diet" for a diet target; null when there is no metric to hold it.
-  holder: { metric_id: string; metric_name: string } | "diet" | null;
 }
 
 export interface CalculationsReport {
   date: string;
   birth_date: string;
   measures: Measures;
-  // By measure, such as weight, body_fat, waist or skinfold_thigh.
+  // By measure, such as weight, height, body_fat, waist or skinfold_thigh; each metric's goal is the body goal.
   sources: Record<string, MeasureSource>;
   calculations: Calculations;
   plan: GoalPlan;
+  // The diet's daily targets from the plan.
   goals: CalculatedGoal[];
-  following: { body: boolean; diet: boolean };
+  // Whether the diet's targets follow the plan after every change.
+  following_diet: boolean;
   // The energy burned a day by the diary and the weight trend, null without enough of either.
   measured: MeasuredEnergy | null;
   measured_days: number;
   energy_source: "formula" | "measured";
+  // Kilograms a week by the weight readings over the measured days, null without two a week apart.
+  weight_trend: number | null;
   // The weight against its goal, and the weeks left at the trend's and the plan's pace.
   progress: GoalProgress | null;
 }
@@ -151,9 +156,6 @@ function number_setting(database: SqlDatabase, key: string): number {
 
 function plan_of(database: SqlDatabase): GoalPlan {
   return {
-    body_fat: number_setting(database, "calculators.goal_body_fat"),
-    bmi: number_setting(database, "calculators.goal_bmi"),
-    waist_to_height: number_setting(database, "calculators.goal_waist_to_height"),
     weekly_change: number_setting(database, "calculators.weekly_change"),
     protein_per_kg: number_setting(database, "calculators.protein_per_kg"),
     fat_percent: number_setting(database, "calculators.fat_percent"),
@@ -182,7 +184,7 @@ function report(database: SqlDatabase, date: string): CalculationsReport {
   const measures: Measures = {
     sex: sex_of(setting_of(database, "body.sex")),
     age: age_on(birth_date, date),
-    height: number_setting(database, "body.height"),
+    height: latest("height"),
     weight: latest("weight"),
     body_fat: latest("body_fat"),
     neck: latest("neck"),
@@ -207,11 +209,12 @@ function report(database: SqlDatabase, date: string): CalculationsReport {
   const measured = measured_energy(intake, weights);
   const energy_source = setting_of(database, "calculators.energy_source") === "measured" ? "measured" : "formula";
   const measured_tdee = energy_source === "measured" ? (measured?.tdee ?? null) : null;
-  const goals = plan_goals(measures, calculations, plan, measured_tdee).map((goal) => with_holder(database, goal, sources));
-  const following = { body: setting_of(database, "calculators.follow_body_goals") === true, diet: setting_of(database, "calculators.follow_diet_targets") === true };
+  const goals = plan_goals(measures, calculations, plan, measured_tdee).map((goal) => with_current(database, goal));
+  const following_diet = setting_of(database, "calculators.follow_diet_targets") === true;
   const trend = change_per_day(weights);
-  const progress = goal_progress(measures.weight, sources.weight?.metric.goal ?? 0, trend === null ? null : trend * 7, plan.weekly_change);
-  return { date, birth_date, measures, sources, calculations, plan, goals, following, measured, measured_days: window_days, energy_source, progress };
+  const weight_trend = trend === null ? null : trend * 7;
+  const progress = goal_progress(measures.weight, sources.weight?.metric.goal ?? 0, weight_trend, plan.weekly_change);
+  return { date, birth_date, measures, sources, calculations, plan, goals, following_diet, measured, measured_days: window_days, energy_source, weight_trend, progress };
 }
 
 // ── Training ─────────────────────────────────────────────────────────────────
@@ -302,17 +305,8 @@ function list_workout_energy(database: SqlDatabase, from: string, to: string): W
   return load_workouts(database, between(workouts.date, from, to)).map((workout) => workout_energy(database, workout, by_id, running_id));
 }
 
-const kg_a_pound = 0.45359237;
-
 function plates_of(database: SqlDatabase): { bar: number; plates: number[] } {
-  const pounds = setting_of(database, "mass_unit") === "lb";
-  const bar = number_setting(database, "calculators.bar_weight");
-  const raw = setting_of(database, "calculators.plates");
-  const chosen = Array.isArray(raw) ? raw.map(Number).filter((plate) => plate > 0) : [];
-  return {
-    bar: bar > 0 ? bar : pounds ? 45 * kg_a_pound : 20,
-    plates: chosen.length ? chosen : pounds ? [45, 35, 25, 10, 5, 2.5].map((plate) => plate * kg_a_pound) : [25, 20, 15, 10, 5, 2.5, 1.25],
-  };
+  return bar_and_plates(setting_of(database, "mass_unit"), setting_of(database, "calculators.bar_weight"), setting_of(database, "calculators.plates"));
 }
 
 function training_report(database: SqlDatabase, date: string): TrainingReport {
@@ -358,43 +352,71 @@ function training_report(database: SqlDatabase, date: string): TrainingReport {
   };
 }
 
-function with_holder(database: SqlDatabase, goal: PlannedGoal, sources: Record<string, MeasureSource>): CalculatedGoal {
-  if (diet_goal_keys.includes(goal.key)) {
-    // The target in force, the preset's when none was set by hand or by the plan.
-    const key = goal.key as NutrientKey;
-    const current = target_of({ "diet.targets": setting_of(database, "diet.targets"), [target_key(key)]: setting_of(database, target_key(key)) }, key);
-    return { ...goal, current: current > 0 ? current : null, holder: "diet" };
-  }
-  const metric = sources[goal.key]?.metric;
-  if (!metric) return { ...goal, current: null, holder: null };
-  return { ...goal, current: metric.goal > 0 ? metric.goal : null, holder: { metric_id: metric.id, metric_name: metric.name } };
+// The target in force, the preset's when none was set by hand or by the plan.
+function with_current(database: SqlDatabase, goal: PlannedGoal): CalculatedGoal {
+  const key = goal.key as NutrientKey;
+  const current = target_of({ "diet.targets": setting_of(database, "diet.targets"), [target_key(key)]: setting_of(database, target_key(key)) }, key);
+  return { ...goal, current: current > 0 ? current : null };
 }
 
 // ── Writing ──────────────────────────────────────────────────────────────────
 
-// Sets each goal named that has a value and somewhere to go, leaving those already equal; gives how many changed.
+// Sets each daily target named that has a value, leaving those already equal; gives how many changed.
 function apply_goals(database: SqlDatabase, keys: GoalKey[], date: string): number {
   let changed = 0;
   for (const goal of report(database, date).goals) {
-    if (!keys.includes(goal.key) || goal.value === null || goal.holder === null) continue;
+    if (!keys.includes(goal.key) || goal.value === null) continue;
     if (goal.current !== null && Math.abs(goal.current - goal.value) < 1e-6) continue;
-    if (goal.holder === "diet") {
-      database.prepare("INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT (key) DO UPDATE SET value = excluded.value").run(`diet.target_${goal.key}`, JSON.stringify(goal.value));
-    } else {
-      drizzle_of(database).update(body_metrics).set({ goal: goal.value }).where(eq(body_metrics.id, goal.holder.metric_id)).run();
-    }
+    database.prepare("INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT (key) DO UPDATE SET value = excluded.value").run(`diet.target_${goal.key}`, JSON.stringify(goal.value));
     changed += 1;
   }
   return changed;
 }
 
-// After every change, the goals turned on to follow the plan are brought up to date with it.
+function today_here(): string {
+  return format_local(new Date(), false);
+}
+
+// After every change, the diet's targets are brought up to date with the plan while they follow it.
 function follow_plan(database: SqlDatabase): void {
-  const keys = [
-    ...(setting_of(database, "calculators.follow_body_goals") === true ? body_goal_keys : []),
-    ...(setting_of(database, "calculators.follow_diet_targets") === true ? diet_goal_keys : []),
-  ];
-  if (keys.length > 0) apply_goals(database, keys, format_local(new Date(), false));
+  if (setting_of(database, "calculators.follow_diet_targets") === true) apply_goals(database, diet_goal_keys, today_here());
+}
+
+// ── Carrying over ────────────────────────────────────────────────────────────
+
+// The plan's body targets as they were once stored as settings, before the goals became the metrics' own.
+const old_body_plan = { body_fat: "calculators.goal_body_fat", bmi: "calculators.goal_bmi", waist_to_height: "calculators.goal_waist_to_height", follow: "calculators.follow_body_goals" };
+
+// Writes the goals an old stored body plan gave into the weight, body fat and waist metrics that have none, then drops
+// the old settings, so it does its work once and running it again changes nothing.
+export function carry_over_body_goals(database: SqlDatabase): void {
+  const stored = new Map(
+    (database.prepare(`SELECT key, value FROM settings WHERE key IN (${Object.values(old_body_plan).map(() => "?").join(", ")})`).all(...Object.values(old_body_plan)) as { key: string; value: string }[]).map((row) => [
+      row.key,
+      Number(JSON.parse(row.value)),
+    ]),
+  );
+  if (stored.size === 0) return;
+  const old = (key: string, fallback: number) => (Number.isFinite(stored.get(key)) ? stored.get(key)! : fallback);
+  const body_fat = old(old_body_plan.body_fat, 0);
+  const bmi = old(old_body_plan.bmi, 22);
+  const waist_to_height = old(old_body_plan.waist_to_height, 0.5);
+  const { measures, calculations, sources } = report(database, today_here());
+  const lean = calculations.composition?.lean_mass ?? 0;
+  const weight = (body_fat > 0 ? weight_at_body_fat(lean, body_fat) : null) ?? weight_at_bmi(bmi, measures.height);
+  const goals: Record<string, number | null> = {
+    weight: weight === null ? null : round_to(weight, 0.1),
+    body_fat: body_fat > 0 ? body_fat : null,
+    waist: waist_to_height > 0 && measures.height > 0 ? round_to(waist_to_height * measures.height, 0.1) : null,
+  };
+  in_transaction(database, () => {
+    for (const [measure, goal] of Object.entries(goals)) {
+      const metric = sources[measure]?.metric;
+      if (goal === null || !metric || metric.goal > 0) continue;
+      drizzle_of(database).update(body_metrics).set({ goal }).where(eq(body_metrics.id, metric.id)).run();
+    }
+    for (const key of stored.keys()) database.prepare("DELETE FROM settings WHERE key = ?").run(key);
+  });
 }
 
 function check_day(date: unknown): string {
@@ -421,4 +443,5 @@ export const calculators_feature = define_feature({
   api: calculators_api,
   setting_defaults: calculators_setting_defaults,
   after_write: follow_plan,
+  on_open: carry_over_body_goals,
 });

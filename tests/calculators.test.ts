@@ -10,6 +10,9 @@ import {
   calculate,
   composition,
   navy_body_fat,
+  body_fat_needs,
+  daily_energy_change,
+  missing_needs,
   plan_goals,
   weight_at_body_fat,
   type GoalPlan,
@@ -33,7 +36,7 @@ const someone: Measures = {
   bmr_formula: "mifflin_st_jeor",
 };
 
-const plan: GoalPlan = { body_fat: 0, bmi: 22, waist_to_height: 0.5, weekly_change: -0.5, protein_per_kg: 2, fat_percent: 25 };
+const plan: GoalPlan = { weekly_change: -0.5, protein_per_kg: 2, fat_percent: 25 };
 
 describe("the fitness formulas", () => {
   it("takes whole years of age, counting the birthday itself", () => {
@@ -93,20 +96,22 @@ describe("the fitness formulas", () => {
     expect(without_sex.tdee).toBeCloseTo((1780 - 83) * 1.375);
   });
 
-  it("plans the goals from the measures, by body fat over BMI when both can", () => {
-    const by_bmi = plan_goals(someone, calculate({ ...someone, neck: 0 }), plan);
-    expect(by_bmi.map((goal) => [goal.key, goal.value])).toEqual([
-      ["weight", 71.3],
-      ["body_fat", null],
-      ["waist", 90],
+  it("plans the daily targets from the measures and the weekly change", () => {
+    const goals = plan_goals(someone, calculate({ ...someone, neck: 0 }), plan);
+    expect(goals.map((goal) => [goal.key, goal.value])).toEqual([
       ["calories", 1900],
       ["protein", 160],
       ["fat", 53],
       ["carbs", 196],
     ]);
-    const by_body_fat = plan_goals({ ...someone, body_fat: 20 }, calculate({ ...someone, body_fat: 20 }), { ...plan, body_fat: 15 });
-    expect(by_body_fat[0]).toMatchObject({ key: "weight", value: 75.3 });
-    expect(by_body_fat[1]).toMatchObject({ key: "body_fat", value: 15 });
+    expect(daily_energy_change(-0.5)).toBeCloseTo(-550);
+  });
+
+  it("names only the measures a body fat method still lacks", () => {
+    expect(missing_needs(body_fat_needs("navy", "female"), { ...someone, sex: "female" })).toEqual(["hips"]);
+    expect(missing_needs(body_fat_needs("jackson_pollock_3", "male"), { ...someone, skinfolds: { chest: 1 } })).toEqual(["abdomen", "thigh"]);
+    expect(missing_needs(body_fat_needs("bmi", ""), { ...someone, sex: "", age: 0 })).toEqual(["sex", "age"]);
+    expect(missing_needs(body_fat_needs("reading", "male"), someone)).toEqual(["body_fat"]);
   });
 });
 
@@ -133,7 +138,7 @@ describe("the calculators store", () => {
     open_store(database);
     const store = bind_methods(() => database, () => undefined);
     store.set_setting("body.sex", "male");
-    store.set_setting("body.height", 180);
+    store.set_body_reading("height", "2026-01-01", 180);
     store.set_setting("body.birth_date", "1996-01-01");
     store.set_body_reading("weight", "2026-11-10", 80);
     store.set_body_reading("neck", "2026-11-01", 40);
@@ -141,15 +146,17 @@ describe("the calculators store", () => {
     return store;
   }
 
-  it("works out from the latest readings by role and the settings", () => {
+  it("works out from the latest readings by role, the height a reading too, and the settings", () => {
     const store = open();
     const report = store.get_calculations("2026-11-13");
 
     expect(report.measures).toMatchObject({ sex: "male", age: 30, height: 180, weight: 80, neck: 40, waist: 90, activity: "light" });
     expect(report.sources.weight?.reading).toEqual({ date: "2026-11-10", value: 80 });
+    expect(report.sources.height?.reading).toEqual({ date: "2026-01-01", value: 180 });
+    expect(report.calculations.bmi).toBeCloseTo(80 / 1.8 ** 2);
     expect(report.calculations.navy_body_fat).toBeCloseTo(18.36, 1);
-    expect(report.goals.find((goal) => goal.key === "waist")).toMatchObject({ value: 90, current: null, holder: { metric_id: "waist" } });
-    expect(report.goals.find((goal) => goal.key === "calories")).toMatchObject({ current: 2000, holder: "diet" });
+    expect(report.goals.find((goal) => goal.key === "calories")).toMatchObject({ current: 2000 });
+    expect(store.get_calculations("2025-12-31").measures.height).toBe(0);
   });
 
   it("reads skinfolds from metrics with a skinfold role", () => {
@@ -165,22 +172,20 @@ describe("the calculators store", () => {
     expect(report.calculations.jackson_pollock_3).toBeCloseTo(13.6, 1);
   });
 
-  it("sets the goals named once, and only those that differ", () => {
+  it("sets the daily targets named once, and only those that differ", () => {
     const store = open();
 
-    expect(store.apply_calculated_goals(["weight", "waist", "calories", "protein"], "2026-11-13")).toBe(4);
-    expect(store.list_body_metrics().find((metric) => metric.id === "weight")?.goal).toBeCloseTo(71.3);
-    expect(store.list_body_metrics().find((metric) => metric.id === "waist")?.goal).toBe(90);
+    expect(store.apply_calculated_goals(["calories", "protein"], "2026-11-13")).toBe(2);
     expect(store.get_settings()["diet.target_calories"]).toBeGreaterThan(2000);
     // Fat was not named, so it still follows the target preset, while the plan's protein overrides any preset.
     expect(store.get_settings()["diet.target_fat"]).toBeUndefined();
     store.set_setting("diet.targets", "eu");
     expect(target_of(store.get_settings(), "protein")).toBe(store.get_settings()["diet.target_protein"]);
     expect(target_of(store.get_settings(), "fat")).toBe(70);
-    expect(store.apply_calculated_goals(["weight", "waist"], "2026-11-13")).toBe(0);
+    expect(store.apply_calculated_goals(["calories", "protein"], "2026-11-13")).toBe(0);
   });
 
-  it("keeps the turned-on goals following the plan after every change, and leaves the rest", () => {
+  it("keeps the diet's targets following the plan after every change, and leaves the body goals alone", () => {
     const store = open();
     store.set_setting("calculators.follow_diet_targets", true);
     const calories = store.get_settings()["diet.target_calories"] as number;
@@ -189,7 +194,28 @@ describe("the calculators store", () => {
 
     expect(store.get_settings()["diet.target_calories"]).toBeGreaterThan(calories);
     expect(store.list_body_metrics().find((metric) => metric.id === "weight")?.goal).toBe(0);
-    store.set_setting("calculators.follow_body_goals", true);
-    expect(store.list_body_metrics().find((metric) => metric.id === "weight")?.goal).toBeCloseTo(71.3);
+  });
+
+  it("carries an old stored body plan over into the metrics' goals once, keeping goals already set", () => {
+    const database = new DatabaseSync(":memory:");
+    open_store(database);
+    const store = bind_methods(() => database, () => undefined);
+    store.set_setting("body.sex", "male");
+    store.set_setting("body.birth_date", "1996-01-01");
+    store.set_body_reading("height", "2026-01-01", 180);
+    store.set_body_reading("weight", "2026-11-10", 80);
+    store.save_body_metric({ id: "waist", name: "Waist", kind: "length", role: "waist", goal: 85 });
+    for (const [key, value] of [["calculators.goal_bmi", 22], ["calculators.goal_waist_to_height", 0.45], ["calculators.follow_body_goals", true]] as const) {
+      database.prepare("INSERT INTO settings (key, value) VALUES (?, ?)").run(key, JSON.stringify(value));
+    }
+
+    open_store(database);
+    const goals = () => Object.fromEntries(store.list_body_metrics().map((metric) => [metric.id, metric.goal]));
+    expect(goals()).toMatchObject({ weight: 71.3, bodyfat: 0, waist: 85 });
+    expect(store.get_settings()["calculators.goal_bmi"]).toBeUndefined();
+
+    store.save_body_metric({ id: "weight", name: "Weight", kind: "weight", goal: 0 });
+    open_store(database);
+    expect(goals()).toMatchObject({ weight: 0, waist: 85 });
   });
 });

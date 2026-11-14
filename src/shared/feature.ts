@@ -27,6 +27,8 @@ export interface Feature<Methods extends Record<string, StoreMethod>> {
   setting_defaults?: Record<string, unknown>;
   // Runs after every write the page, API or MCP makes, before history records it, such as goals that follow a plan.
   after_write?: (database: SqlDatabase) => void;
+  // Runs each time the database opens, after every migration, for upgrades that need more than SQL; it must change nothing the second time.
+  on_open?: (database: SqlDatabase) => void;
 }
 
 export function define_feature<Methods extends Record<string, StoreMethod>>(feature: Feature<Methods>): Feature<Methods> {
