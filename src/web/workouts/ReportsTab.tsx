@@ -21,6 +21,7 @@ import type { ShownUnits } from "../units.ts";
 import { ExerciseSelect } from "./controls.tsx";
 import { field_to_shown, format_field, format_weight } from "./units.ts";
 import { format_metric, meets_target, week_metrics, WeeklyWorkoutsChart, type FigureKind, type WeekMetric } from "./weekly_chart.tsx";
+import { WorkoutEnergy } from "./WorkoutEnergy.tsx";
 
 // ── Wording ──────────────────────────────────────────────────────────────────
 
@@ -288,6 +289,7 @@ export function ReportsTab({ library, units, weekly_target, week_start, today }:
           <Section title="Personal Bests">
             {data.bests.length === 0 ? <Empty title="Nothing logged yet." /> : <DataTable columns={best_columns} rows={data.bests} row_key={(row) => row.exercise.id} />}
           </Section>
+          <WorkoutEnergy units={units} />
         </Stack>
       )}
     </Loaded>

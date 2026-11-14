@@ -1,17 +1,17 @@
-// The Training tab: one-rep maxes and the weights at each share of one, strength scores, the plates on a bar,
-// heart-rate zones, VO2max and race times, and the energy each workout burned, all from the workout log and readings.
+// The Training page's calculators from the workout log and readings: for strength, one-rep maxes with the weights at
+// each share of one, strength scores and the plates on a bar; for cardio, heart-rate zones, VO2max and race times.
 
 // ── Imports ──────────────────────────────────────────────────────────────────
 
 import { useState } from "react";
 import { today } from "@x-tech-laboratories/x-libs/dates";
-import { format_measure, format_number, type EnergyUnit } from "@x-tech-laboratories/x-libs/units";
-import { CommitInput, NumberField, Select, Switch } from "@x-tech-laboratories/x-libs/web/react/controls";
-import { Card, Cards, Facts, FormRow, Section, SettingRow } from "@x-tech-laboratories/x-libs/web/react/layout";
-import { Empty, Loaded } from "@x-tech-laboratories/x-libs/web/react/states";
+import { format_number } from "@x-tech-laboratories/x-libs/units";
+import { NumberField, Select } from "@x-tech-laboratories/x-libs/web/react/controls";
+import { Card, Cards, Facts, FormRow, Section } from "@x-tech-laboratories/x-libs/web/react/layout";
+import { Loaded } from "@x-tech-laboratories/x-libs/web/react/states";
 import { DataTable, type TableColumn } from "@x-tech-laboratories/x-libs/web/react/table";
 
-import type { BigLift, TrainingReport, WorkoutEnergy } from "../../shared/calculators/store.ts";
+import type { BigLift, TrainingReport } from "../../shared/calculators/store.ts";
 import {
   load_plates,
   one_rep_formulas,
@@ -21,16 +21,28 @@ import {
   type Lift,
   type PlateLoad,
 } from "../../shared/calculators/training.ts";
-import { set_setting, use_data } from "../api.ts";
+import { use_data } from "../api.ts";
 import { UnitNumber } from "../unit_field.tsx";
 import type { ShownUnits } from "../units.ts";
+import { plate_text } from "./TrainingSettings.tsx";
 import { field_to_shown, field_to_stored, format_field, format_rest, format_weight } from "./units.ts";
 
 // ── Shared ───────────────────────────────────────────────────────────────────
 
-// Plates such as 1.25 kg need their second decimal.
-function plate_text(plate: number, units: ShownUnits): string {
-  return String(field_to_shown("weight", plate, units));
+type Settings = Record<string, unknown>;
+
+// A pointer to where a setting the page uses is changed.
+function SettingsPointer({ children }: { children: string }) {
+  return (
+    <p className="muted small">
+      {children} — change under <a href="#/settings">Settings → Workouts</a>.
+    </p>
+  );
+}
+
+// Whether an exercise was picked under Settings or guessed from the names.
+function picked_or_guessed(settings: Settings, key: string): string {
+  return settings[key] ? "picked" : "guessed from the names";
 }
 
 function plates_text(load: PlateLoad | null, units: ShownUnits): string {
@@ -85,25 +97,30 @@ function OneRepMax({ report, units }: { report: TrainingReport; units: ShownUnit
   const options: [string, string][] = [["", "Typed in"], ...report.lifts.map((item): [string, string] => [item.exercise_id, item.name])];
 
   return (
-    <Section title="One-rep max">
+    <div className="stack tight">
+      <h3>One-rep max</h3>
       <p className="muted">From your best set of each lift in the last 90 days, or a set typed in. An RPE counts the reps left in reserve.</p>
-      <FormRow label="Lift" id="training-lift" hint={best && !typed ? `${format_weight(best.weight, units)} × ${best.reps}${best.rpe ? ` at RPE ${best.rpe}` : ""} on ${best.date}` : undefined}>
-        <Select bare label="Lift" options={options} value={chosen} on_change={(value) => { set_chosen(value); set_typed(null); }} />
-      </FormRow>
-      <WeightField id="training-lift-weight" label="Weight lifted" value={lift.weight} units={units} on_change={(weight) => change({ weight })} />
-      <FormRow label="Reps" id="training-lift-reps">
-        <NumberField bare label="Reps" value={lift.reps || null} min={0} step={1} on_change={(reps) => change({ reps: reps ?? 0 })} />
-      </FormRow>
-      <FormRow label="RPE" id="training-lift-rpe" hint="10 is all-out; 8 leaves two reps in reserve. Leave empty when not rated.">
-        <NumberField bare label="RPE" value={lift.rpe || null} min={0} max={10} step={0.5} on_change={(rpe) => change({ rpe: rpe ?? 0 })} />
-      </FormRow>
-      {maxes === null ? <p className="muted">Needs a weight and reps.</p> : (
-        <>
+      <div className="training-pair">
+        <div className="form-rows">
+          <FormRow label="Lift" id="training-lift" hint={best && !typed ? `${format_weight(best.weight, units)} × ${best.reps}${best.rpe ? ` at RPE ${best.rpe}` : ""} on ${best.date}` : undefined}>
+            <Select bare label="Lift" options={options} value={chosen} on_change={(value) => { set_chosen(value); set_typed(null); }} />
+          </FormRow>
+          <WeightField id="training-lift-weight" label="Weight lifted" value={lift.weight} units={units} on_change={(weight) => change({ weight })} />
+          <FormRow label="Reps" id="training-lift-reps">
+            <NumberField bare label="Reps" value={lift.reps || null} min={0} step={1} on_change={(reps) => change({ reps: reps ?? 0 })} />
+          </FormRow>
+          <FormRow label="RPE" id="training-lift-rpe" hint="10 is all-out; 8 leaves two reps in reserve. Leave empty when not rated.">
+            <NumberField bare label="RPE" value={lift.rpe || null} min={0} max={10} step={0.5} on_change={(rpe) => change({ rpe: rpe ?? 0 })} />
+          </FormRow>
+        </div>
+        {maxes === null ? (
+          <p className="muted">{lift.weight > 0 ? "Needs the reps." : lift.reps > 0 ? "Needs the weight lifted." : "Needs a weight and reps."}</p>
+        ) : (
           <Facts rows={one_rep_formulas.map((formula) => [`1RM, ${formula.label}`, format_weight(maxes[formula.key], units)])} />
-          <DataTable caption="Weights at each share of the one-rep max" columns={percent_columns} rows={rows} row_key={(row) => String(row.percent)} />
-        </>
-      )}
-    </Section>
+        )}
+      </div>
+      {maxes !== null && <DataTable caption="Weights at each share of the one-rep max" columns={percent_columns} rows={rows} row_key={(row) => String(row.percent)} />}
+    </div>
   );
 }
 
@@ -115,19 +132,20 @@ const big_lifts: { key: BigLift; label: string }[] = [
   { key: "deadlift", label: "Deadlift" },
 ];
 
-function StrengthScores({ report, units }: { report: TrainingReport; units: ShownUnits }) {
-  const options: [string, string][] = [["", "None"], ...report.lifts.map((lift): [string, string] => [lift.exercise_id, lift.name])];
+function StrengthScores({ report, settings, units }: { report: TrainingReport; settings: Settings; units: ShownUnits }) {
+  const all_picked = big_lifts.every((lift) => picked_or_guessed(settings, `calculators.${lift.key}_exercise`) === "picked");
   return (
-    <Section title="Strength scores">
-      <p className="muted">Your squat, bench press and deadlift maxes added up and weighed against your body weight, so lifters of any size compare. Guessed from the names until picked.</p>
-      {big_lifts.map((lift) => {
-        const best = report.lifts.find((item) => item.exercise_id === report.big_three[lift.key]);
-        return (
-          <FormRow key={lift.key} label={lift.label} id={`training-${lift.key}`} hint={best ? `Estimated 1RM ${format_weight(best.one_rep_max, units)}` : "No sets in the last 90 days"}>
-            <Select bare label={lift.label} options={options} value={report.big_three[lift.key]} on_change={(value) => void set_setting(`calculators.${lift.key}_exercise`, value)} />
-          </FormRow>
-        );
-      })}
+    <div className="stack tight">
+      <h3>Strength scores</h3>
+      <p className="muted">Your squat, bench press and deadlift maxes added up and weighed against your body weight, so lifters of any size compare.</p>
+      <Facts
+        rows={big_lifts.map((lift) => {
+          const id = report.big_three[lift.key];
+          const best = report.lifts.find((item) => item.exercise_id === id);
+          return [lift.label, id === "" ? "No exercise fits" : best ? `${format_weight(best.one_rep_max, units)} · ${best.name}` : "No sets in the last 90 days"];
+        })}
+      />
+      <SettingsPointer>{all_picked ? "The lifts are picked" : "The lifts are guessed from the names until picked"}</SettingsPointer>
       {report.total === null ? <p className="muted">Needs a recent set of all three lifts.</p> : (
         <Facts
           rows={[
@@ -136,11 +154,11 @@ function StrengthScores({ report, units }: { report: TrainingReport; units: Show
             report.scores !== null && ["Wilks", format_number(report.scores.wilks)],
             report.scores !== null && ["DOTS", format_number(report.scores.dots)],
             report.scores !== null && ["IPF GoodLift", format_number(report.scores.ipf_gl)],
-            report.scores === null && ["Points", "Need a sex under Settings → Body and a weight reading"],
+            report.scores === null && ["Points", "Need a sex, set under Body → Metrics, and a weight reading"],
           ]}
         />
       )}
-    </Section>
+    </div>
   );
 }
 
@@ -152,30 +170,24 @@ function Plates({ report, units }: { report: TrainingReport; units: ShownUnits }
   const shown_plates = report.plates.plates.map((plate) => plate_text(plate, units)).join(", ");
 
   return (
-    <Section title="Plates">
-      <WeightField id="training-plate-target" label="Weight to load" value={target} units={units} on_change={set_target} />
-      {load !== null && (
-        <Facts
-          rows={[
-            ["Each side", plates_text(load, units)],
-            Math.abs(load.loaded - target) > 0.01 && ["Nearest load", `${format_weight(load.loaded, units)}; the plates make up no closer`],
-          ]}
-        />
-      )}
-      {target > 0 && load === null && <p className="muted">Lighter than the bar.</p>}
-      <WeightField id="training-bar" label="Bar" value={report.plates.bar} units={units} on_change={(kg) => void set_setting("calculators.bar_weight", kg)} />
-      <FormRow label="Plates you have" id="training-plates" hint={`In ${units.mass}, separated by commas.`}>
-        <CommitInput
-          id="training-plates"
-          type="text"
-          value={shown_plates}
-          on_commit={(event) => {
-            const typed = event.currentTarget.value.split(/[,\s]+/).map(Number).filter((plate) => plate > 0);
-            if (event.currentTarget.value !== shown_plates) void set_setting("calculators.plates", typed.map((plate) => field_to_stored("weight", plate, units)));
-          }}
-        />
-      </FormRow>
-    </Section>
+    <div className="stack tight">
+      <h3>Plates</h3>
+      <div className="training-pair">
+        <div className="form-rows">
+          <WeightField id="training-plate-target" label="Weight to load" value={target} units={units} on_change={set_target} />
+        </div>
+        {load !== null && (
+          <Facts
+            rows={[
+              ["Each side", plates_text(load, units)],
+              Math.abs(load.loaded - target) > 0.01 && ["Nearest load", `${format_weight(load.loaded, units)}; the plates make up no closer`],
+            ]}
+          />
+        )}
+        {target > 0 && load === null && <p className="muted">Lighter than the bar.</p>}
+      </div>
+      <SettingsPointer>{`Bar ${format_weight(report.plates.bar, units)} · plates ${shown_plates}`}</SettingsPointer>
+    </div>
   );
 }
 
@@ -186,7 +198,7 @@ function Heart({ report }: { report: TrainingReport }) {
   const bpm = (value: number) => `${Math.round(value)} bpm`;
   return (
     <Card title="Heart-rate zones" subtitle="Karvonen: shares of the reserve between the resting and the maximum pulse">
-      {heart.maximum === null ? <p className="muted">Needs a birth date under Settings → Body.</p> : heart.zones === null ? (
+      {heart.maximum === null ? <p className="muted">Needs a birth date, set under <a href="#/body/metrics">Body → Metrics</a>.</p> : heart.zones === null ? (
         <p className="muted">Needs a resting heart rate reading; give a metric the Resting heart rate role under Body → Metrics.</p>
       ) : (
         <Facts
@@ -245,83 +257,44 @@ const race_columns: TableColumn<RaceRow>[] = [
   { label: "Pace", cell: (row) => `${format_rest(Math.round(row.seconds / field_to_shown("distance", row.distance, row.units)))} a ${row.units.distance}` },
 ];
 
-function Races({ report, units }: { report: TrainingReport; units: ShownUnits }) {
+function Races({ report, settings, units }: { report: TrainingReport; settings: Settings; units: ShownUnits }) {
   const { running } = report;
-  const options: [string, string][] = [["", "None"], ...report.cardio_exercises.map((exercise): [string, string] => [exercise.id, exercise.name])];
+  const name = report.cardio_exercises.find((exercise) => exercise.id === running.exercise_id)?.name;
   return (
-    <Section title="Race times">
-      <FormRow label="Running exercise" id="training-running" hint="Your fastest run of it in the last 90 days, by VDOT, predicts the rest by Riegel's formula. Guessed from the names until picked.">
-        <Select bare label="Running exercise" options={options} value={running.exercise_id} on_change={(value) => void set_setting("calculators.running_exercise", value)} />
-      </FormRow>
+    <div className="stack tight">
+      <h3>Race times</h3>
+      <p className="muted">Your fastest run in the last 90 days, by VDOT, predicts the rest by Riegel's formula.</p>
+      <SettingsPointer>{name ? `From ${name}, ${picked_or_guessed(settings, "calculators.running_exercise")}` : "No cardio exercise fits running"}</SettingsPointer>
       {running.best === null ? <p className="muted">Needs a run of 1 km or more, with its time, in the last 90 days.</p> : (
         <>
           <p className="muted">{`From ${format_field("distance", running.best.distance, units)} in ${format_rest(Math.round(running.best.duration))} on ${running.best.date}.`}</p>
           <DataTable caption="Predicted race times" columns={race_columns} rows={running.predictions.map((row) => ({ ...row, units }))} row_key={(row) => row.label} />
         </>
       )}
-    </Section>
-  );
-}
-
-// ── Workout energy ───────────────────────────────────────────────────────────
-
-interface EnergyRow extends WorkoutEnergy {
-  energy: EnergyUnit;
-}
-
-const energy_columns: TableColumn<EnergyRow>[] = [
-  { label: "Date", cell: (row) => row.date },
-  { label: "Workout", cell: (row) => row.name },
-  { label: "Time", cell: (row) => format_rest(Math.round(row.seconds)) },
-  { label: "Burned", cell: (row) => (row.calories === null ? "Needs a weight" : format_measure(row.calories, row.energy, 0)) },
-];
-
-const met_rows: { key: string; label: string }[] = [
-  { key: "calculators.met_weight", label: "Weights" },
-  { key: "calculators.met_bodyweight", label: "Bodyweight" },
-  { key: "calculators.met_duration", label: "Timed" },
-  { key: "calculators.met_cardio", label: "Cardio" },
-];
-
-function WorkoutCalories({ report, settings, units }: { report: TrainingReport; settings: Record<string, unknown>; units: ShownUnits }) {
-  return (
-    <Section title="Workout energy">
-      <p className="muted">Each exercise's MET, its work as a multiple of resting, times your weight and its time; a set of reps counts two minutes, and a workout with a start and finish takes its own length. Runs go by their pace.</p>
-      {report.workouts.length === 0 ? <Empty title="No workouts in the last 30 days." /> : (
-        <DataTable caption="Energy burned in the last 30 days" columns={energy_columns} rows={report.workouts.map((row) => ({ ...row, energy: units.energy }))} row_key={(row) => row.workout_id} />
-      )}
-      {met_rows.map((row) => {
-        const value = Number(settings[row.key]) || null;
-        return (
-          <SettingRow key={row.key} label={`${row.label} MET`}>
-            <NumberField bare label={`${row.label} MET`} value={value} min={1} step={0.1} on_change={(next) => next && next !== value && void set_setting(row.key, next)} />
-          </SettingRow>
-        );
-      })}
-      <SettingRow label="Add workouts to the diary's calorie target" hint="Each day's calorie target in the diary grows by what that day's workouts burned. Best with the activity set to Sedentary, so exercise is not counted twice.">
-        <Switch label="Add workouts to the diary's calorie target" checked={settings["calculators.eat_back_workouts"] === true} on_change={(on) => set_setting("calculators.eat_back_workouts", on)} />
-      </SettingRow>
-    </Section>
+    </div>
   );
 }
 
 // ── Tab ──────────────────────────────────────────────────────────────────────
 
-export function TrainingTab({ settings, units }: { settings: Record<string, unknown>; units: ShownUnits }) {
+export function TrainingTab({ settings, units }: { settings: Settings; units: ShownUnits }) {
   const report = use_data((api) => api.get_training_calculations(today()));
   return (
     <Loaded resource={report}>
       {(loaded) => (
         <div className="stack">
-          <OneRepMax report={loaded} units={units} />
-          <StrengthScores report={loaded} units={units} />
-          <Plates report={loaded} units={units} />
-          <Cards>
-            <Heart report={loaded} />
-            <Fitness report={loaded} units={units} />
-          </Cards>
-          <Races report={loaded} units={units} />
-          <WorkoutCalories report={loaded} settings={settings} units={units} />
+          <Section title="Strength">
+            <OneRepMax report={loaded} units={units} />
+            <StrengthScores report={loaded} settings={settings} units={units} />
+            <Plates report={loaded} units={units} />
+          </Section>
+          <Section title="Cardio">
+            <Cards>
+              <Heart report={loaded} />
+              <Fitness report={loaded} units={units} />
+            </Cards>
+            <Races report={loaded} settings={settings} units={units} />
+          </Section>
         </div>
       )}
     </Loaded>
