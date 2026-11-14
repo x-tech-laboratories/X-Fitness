@@ -18,6 +18,7 @@ import { register_web_folder } from "@x-tech-laboratories/x-libs/server/web_fold
 import type { SqlDatabase } from "@x-tech-laboratories/x-libs/sql";
 
 import { fitness_bridge } from "../shared/bridge.ts";
+import { mcp_instructions as instructions, without_secrets } from "../shared/mcp.ts";
 import { bind_methods, fitness_api, is_read_only, sync_engine, type FitnessMethods } from "../shared/store.ts";
 
 // ── Options ──────────────────────────────────────────────────────────────────
@@ -34,20 +35,6 @@ export interface AppOptions {
 // ── Other programs ───────────────────────────────────────────────────────────
 
 const version = (JSON.parse(readFileSync(new URL("../../package.json", import.meta.url), "utf8")) as { version: string }).version;
-
-const instructions = [
-  "X-Fitness holds one person's workouts, diet and body measurements.",
-  "Days are local dates such as 2026-11-10; weights are in kg, lengths in cm, distances in km, durations in seconds and energy in kcal, whatever units Settings shows.",
-  "Ids come from the list_ and get_ calls; get_workout_library, get_diet and list_body_metrics are the places to start.",
-].join(" ");
-
-// Settings that hold another service's key, which stay on the server and in the page's own settings.
-const secret_settings = ["diet.usda_api_key"];
-
-function without_secrets(method: string, result: unknown): unknown {
-  if (method !== "get_settings") return result;
-  return Object.fromEntries(Object.entries(result as Record<string, unknown>).filter(([key]) => !secret_settings.includes(key)));
-}
 
 // ── App ──────────────────────────────────────────────────────────────────────
 

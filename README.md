@@ -93,6 +93,14 @@ Every call the page makes is open to other programs on the server, behind a toke
   claude mcp add --transport http x-fitness https://<server>/api/mcp --header "Authorization: Bearer <token>"
   ```
 
+The desktop app can serve the same MCP tools itself, on its own data and with no server or token: turn on **Settings →
+MCP server** and it listens on `http://127.0.0.1:3918/mcp` (the port is set there too), reachable only from the same
+computer:
+
+```sh
+claude mcp add --transport http x-fitness http://127.0.0.1:3918/mcp
+```
+
 Both work in stored units (kg, cm, km, seconds, kcal) and local days such as `2026-11-10`. A change made through
 either reaches every open page and device as if made there. Keys for other services, such as the USDA key, are left out
 of what MCP reads.

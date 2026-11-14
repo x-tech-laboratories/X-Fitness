@@ -15,13 +15,15 @@ import { create_window, is_app_page } from "@x-tech-laboratories/x-libs/electron
 import { keep_backing_up, type BackupSchedule } from "@x-tech-laboratories/x-libs/backups";
 import { sqlite_backups } from "@x-tech-laboratories/x-libs/server/sqlite_backups";
 import { create_certificate_trust } from "@x-tech-laboratories/x-libs/certificates";
+import { create_local_mcp } from "@x-tech-laboratories/x-libs/electron/mcp";
 import { trust_in_session, trusting_fetch } from "@x-tech-laboratories/x-libs/electron/certificates";
 import { create_sync_client, sync_device_methods } from "@x-tech-laboratories/x-libs/sync_client";
 import { file_sync_storage } from "@x-tech-laboratories/x-libs/sync_file_storage";
 
 import { fitness_backup_naming, read_schedule } from "../shared/backups.ts";
-import { certificate_bridge, device_bridge, fitness_bridge, fitness_events } from "../shared/bridge.ts";
-import { bind_methods, needs_upgrade, open_store, sync_engine } from "../shared/store.ts";
+import { certificate_bridge, device_bridge, fitness_bridge, fitness_events, local_mcp_bridge } from "../shared/bridge.ts";
+import { mcp_instructions, without_secrets } from "../shared/mcp.ts";
+import { bind_methods, fitness_api, is_read_only, needs_upgrade, open_store, sync_engine } from "../shared/store.ts";
 
 // ── Profile ──────────────────────────────────────────────────────────────────
 
@@ -90,6 +92,20 @@ const sync = create_sync_client({
   fetch: trusting_fetch(session, certificates),
 });
 
+// ── MCP ──────────────────────────────────────────────────────────────────────
+
+// Off until turned on in Settings; a change made through it reaches the open window and syncs like any other.
+const local_mcp = create_local_mcp({
+  name: "x-fitness",
+  version: app.getVersion(),
+  instructions: mcp_instructions,
+  api: fitness_api,
+  is_read_only,
+  settings_file: join(profile, "mcp.json"),
+  default_port: 3918,
+  call: async (method, args) => without_secrets(method, await fitness_bridge.dispatch(bind_methods(() => database, announce_change), method, args)),
+});
+
 // ── Window ───────────────────────────────────────────────────────────────────
 
 const page = {
@@ -129,6 +145,7 @@ if (hold_single_instance(app, show_existing_window)) {
   void app.whenReady().then(() => {
     fitness_bridge.handle(ipcMain, bind_methods(() => database, announce_change), { trusted, envelopes: true });
     certificate_bridge.handle(ipcMain, certificates.methods, { trusted, envelopes: true });
+    local_mcp_bridge.handle(ipcMain, local_mcp.methods, { trusted, envelopes: true });
     trust_in_session(session.defaultSession, certificates.is_trusted);
     device_bridge.handle(
       ipcMain,
@@ -153,11 +170,13 @@ if (hold_single_instance(app, show_existing_window)) {
     );
     open_window();
     sync.start();
+    void local_mcp.start();
   });
 
   app.on("window-all-closed", () => {
     sync.stop();
     backing_up.stop();
+    void local_mcp.stop();
     database.close();
     app.quit();
   });

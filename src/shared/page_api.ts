@@ -6,6 +6,7 @@
 import type { Client } from "@x-tech-laboratories/x-libs/electron/bridge";
 import { backup_method_names, type BackupClient, type BackupMethods } from "@x-tech-laboratories/x-libs/backup_protocol";
 import type { CertificateClient } from "@x-tech-laboratories/x-libs/certificate_protocol";
+import type { LocalMcpClient } from "@x-tech-laboratories/x-libs/local_mcp_protocol";
 import { sync_device_method_names, type SyncDeviceMethods, type SyncStatus } from "@x-tech-laboratories/x-libs/sync_protocol";
 
 import type { FitnessMethods } from "./store.ts";
@@ -16,6 +17,7 @@ export const fitness_api_name = "x_fitness";
 export const device_api_name = "x_fitness_device";
 export const events_api_name = "x_fitness_events";
 export const certificates_api_name = "x_fitness_certificates";
+export const local_mcp_api_name = "x_fitness_local_mcp";
 
 // ── Device calls ─────────────────────────────────────────────────────────────
 
@@ -43,6 +45,8 @@ export interface PageApi {
   backup_folder?: { get: () => Promise<string>; choose: () => Promise<string> };
   // Set where the app makes its own connections and can trust a certificate the system refuses.
   certificates?: CertificateClient;
+  // Set on the desktop, which can serve its own MCP endpoint to AI clients on the same computer.
+  local_mcp?: LocalMcpClient;
   // Runs whenever the data changed somewhere else; returns the function that stops listening.
   on_change: (listener: () => void) => () => void;
 }
