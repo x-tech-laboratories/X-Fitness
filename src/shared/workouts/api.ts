@@ -50,7 +50,7 @@ const session_entry: JsonSchema = {
 
 export const workouts_api = {
   get_workout_library: {
-    description: "Every exercise with when it was last done, every program with its sessions and their exercises' targets, the category tree in order with each id, parent and path, and the equipment and muscle lists.",
+    description: "Every exercise with when it was last done and whether it has a picture, every program with its sessions and their exercises' targets, the category tree in order with each id, parent and path, and the equipment and muscle lists.",
     params: [],
   },
   save_exercise: {
@@ -68,16 +68,23 @@ export const workouts_api = {
             muscles: { type: "array", items: { type: "string" } },
             categories,
             notes: text("A note."),
+            picture: text("A small picture as a data URL, such as data:image/webp;base64,…, under 1 MB; an empty string removes it, and leaving it out keeps the one it has."),
           },
           required: ["name"],
         },
       },
     ],
   },
+  get_exercise_picture: { description: "An exercise's picture as a data URL, or an empty string when it has none.", params: [{ name: "id", schema: id_of("exercise") }] },
+  list_exercise_pictures: { description: "The picture of every exercise that has one, as data URLs by exercise id.", params: [] },
   delete_exercise: { description: "Deletes an exercise; sessions and logged sets naming it show it as deleted.", params: [{ name: "id", schema: id_of("exercise") }] },
   search_wger_exercises: {
     description: "Searches the public wger exercise database by name, for exercises to add with save_exercise.",
     params: [{ name: "term", schema: text("Part of the exercise's name.") }],
+  },
+  lookup_wger_picture: {
+    description: "Fetches the main picture of an exercise found with search_wger_exercises, as a data URL at wger's full size, or an empty string when wger has none. Shrink it before passing it to save_exercise.",
+    params: [{ name: "wger_id", schema: { type: "integer", description: "The wger_id from search_wger_exercises." } }],
   },
   list_workout_categories: { description: "Every workout category in tree order with its id, parent and path, and how many exercises and sessions use it, directly and through its subcategories.", params: [] },
   add_workout_category: {

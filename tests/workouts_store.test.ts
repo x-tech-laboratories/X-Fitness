@@ -4,6 +4,7 @@ import { migrate } from "@x-tech-laboratories/x-libs/sql";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { bind_methods, features, open_store, setting_defaults, sync_engine } from "../src/shared/store.ts";
+import { migrations as workout_migrations } from "../src/shared/workouts/migrations/index.ts";
 import { normalize_progression, type LoggedSet, type Target } from "../src/shared/workouts/model.ts";
 import { evaluate_progression, step_weight } from "../src/shared/workouts/progression.ts";
 import { week_start_day } from "../src/shared/workouts/reports.ts";
@@ -68,10 +69,29 @@ describe("workouts store", () => {
     store.add_workout_exercise(workout, squat);
     const library = store.get_workout_library();
     const quads = library.categories.find((category) => category.name === "Quads")!;
-    expect(library.exercises).toEqual([{ id: squat, name: "Squat", measurement: "weight", equipment: "Barbell", muscles: ["Glutes", "Quads"], categories: [quads.id], notes: "Low bar", last_done: "2026-11-09" }]);
+    expect(library.exercises).toEqual([{ id: squat, name: "Squat", measurement: "weight", equipment: "Barbell", muscles: ["Glutes", "Quads"], categories: [quads.id], notes: "Low bar", last_done: "2026-11-09", has_picture: false }]);
     expect(library.categories.map((category) => category.path)).toEqual([["Legs"], ["Legs", "Quads"], ["Cardio"]]);
     expect(library.equipment).toEqual(["Barbell"]);
     expect(() => store.save_exercise({ name: "  " })).toThrow("needs a name");
+  });
+
+  it("keeps an exercise's picture out of the library, through a save without one, and removes it with an empty one", () => {
+    const { store } = open_methods();
+    const picture = "data:image/webp;base64,UklGRg==";
+    const squat = store.save_exercise({ name: "Squat", picture });
+    const plank = store.save_exercise({ name: "Plank" });
+    expect(store.get_workout_library().exercises.map((exercise) => [exercise.name, exercise.has_picture, "picture" in exercise])).toEqual([["Plank", false, false], ["Squat", true, false]]);
+    expect(store.list_exercise_pictures()).toEqual({ [squat]: picture });
+
+    store.save_exercise({ id: squat, name: "Back Squat" });
+    expect(store.get_exercise_picture(squat)).toBe(picture);
+    store.save_exercise({ id: squat, name: "Back Squat", picture: "" });
+    expect(store.get_exercise_picture(squat)).toBe("");
+    expect(store.get_exercise_picture(plank)).toBe("");
+    expect(store.list_exercise_pictures()).toEqual({});
+
+    expect(() => store.save_exercise({ name: "Row", picture: "https://example.com/row.png" })).toThrow("data URL of an image");
+    expect(() => store.save_exercise({ name: "Row", picture: `data:image/png;base64,${"A".repeat(1_000_000)}` })).toThrow("too large");
   });
 
   it("renames a category keeping its subtree, merges onto a sibling of that name, moves one and deletes a subtree keeping the items", () => {
@@ -102,7 +122,8 @@ describe("workouts store", () => {
 
   it("turns the category paths of an older database into a tree keyed by those paths", () => {
     const database = new DatabaseSync(":memory:");
-    for (const feature of features) migrate(database, feature.id === "workouts" ? feature.migrations.slice(0, -1) : feature.migrations, { owner: feature.id });
+    const tree_step = workout_migrations.findIndex((migration) => migration.name.endsWith("_category_tree"));
+    for (const feature of features) migrate(database, feature.id === "workouts" ? feature.migrations.slice(0, tree_step) : feature.migrations, { owner: feature.id });
     database.prepare("INSERT INTO workout_categories (name) VALUES (?)").run("Cardio");
     database.prepare("INSERT INTO exercises (id, name, categories) VALUES (?, ?, ?)").run("fly", "Fly", JSON.stringify(["Push/Chest"]));
     database.prepare("INSERT INTO programs (id, name) VALUES (?, ?)").run("p", "Plan");
@@ -202,6 +223,7 @@ describe("workouts store", () => {
     const entry = phone.store.list_workouts("2026-11-10")[0]!.entries[0]!;
     phone.store.update_workout_set(entry.sets[0]!.id, { reps: 6, rpe: 9 });
     phone.store.finish_workout(workout, "2026-11-10T10:00:00.000Z");
+    phone.store.save_exercise({ id: bench, name: "Bench Press", picture: "data:image/webp;base64,UklGRg==" });
     const outgoing = sync_engine.collect_unpushed_changes(phone.database);
     sync_engine.apply_changes(desktop.database, outgoing.changes);
 
@@ -209,6 +231,7 @@ describe("workouts store", () => {
     expect(desktop.store.list_workouts("2026-11-10")[0]).toMatchObject({ id: workout, has_session: true, finished_at: "2026-11-10T10:00:00.000Z" });
     expect(desktop.store.get_workout_library()).toEqual(phone.store.get_workout_library());
     expect(desktop.store.get_exercise_report(bench)?.history).toHaveLength(1);
+    expect(desktop.store.get_exercise_picture(bench)).toBe("data:image/webp;base64,UklGRg==");
   });
 
   it("evaluates linear, double and sum progressions as Liftosaur does", () => {
@@ -427,7 +450,7 @@ describe("wger lookup", () => {
   const languages = { results: [{ id: 2, short_name: "en" }, { id: 1, short_name: "de" }] };
   const exercises = {
     results: [
-      { id: 1, category: { name: "Chest" }, equipment: [{ name: "Barbell" }], muscles: [{ name: "Pectoralis major", name_en: "Chest" }], muscles_secondary: [{ name: "Triceps brachii", name_en: "Triceps" }], translations: [{ language: 1, name: "Bankdrücken" }, { language: 2, name: "Bench Press" }] },
+      { id: 1, category: { name: "Chest" }, equipment: [{ name: "Barbell" }], muscles: [{ name: "Pectoralis major", name_en: "Chest" }], muscles_secondary: [{ name: "Triceps brachii", name_en: "Triceps" }], translations: [{ language: 1, name: "Bankdrücken" }, { language: 2, name: "Bench Press" }], images: [{ image: "https://wger.de/media/exercise-images/1/bench-2.png", is_main: false }, { image: "https://wger.de/media/exercise-images/1/bench-1.png", is_main: true }] },
       { id: 2, category: { name: "Arms" }, equipment: [{ name: "none (bodyweight exercise)" }], muscles: [], translations: [{ language: 2, name: "Close-Grip Press Up" }] },
       { id: 3, category: { name: "Cardio" }, equipment: [], translations: [{ language: 2, name: "Rowing" }] },
       { id: 4, category: { name: "Legs" }, equipment: [], translations: [{ language: 1, name: "Nur Deutsch" }] },
@@ -439,6 +462,7 @@ describe("wger lookup", () => {
     const fetch = vi.fn(async (url: string) => {
       calls += 1;
       if (fail_first && calls === 1) return new Response("", { status: 503, statusText: "Service Unavailable" });
+      if (url.includes("/media/")) return new Response(new Uint8Array([137, 80, 78, 71]), { headers: { "content-type": "image/png" } });
       return Response.json(url.includes("/language/") ? languages : exercises);
     });
     vi.stubGlobal("fetch", fetch);
@@ -449,13 +473,22 @@ describe("wger lookup", () => {
     const fetch = stub_fetch();
     const { store } = open_methods();
     expect(await store.search_wger_exercises("press")).toEqual([
-      { wger_id: 1, name: "Bench Press", measurement: "weight", equipment: "Barbell", muscles: ["Chest", "Triceps"], category: "Chest" },
-      { wger_id: 2, name: "Close-Grip Press Up", measurement: "bodyweight", equipment: "", muscles: [], category: "Arms" },
+      { wger_id: 1, name: "Bench Press", measurement: "weight", equipment: "Barbell", muscles: ["Chest", "Triceps"], category: "Chest", has_picture: true },
+      { wger_id: 2, name: "Close-Grip Press Up", measurement: "bodyweight", equipment: "", muscles: [], category: "Arms", has_picture: false },
     ]);
     expect(await store.search_wger_exercises("row")).toMatchObject([{ name: "Rowing", measurement: "cardio" }]);
     expect(await store.search_wger_exercises(" ")).toEqual([]);
     // The index is fetched once.
     expect(fetch).toHaveBeenCalledTimes(2);
+  });
+
+  it("fetches an exercise's main picture as a data URL, and nothing for one without a picture", async () => {
+    const fetch = stub_fetch();
+    const { store } = open_methods();
+    expect(await store.lookup_wger_picture(1)).toBe("data:image/png;base64,iVBORw==");
+    expect(fetch).toHaveBeenLastCalledWith("https://wger.de/media/exercise-images/1/bench-1.png");
+    expect(await store.lookup_wger_picture(2)).toBe("");
+    expect(await store.lookup_wger_picture(99)).toBe("");
   });
 
   it("reports a failed fetch and tries again on the next search", async () => {

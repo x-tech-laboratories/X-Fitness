@@ -52,7 +52,7 @@ export function WorkoutsView({ parts }: { parts: string[] }) {
       <Loaded resource={library}>
         {(data) => (
           <Loaded resource={settings}>
-            {(values) => <Stack>{tab_view(tab, data, values)}</Stack>}
+            {(values) => <Stack>{tab_view(tab, data, values, parts.slice(1))}</Stack>}
           </Loaded>
         )}
       </Loaded>
@@ -60,12 +60,12 @@ export function WorkoutsView({ parts }: { parts: string[] }) {
   );
 }
 
-// One tab's page, given the library and the settings it reads.
-function tab_view(tab: TabId, data: WorkoutLibrary, values: Record<string, unknown>) {
+// One tab's page, given the library, the settings it reads and the route's parts after the tab.
+function tab_view(tab: TabId, data: WorkoutLibrary, values: Record<string, unknown>, rest: string[]) {
   const units = units_of(values);
   const default_rest = setting_number(values, "workouts.default_rest");
   if (tab === "programs") return <ProgramsTab library={data} units={units} default_rest={default_rest} />;
-  if (tab === "exercises") return <ExercisesTab library={data} />;
+  if (tab === "exercises") return <ExercisesTab library={data} open_id={rest[0] && decodeURIComponent(rest[0])} />;
   if (tab === "reports") return <ReportsTab library={data} units={units} weekly_target={setting_number(values, "workouts.weekly_target")} week_start={Number(values.week_start ?? 1)} />;
   if (tab === "categories") return <CategoriesTab />;
   return <LogTab library={data} units={units} default_rest={default_rest} rest_sound={values["workouts.rest_sound"] !== false} />;

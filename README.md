@@ -4,7 +4,7 @@ Workouts, diet and body measurements in one app. It runs as a web page served by
 as an Android app; the desktop and Android apps keep their own copy of the data, work offline, and sync with the server
 whenever it can be reached.
 
-- **Workouts:** exercises, routines, logged sessions with their sets, rest timer, and progress per exercise.
+- **Workouts:** exercises with pictures, shown as a table or a grid, filled in from wger or by hand, routines, logged sessions with their sets, rest timer, and progress per exercise.
 - **Diet:** foods and meals, what was eaten each day, and the day's calories and nutrients against targets. Around 80
   nutrients, from the macros to vitamins, minerals and amino acids; a country's nutrition label (US, EU and UK, Canada,
   Australia and NZ) picks the ones shown and a region's reference intakes the targets, each changeable by hand.

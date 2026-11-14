@@ -116,7 +116,7 @@ describe("body reports", () => {
     store.set_body_reading("waist", "2026-11-10", 99);
     show(["reports"]);
 
-    const waist_card = await screen.findByRole("button", { name: /^Waist/ });
+    const waist_card = await screen.findByRole("button", { name: /^Waist.*99 cm/ });
     expect(waist_card.textContent).toContain("99 cm");
     expect(waist_card.textContent).toContain("+9 cm");
     fireEvent.click(waist_card);
