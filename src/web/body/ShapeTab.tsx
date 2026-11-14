@@ -232,7 +232,7 @@ function ShapeView({ shape, units, saved_looks, playing, on_date, on_play }: Sha
   const [now_measures, day_measures] = compared === "day" && then_measures ? shared_measures(shape.measures, then_measures) : [shape.measures, then_measures];
   const now = use_fit(now_measures);
   const other = use_fit(compared === "day" ? day_measures : shape.goal);
-  const missing = [shape.measures.height > 0 ? "" : "height", shape.measures.sex ? "" : "sex"].filter(Boolean);
+  const missing = [shape.measures.height > 0 ? "" : "log a height on the metric with the Height role", shape.measures.sex ? "" : "set your sex"].filter(Boolean);
 
   // The second body is the goal body or the body on the compared day, each with its own look.
   const other_layer: LayerName = compared === "day" ? "day" : "goal";
@@ -289,7 +289,12 @@ function ShapeView({ shape, units, saved_looks, playing, on_date, on_play }: Sha
       )}
       {compared === "day" && <p className="muted small">{`A reading only one of ${shape.date} and ${then_day} has is taken as the same on both.`}</p>}
       {shading && <p className="muted small">{`Red where the body now is larger than ${compared === "day" ? `on ${then_day}` : "at the goals"}, teal where it is smaller.`}</p>}
-      {missing.length > 0 && <p className="muted">{`Set your ${missing.join(" and ")} under Settings, Body, for a body true to yours.`}</p>}
+      {missing.length > 0 && (
+        <p className="muted">
+          {`For a body true to yours, ${missing.join(" and ")} on `}
+          <a href="#/body/metrics">Body → Metrics</a>.
+        </p>
+      )}
       {model ? (
         <div className="body-viewers">
           {shown === "side" && (
