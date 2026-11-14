@@ -63,6 +63,24 @@ offline. On first connecting, the user chooses whether the server's copy or the 
 Every measure is stored in metric (kg, cm, km, kcal) and shown in the units set under Settings, converted with X-Libs
 `units`.
 
+## Nutrients, labels and targets
+
+`src/shared/diet/model.ts` lists every nutrient once, in `nutrients`, with the unit it is shown in, the group it sits in
+and whether its target is a goal to reach or a limit; the store keeps each as a column of `diet_foods` in kcal or grams.
+Salt is no column: it is sodium shown × 2.5, which the EU label uses. `labels.ts` holds the presets. A nutrition label
+(US, EU and UK, Canada, Australia and NZ, or everything) says which nutrients the page shows, and the `diet.shown`
+setting lays the ones switched on or off by hand over it. A target preset (the same four regions' reference amounts)
+gives each nutrient's target, which has no default of its own: `diet.target_<nutrient>` is stored only when something
+sets it, and `target_of` takes it before the preset. Two things set one: the user by hand, and the plan on
+Calculators → Goals while "Diet targets follow the plan" is on, which writes calories, protein, fat and carbs after every
+change. So a missing target follows the preset, and a plan or hand value always beats it; never add a default target to
+`settings.ts`. The Diary also raises the day's calorie target by the workouts' energy when Calculators says to eat them
+back. `get_diet_targets` gives each target in force with where it came from.
+
+Each diary entry belongs to a meal from the `diet.meals` setting (an id, a name, the time from which new entries fall in
+it and its share of the energy target). A new entry takes the meal its logged time falls in, or the one the user picks;
+an entry whose meal is gone goes by its logged time again.
+
 ## The 3D body
 
 `src/shared/body/shape.ts` morphs MakeHuman's CC0 body mesh with its sex, muscle, weight and height targets and its girth
