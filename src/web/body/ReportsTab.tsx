@@ -6,10 +6,10 @@
 import { useState } from "react";
 import { today } from "@x-tech-laboratories/x-libs/dates";
 import { format_number } from "@x-tech-laboratories/x-libs/units";
-import { LineChart, Sparkline } from "@x-tech-laboratories/x-libs/web/react/charts";
+import { LineChart } from "@x-tech-laboratories/x-libs/web/react/charts";
 import { ChipField } from "@x-tech-laboratories/x-libs/web/react/chip_field";
 import { Select } from "@x-tech-laboratories/x-libs/web/react/controls";
-import { Card, Cards, PageHeading, Section, Tile, Tiles, Toolbar } from "@x-tech-laboratories/x-libs/web/react/layout";
+import { Cards, PageHeading, Section, Tile, Tiles, Toolbar } from "@x-tech-laboratories/x-libs/web/react/layout";
 import { Empty, Loaded } from "@x-tech-laboratories/x-libs/web/react/states";
 import { DataTable, type TableColumn } from "@x-tech-laboratories/x-libs/web/react/table";
 
@@ -18,6 +18,7 @@ import type { BodyReport, HistoryDay } from "../../shared/body/store.ts";
 import { use_data } from "../api.ts";
 import { day_of, epoch_of } from "../dates.ts";
 import type { ShownUnits } from "../units.ts";
+import { MetricSparkCard, readings_of } from "./cards.tsx";
 import { format_change, format_value, to_shown_value, unit_of } from "./format.ts";
 
 // ── Report ───────────────────────────────────────────────────────────────────
@@ -79,30 +80,15 @@ function history_columns(metrics: BodyMetric[], units: ShownUnits): TableColumn<
 
 // ── Every metric ─────────────────────────────────────────────────────────────
 
-// A metric's readings oldest first, whatever order the history comes in.
-export function readings_of(metric: BodyMetric, history: HistoryDay[]): [date: string, value: number][] {
-  return history
-    .filter((day) => day.values[metric.id] !== undefined)
-    .map((day): [string, number] => [day.date, day.values[metric.id]!])
-    .sort(([first], [second]) => first.localeCompare(second));
-}
-
 // A card per metric read in the range with its latest reading, its change and a sparkline; picking one reports on it.
 function MetricCards({ metrics, history, units, on_pick }: { metrics: BodyMetric[]; history: HistoryDay[]; units: ShownUnits; on_pick: (id: string) => void }) {
   const read = metrics.map((metric) => ({ metric, readings: readings_of(metric, history) })).filter((item) => item.readings.length > 0);
   if (read.length === 0) return <Empty title="Nothing logged in this range." />;
   return (
     <Cards>
-      {read.map(({ metric, readings }) => {
-        const [first, last] = [readings[0]!, readings.at(-1)!];
-        return (
-          <Card key={metric.id} title={metric.name} badge={<span className="muted small">{last[0]}</span>} on_click={() => on_pick(metric.id)}>
-            <strong>{format_value(metric, last[1], units)}</strong>
-            {readings.length > 1 && <span className="muted small">{` ${format_change(metric, last[1] - first[1], units)}`}</span>}
-            <Sparkline scale="fit" top={0} color="var(--series-1)" label={`${metric.name} in this range`} points={readings.map(([date, value]): [number, number] => [epoch_of(date), to_shown_value(metric, value, units)])} />
-          </Card>
-        );
-      })}
+      {read.map(({ metric, readings }) => (
+        <MetricSparkCard key={metric.id} metric={metric} readings={readings} units={units} range="in this range" on_click={() => on_pick(metric.id)} />
+      ))}
     </Cards>
   );
 }

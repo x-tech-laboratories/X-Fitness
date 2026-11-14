@@ -6,7 +6,7 @@
 import { useState } from "react";
 import { today as today_here } from "@x-tech-laboratories/x-libs/dates";
 import { format_number } from "@x-tech-laboratories/x-libs/units";
-import { BarChart, Donut, LineChart, Sparkline, Strip } from "@x-tech-laboratories/x-libs/web/react/charts";
+import { Donut, LineChart, Sparkline } from "@x-tech-laboratories/x-libs/web/react/charts";
 import { Select } from "@x-tech-laboratories/x-libs/web/react/controls";
 import { Card, Cards, Facts, Section, Stack } from "@x-tech-laboratories/x-libs/web/react/layout";
 import { Empty, Loaded } from "@x-tech-laboratories/x-libs/web/react/states";
@@ -20,31 +20,14 @@ import { epoch_of } from "../dates.ts";
 import type { ShownUnits } from "../units.ts";
 import { ExerciseSelect } from "./controls.tsx";
 import { field_to_shown, format_field, format_weight } from "./units.ts";
+import { format_metric, meets_target, week_metrics, WeeklyWorkoutsChart, type FigureKind, type WeekMetric } from "./weekly_chart.tsx";
 
 // ── Wording ──────────────────────────────────────────────────────────────────
 
 const ranges = [8, 12, 26, 52];
 
-type WeekMetric = "volume" | "sets" | "workouts" | "duration" | "distance";
-
-// A week's total or a trend point's value, converted and with its unit.
-function format_metric(kind: "weight" | "distance" | "duration" | "count", value: number, units: ShownUnits, suffix = ""): string {
-  if (kind === "weight") return format_field("weight", value, units);
-  if (kind === "distance") return format_field("distance", value, units);
-  if (kind === "duration") return format_field("duration", value, units);
-  return `${format_number(value)}${suffix ? ` ${suffix}` : ""}`;
-}
-
-const week_metrics: { key: WeekMetric; label: string; kind: "weight" | "distance" | "duration" | "count"; suffix?: string }[] = [
-  { key: "volume", label: "Volume", kind: "weight" },
-  { key: "sets", label: "Sets", kind: "count", suffix: "sets" },
-  { key: "workouts", label: "Workouts", kind: "count", suffix: "workouts" },
-  { key: "duration", label: "Duration", kind: "duration" },
-  { key: "distance", label: "Distance", kind: "distance" },
-];
-
 // Which curves are worth drawing follows how the exercise is measured.
-function trend_metrics(measurement: Measurement): { key: TrendMetric; label: string; kind: "weight" | "distance" | "duration" | "count"; suffix?: string }[] {
+function trend_metrics(measurement: Measurement): { key: TrendMetric; label: string; kind: FigureKind; suffix?: string }[] {
   switch (measurement) {
     case "weight":
       return [
@@ -204,7 +187,7 @@ export function ReportsTab({ library, units, weekly_target, week_start, today }:
 
   const week_columns: TableColumn<WeekTotals>[] = [
     { label: "Week of", cell: (week) => week.week_start },
-    { label: "Workouts", cell: (week) => <span className={week.workouts >= weekly_target ? "tone-good" : undefined}>{`${week.workouts} / ${weekly_target}`}</span> },
+    { label: "Workouts", cell: (week) => <span className={meets_target(week.workouts, weekly_target) ? "tone-good" : undefined}>{`${week.workouts} / ${weekly_target}`}</span> },
     { label: "Sets", cell: (week) => week.sets },
     { label: `Volume (${units.mass})`, cell: (week) => format_number(field_to_shown("weight", week.volume, units)) },
     { label: "Duration (min)", cell: (week) => format_number(week.duration / 60) },
@@ -251,12 +234,15 @@ export function ReportsTab({ library, units, weekly_target, week_start, today }:
               </>
             }
           >
-            <BarChart
+            <WeeklyWorkoutsChart
+              weeks={data.weeks}
+              days={data.days}
+              weekly_target={weekly_target}
+              units={units}
+              metric={week_metric}
               title={`${metric.label} per week`}
-              format={(value) => format_metric(metric.kind, value, units, metric.suffix)}
-              bars={data.weeks.map((week) => ({ label: `Week of ${week.week_start}`, value: week[week_metric], color: week_metric === "workouts" && week.workouts >= weekly_target ? "var(--status-success)" : "var(--series-1)" }))}
+              strip_title="Days trained"
             />
-            <Strip title="Days trained" cells={data.days.map((item) => ({ label: `${item.date}: ${item.workouts ? `${item.sets} sets` : "rest"}`, ok: item.workouts > 0 ? true : null }))} />
             <DataTable columns={week_columns} rows={[...data.weeks].reverse()} row_key={(week) => week.week_start} />
           </Section>
 

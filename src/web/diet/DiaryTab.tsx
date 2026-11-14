@@ -5,7 +5,7 @@
 
 import { useMemo, useState } from "react";
 import { format_measure, to_shown, type EnergyUnit } from "@x-tech-laboratories/x-libs/units";
-import { Donut, Meters, type Meter } from "@x-tech-laboratories/x-libs/web/react/charts";
+import { Donut, Meters } from "@x-tech-laboratories/x-libs/web/react/charts";
 import { NumberField, Segmented, Select } from "@x-tech-laboratories/x-libs/web/react/controls";
 import { Section, Toolbar } from "@x-tech-laboratories/x-libs/web/react/layout";
 import { Empty, Loaded } from "@x-tech-laboratories/x-libs/web/react/states";
@@ -13,35 +13,17 @@ import { DataTable, type TableColumn } from "@x-tech-laboratories/x-libs/web/rea
 import { toast } from "@x-tech-laboratories/x-libs/web/react/toasts";
 
 import { shown_nutrients, target_of } from "../../shared/diet/labels.ts";
-import { by_id, food_label, meal_at, normalize_meals, nutrient_groups, nutrients, serving_unit, target_key, target_progress, type EntryKind, type Food, type Meal, type NutrientInfo, type Nutrients, type Recipe } from "../../shared/diet/model.ts";
+import { by_id, food_label, meal_at, normalize_meals, nutrient_groups, nutrients, serving_unit, target_key, type EntryKind, type Food, type Meal, type Nutrients, type Recipe } from "../../shared/diet/model.ts";
 import type { DayEntry, DietData, MealMacros } from "../../shared/diet/store.ts";
 import { attempt, calls, succeeds, use_data } from "../api.ts";
 import { CategorizedSelect } from "../categories.tsx";
 import { DayStepper, use_day } from "../day.tsx";
 import { row_actions_column } from "../rows.tsx";
-import { format_amount, format_nutrient, shown_unit, to_shown_value } from "./format.ts";
+import { format_amount, format_nutrient, to_shown_value } from "./format.ts";
+import { target_meters } from "./targets.ts";
 import { FoodUnitSelect } from "./widgets.tsx";
 
 // ── Totals ───────────────────────────────────────────────────────────────────
-
-// One meter per nutrient listed.
-export function target_meters(totals: Nutrients, settings: Record<string, unknown>, energy: EnergyUnit, infos: NutrientInfo[]): Meter[] {
-  return infos.map((info) => {
-    const value = totals[info.key];
-    const progress = target_progress(value, target_of(settings, info.key), info.goal);
-    const shown = format_nutrient(info, value, energy);
-    const target_text = progress.target === null ? "" : ` / ${format_nutrient(info, progress.target, energy)}`;
-    return {
-      label: info.label,
-      href: null,
-      value_text: `${shown}${target_text}${progress.over ? " · over" : ""}`,
-      percent: progress.percent,
-      color: progress.over ? "var(--status-danger)" : "var(--accent)",
-      marks: [],
-      title: progress.target === null ? "No target" : progress.over ? `Over the ${shown_unit(info, energy)} target` : null,
-    };
-  });
-}
 
 // The nutrients Settings shows, a heading over each group after the first.
 export function NutrientTotals({ totals, settings, energy }: { totals: Nutrients; settings: Record<string, unknown>; energy: EnergyUnit }) {
