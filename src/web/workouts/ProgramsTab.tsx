@@ -7,7 +7,7 @@ import { Fragment, useState } from "react";
 import { today } from "@x-tech-laboratories/x-libs/dates";
 import { format_number } from "@x-tech-laboratories/x-libs/units";
 import { NumberField, Select } from "@x-tech-laboratories/x-libs/web/react/controls";
-import { confirm_dialog, Dialog } from "@x-tech-laboratories/x-libs/web/react/dialog";
+import { Dialog } from "@x-tech-laboratories/x-libs/web/react/dialog";
 import { Card, Cards, FormRow, RowActions, Section, Stack } from "@x-tech-laboratories/x-libs/web/react/layout";
 import { Empty } from "@x-tech-laboratories/x-libs/web/react/states";
 import { toast } from "@x-tech-laboratories/x-libs/web/react/toasts";
@@ -30,7 +30,9 @@ import {
 import type { WorkoutLibrary } from "../../shared/workouts/store.ts";
 import { calls, succeeds } from "../api.ts";
 import { CategoryEditor } from "../categories.tsx";
+import { AddNameForm, DialogButtons, use_rename } from "../forms.tsx";
 import { HistoryButton } from "../history/HistoryView.tsx";
+import { confirm_delete } from "../rows.tsx";
 import { UnitNumber } from "../unit_field.tsx";
 import type { ShownUnits } from "../units.ts";
 import { ExerciseSelect } from "./controls.tsx";
@@ -137,16 +139,7 @@ export function SessionDialog({ program, initial, library, units, default_rest, 
       subtitle={program.name}
       full
       on_close={on_close}
-      buttons={
-        <>
-          <button type="button" onClick={on_close}>
-            Cancel
-          </button>
-          <button type="button" className="accent solid" onClick={() => void save()}>
-            Save
-          </button>
-        </>
-      }
+      buttons={<DialogButtons on_save={() => void save()} on_cancel={on_close} />}
     >
       <div className="form-rows">
         <FormRow label="Name" id="session-name">
@@ -224,15 +217,9 @@ interface ProgramsTabProps {
 }
 
 export function ProgramsTab({ library, units, default_rest }: ProgramsTabProps) {
-  const [draft, set_draft] = useState("");
   const [editing, set_editing] = useState<{ program: Program; session: Session | null } | null>(null);
-  const [renaming, set_renaming] = useState<{ program: Program; name: string } | null>(null);
+  const rename = use_rename<Program>((program, name) => void succeeds(() => calls().save_program({ id: program.id, name, notes: program.notes })));
   const exercises = new Map(library.exercises.map((exercise) => [exercise.id, exercise]));
-
-  async function add_program(): Promise<void> {
-    if (!draft.trim()) return;
-    if (await succeeds(() => calls().save_program({ name: draft }))) set_draft("");
-  }
 
   async function start(session: Session): Promise<void> {
     if (await succeeds(() => calls().start_workout(today(), session.id, new Date().toISOString()))) location.hash = "#/workouts/log";
@@ -240,52 +227,29 @@ export function ProgramsTab({ library, units, default_rest }: ProgramsTabProps) 
 
   function delete_program(program: Program): void {
     const count = program.sessions.length;
-    confirm_dialog({
-      title: `Delete ${program.name}?`,
-      message: `${count > 0 ? `Its ${count} session(s) go with it. ` : ""}Workouts already logged are kept.`,
-      confirm_label: "Delete",
-      danger: true,
-      run: async () => void (await succeeds(() => calls().delete_program(program.id))),
-    });
+    confirm_delete(`Delete ${program.name}?`, `${count > 0 ? `Its ${count} session(s) go with it. ` : ""}Workouts already logged are kept.`, () => succeeds(() => calls().delete_program(program.id)));
   }
 
   function delete_session(session: Session): void {
-    confirm_dialog({
-      title: `Delete ${session.name}?`,
-      message: "Workouts logged from it are kept.",
-      confirm_label: "Delete",
-      danger: true,
-      run: async () => void (await succeeds(() => calls().delete_program_session(session.id))),
-    });
+    confirm_delete(`Delete ${session.name}?`, "Workouts logged from it are kept.", () => succeeds(() => calls().delete_program_session(session.id)));
   }
 
   return (
     <>
-      <form
-        className="toolbar"
-        onSubmit={(event) => {
-          event.preventDefault();
-          void add_program();
-        }}
-      >
-        <input type="text" aria-label="New program" placeholder="New program…" value={draft} onChange={(event) => set_draft(event.currentTarget.value)} />
-        <button type="submit" className="accent solid" disabled={!draft.trim()}>
-          Add Program
-        </button>
-      </form>
+      <AddNameForm label="New program" button="Add Program" on_add={(name) => succeeds(() => calls().save_program({ name }))} />
       {library.programs.length === 0 && <Empty title="No programs yet." hint="A program groups the sessions of a training block, such as Push, Pull and Legs." />}
       <Stack>
         {library.programs.map((program) => (
           <Section
             key={program.id}
-            title={program.name}
+            title={rename.renaming?.id === program.id ? rename.field(program, program.name) : program.name}
             tools={
               <>
                 <span className="muted small">{`${program.sessions.length} session(s)`}</span>
                 <button type="button" onClick={() => set_editing({ program, session: null })}>
                   Add Session
                 </button>
-                <button type="button" onClick={() => set_renaming({ program, name: program.name })} aria-label={`Rename ${program.name}`}>
+                <button type="button" onClick={() => rename.start(program)} aria-label={`Rename ${program.name}`}>
                   Rename
                 </button>
                 <HistoryButton kind="program" item_id={program.id} name={program.name} />
@@ -331,27 +295,6 @@ export function ProgramsTab({ library, units, default_rest }: ProgramsTabProps) 
         ))}
       </Stack>
       {editing && <SessionDialog program={editing.program} initial={editing.session} library={library} units={units} default_rest={default_rest} on_close={() => set_editing(null)} />}
-      {renaming && (
-        <Dialog
-          title={`Rename ${renaming.program.name}`}
-          on_close={() => set_renaming(null)}
-          form={{
-            on_submit: () => {
-              void succeeds(() => calls().save_program({ id: renaming.program.id, name: renaming.name.trim() || renaming.program.name, notes: renaming.program.notes })).then(
-                (saved) => saved && set_renaming(null),
-              );
-            },
-            submit_label: "Rename",
-          }}
-          buttons={
-            <button type="button" onClick={() => set_renaming(null)}>
-              Cancel
-            </button>
-          }
-        >
-          <input type="text" aria-label="Program name" autoFocus value={renaming.name} onChange={(event) => set_renaming({ ...renaming, name: event.currentTarget.value })} />
-        </Dialog>
-      )}
     </>
   );
 }

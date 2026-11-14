@@ -4,7 +4,7 @@
 
 import { useState } from "react";
 import { NumberField, Select } from "@x-tech-laboratories/x-libs/web/react/controls";
-import { confirm_dialog, Dialog, open_dialog } from "@x-tech-laboratories/x-libs/web/react/dialog";
+import { Dialog, open_dialog } from "@x-tech-laboratories/x-libs/web/react/dialog";
 import { FormRow, RowActions, Toolbar } from "@x-tech-laboratories/x-libs/web/react/layout";
 import { Empty, Loaded } from "@x-tech-laboratories/x-libs/web/react/states";
 import { DataTable, type TableColumn } from "@x-tech-laboratories/x-libs/web/react/table";
@@ -12,7 +12,7 @@ import { DataTable, type TableColumn } from "@x-tech-laboratories/x-libs/web/rea
 import { metric_kinds, metric_roles, type BodyMetric, type MetricKind, type MetricRole } from "../../shared/body/readings.ts";
 import type { MetricSummary } from "../../shared/body/store.ts";
 import { calls, succeeds, use_data } from "../api.ts";
-import { HistoryButton } from "../history/HistoryView.tsx";
+import { confirm_delete, row_actions_column } from "../rows.tsx";
 import type { ShownUnits } from "../units.ts";
 import { format_value, to_shown_value, to_stored_value, unit_of } from "./format.ts";
 
@@ -97,13 +97,8 @@ export function edit_metric(metric: BodyMetric | null, units: ShownUnits): void 
 
 // A metric's readings go with it, since nothing else could show them; the confirmation says how many.
 function delete_metric(metric: MetricSummary): void {
-  confirm_dialog({
-    title: `Delete metric "${metric.name}"?`,
-    message: metric.readings > 0 ? `Its ${metric.readings} reading${metric.readings === 1 ? " is" : "s are"} deleted with it.` : "It has no readings.",
-    confirm_label: "Delete",
-    danger: true,
-    run: async () => void (await succeeds(() => calls().delete_body_metric(metric.id))),
-  });
+  const readings = metric.readings > 0 ? `Its ${metric.readings} reading${metric.readings === 1 ? " is" : "s are"} deleted with it.` : "It has no readings.";
+  confirm_delete(`Delete metric "${metric.name}"?`, readings, () => succeeds(() => calls().delete_body_metric(metric.id)));
 }
 
 interface MetricRow extends MetricSummary {
@@ -125,23 +120,20 @@ const columns: TableColumn<MetricRow>[] = [
   { label: "Stands for", cell: (row) => (row.role ? (metric_roles.find((role) => role.key === row.role)?.label ?? "") : "—") },
   { label: "Readings", cell: (row) => row.readings },
   { label: "Last taken", cell: (row) => row.last_date || "—" },
-  {
-    label: "Actions",
-    id: "actions",
-    cell: (row) => (
-      <>
-        <button type="button" className="icon" aria-label={`Edit ${row.name}`} onClick={() => edit_metric(row, row.units)}>✎</button>
-        <HistoryButton kind="metric" item_id={row.id} name={row.name} />
-        <RowActions
-          index={row.index}
-          count={row.count}
-          on_move={(from, to) => void succeeds(() => calls().move_body_metric(row.id, to - from))}
-          on_remove={() => delete_metric(row)}
-          remove_label={`Delete ${row.name}`}
-        />
-      </>
+  row_actions_column<MetricRow>({
+    name: (row) => row.name,
+    edit: (row) => edit_metric(row, row.units),
+    history: (row) => ({ kind: "metric", item_id: row.id }),
+    trailing: (row) => (
+      <RowActions
+        index={row.index}
+        count={row.count}
+        on_move={(from, to) => void succeeds(() => calls().move_body_metric(row.id, to - from))}
+        on_remove={() => delete_metric(row)}
+        remove_label={`Delete ${row.name}`}
+      />
     ),
-  },
+  }),
 ];
 
 export function MetricsTab({ units }: { units: ShownUnits }) {

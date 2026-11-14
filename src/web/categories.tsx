@@ -1,19 +1,23 @@
 // The category pieces the Diet and Workouts pages share: the category tree managed one folder at a time, a filter that
-// steps into categories the same way, the category picker on a form, and paths shown with chevrons.
+// steps into categories the same way with the grouping and sorting of a list, the pickers on a form, and paths shown
+// with chevrons.
 
 // ── Imports ──────────────────────────────────────────────────────────────────
 
-import { Fragment, useState, type KeyboardEvent, type ReactNode } from "react";
+import { Fragment, useMemo, useState, type ReactNode } from "react";
 import { Chip, Chips } from "@x-tech-laboratories/x-libs/web/react/badges";
 import { TreeChipField } from "@x-tech-laboratories/x-libs/web/react/chip_field";
-import { TreeSelect } from "@x-tech-laboratories/x-libs/web/react/controls";
-import { confirm_dialog, Dialog } from "@x-tech-laboratories/x-libs/web/react/dialog";
+import { Select, TreeSelect } from "@x-tech-laboratories/x-libs/web/react/controls";
+import { Dialog } from "@x-tech-laboratories/x-libs/web/react/dialog";
 import { Crumbs, PathText, type CrumbTarget } from "@x-tech-laboratories/x-libs/web/react/layout";
+import { use_pref } from "@x-tech-laboratories/x-libs/web/react/prefs";
 import { Empty } from "@x-tech-laboratories/x-libs/web/react/states";
-import { DataTable, type TableColumn } from "@x-tech-laboratories/x-libs/web/react/table";
+import { DataTable, type RowGroup, type Sorting, type TableColumn } from "@x-tech-laboratories/x-libs/web/react/table";
 import { move_for_drop } from "@x-tech-laboratories/x-libs/web/tree";
 
-import { category_path, category_path_text, category_subtree, children_of_category, uncategorized, type Category, type PlacedCategory } from "../shared/category_tree.ts";
+import { category_path, category_path_text, category_subtree, children_of_category, is_in_category, shown_separator, uncategorized, type Category, type PlacedCategory } from "../shared/category_tree.ts";
+import { AddNameForm, use_rename } from "./forms.tsx";
+import { confirm_delete, row_actions_column } from "./rows.tsx";
 
 // ── Paths ────────────────────────────────────────────────────────────────────
 
@@ -71,18 +75,72 @@ export function CategoryEditor({ categories, values, on_change }: { categories: 
   );
 }
 
-interface CategoryBrowserProps {
+interface Categorized {
+  id: string;
+  name: string;
+  categories: string[];
+}
+
+const name_of = (item: Categorized) => item.name;
+
+interface CategorizedSelectProps<Item extends Categorized> {
+  label: string;
+  items: Item[];
   categories: PlacedCategory[];
-  // "" for everything, uncategorized for items without a category, or a category's id.
   value: string;
-  on_change: (value: string) => void;
-  // How many items sit in the category or anywhere below it.
+  placeholder: string;
+  // Shown instead of the placeholder when nothing is left to pick.
+  empty_label?: string;
+  exclude?: Set<string>;
+  // The option's text, the item's name unless set.
+  label_of?: (item: Item) => string;
+  on_change: (id: string) => void;
+  id?: string;
+}
+
+// Items under one heading per category that holds any, offered under each of theirs, the uncategorised last.
+export function CategorizedSelect<Item extends Categorized>({ label, items, categories, value, placeholder, empty_label, exclude, label_of = name_of, on_change, id }: CategorizedSelectProps<Item>) {
+  const groups = useMemo(() => {
+    const available = items.filter((item) => !exclude?.has(item.id)).sort((first, second) => first.name.localeCompare(second.name));
+    const option = (item: Item): [string, string] => [item.id, label_of(item)];
+    const grouped = categories
+      .map((category) => ({ label: category.path.join(shown_separator), options: available.filter((item) => item.categories.includes(category.id)).map(option) }))
+      .filter((group) => group.options.length > 0);
+    const loose = available.filter((item) => item.categories.length === 0);
+    return loose.length ? [...grouped, { label: uncategorized, options: loose.map(option) }] : grouped;
+  }, [items, categories, exclude, label_of]);
+  return <Select id={id} label={label} bare options={[["", groups.length === 0 && empty_label ? empty_label : placeholder]]} groups={groups} value={value} on_change={on_change} />;
+}
+
+// ── Filtering ────────────────────────────────────────────────────────────────
+
+export interface CategoryFilter<Item> {
+  // "" for everything, uncategorized for items without a category, or a category's id.
+  filter: string;
+  set_filter: (filter: string) => void;
+  // The items the filter lets through.
+  filtered: Item[];
+  // How many of all the items sit in a category or below it, and how many have none, for the filter's chips.
   count_in: (id: string) => number;
   uncategorized_count: number;
 }
 
+// The category filter of a list of categorised items.
+export function use_category_filter<Item extends { categories: string[] }>(items: Item[], categories: PlacedCategory[]): CategoryFilter<Item> {
+  const [filter, set_filter] = useState("");
+  const filtered = useMemo(() => {
+    if (!filter) return items;
+    if (filter === uncategorized) return items.filter((item) => item.categories.length === 0);
+    return items.filter((item) => is_in_category(item.categories, filter, categories));
+  }, [items, filter, categories]);
+  const count_in = (id: string) => items.filter((item) => is_in_category(item.categories, id, categories)).length;
+  const uncategorized_count = items.filter((item) => item.categories.length === 0).length;
+  return { filter, set_filter, filtered, count_in, uncategorized_count };
+}
+
 // A filter opened like folders: the trail back up, and a chip for each category inside the one open.
-export function CategoryBrowser({ categories, value, on_change, count_in, uncategorized_count }: CategoryBrowserProps) {
+export function CategoryBrowser({ categories, view }: { categories: PlacedCategory[]; view: CategoryFilter<unknown> }) {
+  const { filter: value, set_filter: on_change, count_in, uncategorized_count } = view;
   const open = categories.find((category) => category.id === value) ?? null;
   const is_loose = value === uncategorized;
   const trail: [string, CrumbTarget][] = is_loose ? [["All categories", () => on_change("")], [uncategorized, null]] : trail_to(open, categories, (id) => on_change(id ?? ""));
@@ -109,21 +167,88 @@ export function CategoryBrowser({ categories, value, on_change, count_in, uncate
   );
 }
 
+// ── Grouping ─────────────────────────────────────────────────────────────────
+
+export function GroupToggle({ checked, on_change }: { checked: boolean; on_change: (checked: boolean) => void }) {
+  return (
+    <label className="check">
+      <input type="checkbox" checked={checked} onChange={(event) => on_change(event.currentTarget.checked)} />
+      Group by category
+    </label>
+  );
+}
+
+// One table row; an item in several categories gets one per group, each with its own key.
+export interface ListRow<Item> {
+  key: string;
+  item: Item;
+}
+
+function group_label(path: string[], count: number): ReactNode {
+  return (
+    <>
+      <PathText names={path} /> <span className="muted">({count})</span>
+    </>
+  );
+}
+
+// A group per category in tree order, headed by its whole path, holding the items carrying it exactly; a parent whose
+// items are all nested still gets its heading, and the uncategorised come last.
+export function category_groups<Item>(items: Item[], categories: PlacedCategory[], categories_of: (item: Item) => string[], id_of: (item: Item) => string): RowGroup<ListRow<Item>>[] {
+  const groups = categories
+    .filter((category) => items.some((item) => is_in_category(categories_of(item), category.id, categories)))
+    .map((category) => {
+      const members = items.filter((item) => categories_of(item).includes(category.id));
+      return { key: category.id, label: group_label(category.path, members.length), rows: members.map((item) => ({ key: `${category.id}\u0000${id_of(item)}`, item })) };
+    });
+  const loose = items.filter((item) => categories_of(item).length === 0);
+  if (loose.length) groups.push({ key: uncategorized, label: group_label([uncategorized], loose.length), rows: loose.map((item) => ({ key: `\u0000${id_of(item)}`, item })) });
+  return groups;
+}
+
+interface CategoryView<Item> extends CategoryFilter<Item> {
+  grouped: boolean;
+  set_grouped: (grouped: boolean) => void;
+  sorting: Sorting;
+  set_sorting: (sorting: Sorting) => void;
+  rows: ListRow<Item>[];
+  groups: RowGroup<ListRow<Item>>[] | undefined;
+}
+
+// The filter, grouping and sorting of a table of categorised items; grouping is remembered in this browser, per list.
+export function use_category_view<Item extends { id: string; categories: string[] }>(items: Item[], categories: PlacedCategory[], grouped_key: string): CategoryView<Item> {
+  const filter = use_category_filter(items, categories);
+  const [grouped, set_grouped] = use_pref(grouped_key, false, (value): value is boolean => typeof value === "boolean");
+  const [sorting, set_sorting] = useState<Sorting>({ key: "name", descending: false });
+  const { filtered } = filter;
+  const groups = useMemo(() => (grouped ? category_groups(filtered, categories, (item) => item.categories, (item) => item.id) : undefined), [grouped, filtered, categories]);
+  const rows = useMemo(() => filtered.map((item) => ({ key: item.id, item })), [filtered]);
+  return { ...filter, grouped, set_grouped, sorting, set_sorting, rows, groups };
+}
+
 // ── Managing ─────────────────────────────────────────────────────────────────
 
-// A name edited in place: Enter or leaving saves it, Escape gives up.
-export function RenameField({ label, value, on_done }: { label: string; value: string; on_done: (name: string | null) => void }) {
-  const [draft, set_draft] = useState(value);
-  const keyed = (event: KeyboardEvent<HTMLInputElement>) => {
-    if (event.key === "Enter") {
-      event.preventDefault();
-      on_done(draft);
-    } else if (event.key === "Escape") {
-      event.preventDefault();
-      on_done(null);
-    }
+// A category's count of items, with the count below it too beside it when that is more, such as "2 (5 with nested)".
+export function NestedCount({ own, nested }: { own: number; nested: number }) {
+  return (
+    <>
+      {own}
+      {nested > own && <span className="muted small"> ({nested} with nested)</span>}
+    </>
+  );
+}
+
+// A count column of the category table, its own count and the one with everything nested below it.
+export function count_column<Row>(label: string, id: string, counts: (row: Row) => [own: number, nested: number]): TableColumn<Row> {
+  return {
+    label,
+    id,
+    class: "number",
+    cell: (row) => {
+      const [own, nested] = counts(row);
+      return <NestedCount own={own} nested={nested} />;
+    },
   };
-  return <input type="text" aria-label={label} autoFocus value={draft} onChange={(event) => set_draft(event.currentTarget.value)} onKeyDown={keyed} onBlur={() => on_done(draft)} />;
 }
 
 function MoveDialog({ category, categories, on_move, on_close }: { category: Category; categories: Category[]; on_move: (parent_id: string | null) => void; on_close: () => void }) {
@@ -169,8 +294,7 @@ interface CategoryManagerProps<Row extends PlacedCategory> {
 // reorder or onto one another to nest.
 export function CategoryManager<Row extends PlacedCategory>({ categories, count_columns, describe_delete, calls, children }: CategoryManagerProps<Row>) {
   const [open_id, set_open_id] = useState<string | null>(null);
-  const [draft, set_draft] = useState("");
-  const [renaming, set_renaming] = useState<string | null>(null);
+  const rename = use_rename<string>((id, name) => void calls.rename(id, name));
   const [moving, set_moving] = useState<Row | null>(null);
   const [dragged, set_dragged] = useState<Row | null>(null);
 
@@ -178,34 +302,13 @@ export function CategoryManager<Row extends PlacedCategory>({ categories, count_
   const rows = categories.filter((category) => category.parent_id === (open?.id ?? null));
   const inside_count = (row: Row) => categories.filter((category) => category.parent_id === row.id).length;
 
-  function add(): void {
-    const name = draft.trim();
-    if (name) void calls.add(name, open?.id ?? null).then((added) => added !== false && set_draft(""));
-  }
-
-  function finish_rename(row: Row, name: string | null): void {
-    set_renaming(null);
-    const target = name?.trim() ?? "";
-    if (target && target !== row.name) void calls.rename(row.id, target);
-  }
-
-  function remove(row: Row): void {
-    confirm_dialog({
-      title: `Delete ${row.name}?`,
-      message: describe_delete(row),
-      confirm_label: "Delete",
-      danger: true,
-      run: async () => void (await calls.remove(row.id)),
-    });
-  }
-
   const columns: TableColumn<Row>[] = [
     {
       label: "Category",
       id: "name",
       cell: (row) =>
-        renaming === row.id ? (
-          <RenameField label={`Rename ${row.name}`} value={row.name} on_done={(name) => finish_rename(row, name)} />
+        rename.renaming === row.id ? (
+          rename.field(row.id, row.name)
         ) : (
           <>
             <button type="button" className="link" title={`Open ${row.name}`} onClick={() => set_open_id(row.id)}>
@@ -216,44 +319,28 @@ export function CategoryManager<Row extends PlacedCategory>({ categories, count_
         ),
     },
     ...count_columns,
-    {
-      label: "Actions",
-      id: "actions",
-      header: <span className="visually-hidden">Actions</span>,
-      class: "actions-cell",
-      width: 230,
-      cell: (row) => (
-        <div className="row-actions">
-          <button type="button" aria-label={`Rename ${row.name}`} onClick={() => set_renaming(row.id)}>
+    row_actions_column<Row>({
+      name: (row) => row.name,
+      buttons: (row) => (
+        <>
+          <button type="button" aria-label={`Rename ${row.name}`} onClick={() => rename.start(row.id)}>
             Rename
           </button>
           <button type="button" aria-label={`Move ${row.name}`} onClick={() => set_moving(row)}>
             Move
           </button>
-          <button type="button" className="danger" aria-label={`Delete ${row.name}`} onClick={() => remove(row)}>
-            Delete
-          </button>
-        </div>
+        </>
       ),
-    },
+      remove: (row) => confirm_delete(`Delete ${row.name}?`, describe_delete(row), () => calls.remove(row.id)),
+      width: 230,
+    }),
   ];
 
   const label = open ? `New category in ${open.name}` : "New category";
   return (
     <div className="stack tight">
       <Crumbs items={trail_to(open, categories, set_open_id)} />
-      <form
-        className="toolbar"
-        onSubmit={(event) => {
-          event.preventDefault();
-          add();
-        }}
-      >
-        <input type="text" aria-label={label} placeholder={`${label}…`} value={draft} onChange={(event) => set_draft(event.currentTarget.value)} />
-        <button type="submit" className="accent solid" disabled={!draft.trim()}>
-          Add category
-        </button>
-      </form>
+      <AddNameForm label={label} button="Add category" on_add={(name) => calls.add(name, open?.id ?? null).then((added) => added !== false)} />
       {rows.length === 0 ? (
         <Empty title={open ? `Nothing inside ${open.name} yet.` : "No categories yet."} />
       ) : (

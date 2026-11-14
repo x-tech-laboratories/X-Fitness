@@ -15,12 +15,13 @@ import { DataTable, type TableColumn } from "@x-tech-laboratories/x-libs/web/rea
 import { toast } from "@x-tech-laboratories/x-libs/web/react/toasts";
 
 import { shown_nutrients, target_of } from "../../shared/diet/labels.ts";
-import { by_id, meal_at, normalize_meals, nutrient_groups, nutrients, serving_unit, target_key, target_progress, type EntryKind, type Meal, type NutrientInfo, type Nutrients } from "../../shared/diet/model.ts";
+import { by_id, food_label, meal_at, normalize_meals, nutrient_groups, nutrients, serving_unit, target_key, target_progress, type EntryKind, type Food, type Meal, type NutrientInfo, type Nutrients, type Recipe } from "../../shared/diet/model.ts";
 import type { DayEntry, DietData, MealMacros } from "../../shared/diet/store.ts";
 import { attempt, calls, succeeds, use_data } from "../api.ts";
-import { HistoryButton } from "../history/HistoryView.tsx";
+import { CategorizedSelect } from "../categories.tsx";
+import { row_actions_column } from "../rows.tsx";
 import { format_amount, format_nutrient, shown_unit, to_shown_value } from "./format.ts";
-import { FoodUnitSelect, ItemSelect } from "./widgets.tsx";
+import { FoodUnitSelect } from "./widgets.tsx";
 
 // ── Dates ────────────────────────────────────────────────────────────────────
 
@@ -158,7 +159,7 @@ function LogForm({ date, data, meals }: { date: string; data: DietData; meals: M
           choose("");
         }}
       />
-      <ItemSelect label={kind === "food" ? "Food" : "Recipe"} items={kind === "food" ? data.foods : data.recipes} categories={data.categories} value={ref_id} placeholder={`Select ${kind}…`} on_change={choose} />
+      <CategorizedSelect<Food | Recipe> label={kind === "food" ? "Food" : "Recipe"} items={kind === "food" ? data.foods : data.recipes} label_of={food_label} categories={data.categories} value={ref_id} placeholder={`Select ${kind}…`} on_change={choose} />
       <NumberField label="Amount" bare min={0.01} value={amount} on_change={set_amount} />
       {kind === "food" && ref_id && <FoodUnitSelect label="Unit" food={foods[ref_id]} value={unit} on_change={set_unit} />}
       <button type="submit" className="accent solid" disabled={!ref_id}>Log</button>
@@ -200,20 +201,14 @@ export function DiaryTab({ data, settings, energy }: { data: DietData; settings:
       nutrient(1),
       nutrient(2),
       nutrient(3),
-      {
-        label: "Actions",
-        id: "actions",
-        header: <span className="visually-hidden">Actions</span>,
-        class: "actions-cell",
+      row_actions_column<DayEntry>({
+        name: (entry) => entry.label,
+        buttons: (entry) => <Select label={`Meal of ${entry.label}`} bare options={meal_options(meals)} value={entry.meal} on_change={(meal) => void attempt(() => calls().move_diary_entry(entry.id, meal))} />,
+        history: (entry) => ({ kind: "diary", item_id: entry.id }),
+        remove: (entry) => void remove(entry),
+        remove_text: "Remove",
         width: 330,
-        cell: (entry) => (
-          <div className="row-actions">
-            <Select label={`Meal of ${entry.label}`} bare options={meal_options(meals)} value={entry.meal} on_change={(meal) => void attempt(() => calls().move_diary_entry(entry.id, meal))} />
-            <HistoryButton kind="diary" item_id={entry.id} name={entry.label} />
-            <button type="button" className="danger" aria-label={`Remove ${entry.label}`} onClick={() => void remove(entry)}>Remove</button>
-          </div>
-        ),
-      },
+      }),
     ];
   }, [energy, meals]);
 

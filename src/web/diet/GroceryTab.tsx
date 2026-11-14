@@ -11,10 +11,10 @@ import { Empty } from "@x-tech-laboratories/x-libs/web/react/states";
 import { DataTable, type TableColumn } from "@x-tech-laboratories/x-libs/web/react/table";
 import { ComboField } from "@x-tech-laboratories/x-libs/web/react/suggestions";
 
-import { by_id, food_units, normalize_names, type Food, type GroceryItem } from "../../shared/diet/model.ts";
+import { by_id, food_label, food_units, normalize_names, type Food, type GroceryItem } from "../../shared/diet/model.ts";
 import type { DietData, GroceryChanges } from "../../shared/diet/store.ts";
 import { attempt, calls } from "../api.ts";
-import { GroupToggle, ItemSelect, category_groups, type ListRow } from "./widgets.tsx";
+import { CategorizedSelect, category_groups, GroupToggle, type ListRow } from "../categories.tsx";
 
 // ── Lines ────────────────────────────────────────────────────────────────────
 
@@ -74,7 +74,7 @@ function AddLine({ data, foods, prefill_comment }: { data: DietData; foods: Reco
         void add();
       }}
     >
-      <ItemSelect label="Food" items={data.foods} categories={data.categories} value={food_id} placeholder="Select food…" empty_label="Every food is already listed" exclude={on_list} on_change={choose} />
+      <CategorizedSelect label="Food" items={data.foods} label_of={food_label} categories={data.categories} value={food_id} placeholder="Select food…" empty_label="Every food is already listed" exclude={on_list} on_change={choose} />
       <NumberField label="Amount" bare min={0.01} value={amount} on_change={set_amount} />
       <ComboField label="Unit" placeholder="Unit" value={unit} options={units_for(food, data.units)} on_change={set_unit} on_enter={() => void add()} />
       <ComboField label="Brand" placeholder="Brand" value={brand} options={data.brands} on_change={set_brand} on_enter={() => void add()} />

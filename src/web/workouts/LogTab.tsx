@@ -16,6 +16,7 @@ import { measurement_of, workout_totals, type Exercise, type WorkoutEntry } from
 import type { LoggedWorkout, ProgressionReport, WorkoutLibrary } from "../../shared/workouts/store.ts";
 import { attempt, calls, succeeds, use_data } from "../api.ts";
 import { HistoryButton } from "../history/HistoryView.tsx";
+import { confirm_delete } from "../rows.tsx";
 import { UnitNumber } from "../unit_field.tsx";
 import type { ShownUnits } from "../units.ts";
 import { ExerciseSelect } from "./controls.tsx";
@@ -133,13 +134,7 @@ function WorkoutCard({ workout, library, units, default_rest, rest_sound }: Work
   }
 
   function remove(): void {
-    confirm_dialog({
-      title: `Delete ${workout.name}?`,
-      message: `It was logged on ${workout.date}.`,
-      confirm_label: "Delete",
-      danger: true,
-      run: async () => void (await succeeds(() => calls().delete_workout(workout.id))),
-    });
+    confirm_delete(`Delete ${workout.name}?`, `It was logged on ${workout.date}.`, () => succeeds(() => calls().delete_workout(workout.id)));
   }
 
   const summary = [
