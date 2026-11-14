@@ -123,27 +123,78 @@ describe("goals", () => {
     expect(screen.queryByRole("combobox", { name: "BMR formula" })).toBeNull();
   });
 
-  it("edits the metrics' own goals, filled in by the suggestions", async () => {
+  it("lists only the goals set, weight, body fat and waist first, each with how far it is from the latest reading", async () => {
     const store = fake_page();
+    store.set_body_goal("hips", 95);
+    store.set_body_goal("waist", 84);
+    store.set_body_goal("weight", 75);
+    store.set_body_goal("body_fat", 15);
     show("goals");
-    const goal_of = (id: string) => store.list_body_metrics().find((metric) => metric.id === id)?.goal;
 
-    expect(await screen.findByText("now 80 kg")).toBeTruthy();
-    expect(screen.getByText("now 90 cm")).toBeTruthy();
-    expect(screen.getByText(/^now [\d.]+ ?% \(estimated\)$/)).toBeTruthy();
+    const section = (await screen.findByRole("heading", { name: "Where I want to be" })).closest("section")!;
+    await waitFor(() => expect([...section.querySelectorAll(".card-head strong")].map((title) => title.textContent)).toEqual(["Weight", "Body fat", "Waist", "Hips"]));
+    expect(within(section).getByText("now 80 kg · 5 kg to lose · BMI 23.1")).toBeTruthy();
+    expect(within(section).getByText("now 90 cm · 6 cm to go down · 0.47 of your height")).toBeTruthy();
+    expect(within(section).getByText(/^now [\d.]+ ?% \(estimated\) · [\d.]+ ?% to go down$/)).toBeTruthy();
+    expect(within(section).queryByText(/now .* · .*95/)).toBeNull();
+    expect((within(section).getByRole("textbox", { name: "Hips goal" }) as HTMLInputElement).value).toBe("95");
+    expect(within(section).queryByText(/apart from the metrics/)).toBeTruthy();
+    expect(within(section).queryByText(/metrics' goals|goals of your/)).toBeNull();
+  });
+
+  it("adds a goal from the menu of those not set, edits and removes it, and keeps it with no metric for it", async () => {
+    const store = fake_page();
+    store.delete_body_metric("hips");
+    show("goals");
+    const goals = () => Object.fromEntries(store.list_body_goals().map((goal) => [goal.key, goal.value]));
+
+    expect(await screen.findByText("No goals yet; add one with Add goal.")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Add goal" }));
+    const menu = await screen.findByRole("menu");
+    expect(within(menu).getAllByRole("menuitem").map((item) => item.textContent)).toEqual(["Weight", "Body fat", "Waist", "Neck", "Chest", "Underbust", "Hips", "Upper arm", "Wrist", "Thigh", "Knee", "Calf", "Ankle"]);
+    fireEvent.click(within(menu).getByRole("menuitem", { name: "Hips" }));
+    const hips = await screen.findByRole("textbox", { name: "Hips goal" });
+    expect(store.list_body_goals()).toEqual([]);
+    fireEvent.change(hips, { target: { value: "96" } });
+    fireEvent.blur(hips);
+    await waitFor(() => expect(goals()).toEqual({ hips: 96 }));
+    expect(screen.queryByText(/^now /)).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Add goal" }));
+    expect(within(await screen.findByRole("menu")).queryByRole("menuitem", { name: "Hips" })).toBeNull();
+    fireEvent.click(within(screen.getByRole("menu")).getByRole("menuitem", { name: "Weight" }));
+    const weight = await screen.findByRole("textbox", { name: "Weight goal" });
+    fireEvent.change(weight, { target: { value: "75" } });
+    fireEvent.blur(weight);
+    await waitFor(() => expect(goals()).toEqual({ weight: 75, hips: 96 }));
+    const edited = screen.getByRole("textbox", { name: "Weight goal" });
+    fireEvent.change(edited, { target: { value: "77.5" } });
+    fireEvent.blur(edited);
+    await waitFor(() => expect(goals()).toEqual({ weight: 77.5, hips: 96 }));
+
+    fireEvent.click(screen.getByRole("button", { name: "Remove the hips goal" }));
+    await waitFor(() => expect(goals()).toEqual({ weight: 77.5 }));
+    await waitFor(() => expect(screen.queryByRole("textbox", { name: "Hips goal" })).toBeNull());
+  });
+
+  it("fills the weight goal in from a BMI of 22 and the waist from half the height, with nothing tying the weight to body fat", async () => {
+    const store = fake_page();
+    store.set_body_goal("weight", 90);
+    store.set_body_goal("waist", 100);
+    store.set_body_goal("body_fat", 15);
+    show("goals");
+    const goal_of = (key: string) => store.list_body_goals().find((goal) => goal.key === key)?.value;
+
     fireEvent.click(await screen.findByRole("button", { name: "Set the goal weight for a BMI of 22" }));
     await waitFor(() => expect(goal_of("weight")).toBeCloseTo(71.3));
     expect(await screen.findByText(/now 80 kg · 8\.7 kg to lose/)).toBeTruthy();
+    expect(screen.getByText(/^A healthy BMI at your height is/)).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Set the goal waist to half your height" }));
     await waitFor(() => expect(goal_of("waist")).toBe(90));
-    const body_fat = screen.getByRole("textbox", { name: "Goal body fat" });
-    fireEvent.change(body_fat, { target: { value: "15" } });
-    fireEvent.blur(body_fat);
-    await waitFor(() => expect(goal_of("bodyfat")).toBe(15));
-    const weight = screen.getByRole("textbox", { name: "Goal weight" });
-    fireEvent.change(weight, { target: { value: "75" } });
-    fireEvent.blur(weight);
-    await waitFor(() => expect(goal_of("weight")).toBe(75));
+    expect(goal_of("body_fat")).toBe(15);
+    expect(screen.queryByText(/body fat at today's lean mass/)).toBeNull();
+    expect(screen.queryByRole("textbox", { name: "Body fat for the goal weight" })).toBeNull();
+    expect(screen.queryByRole("button", { name: /goal weight for .*% body fat/ })).toBeNull();
   });
 
   it("stores Lose, Keep and Gain as the signed weekly change", async () => {
@@ -179,7 +230,7 @@ describe("goals", () => {
 
   it("projects the weight goal once one is set, and warns when the pace heads away from it", async () => {
     const store = fake_page();
-    store.save_body_metric({ id: "weight", name: "Weight", kind: "weight", goal: 75 });
+    store.set_body_goal("weight", 75);
     store.set_setting("calculators.weekly_change", 0.5);
     show("goals");
 

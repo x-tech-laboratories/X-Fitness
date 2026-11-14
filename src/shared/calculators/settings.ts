@@ -6,7 +6,7 @@
 export const calculators_setting_defaults = {
   "calculators.activity": "light",
   "calculators.bmr_formula": "mifflin_st_jeor",
-  // The plan: the weekly change is in kg, below 0 to lose; the body goals are the metrics' own.
+  // The plan: the weekly change is in kg, below 0 to lose; the body goals are kept apart, in the body feature's body_goals.
   "calculators.weekly_change": 0,
   "calculators.protein_per_kg": 1.6,
   "calculators.fat_percent": 30,

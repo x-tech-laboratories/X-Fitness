@@ -26,7 +26,7 @@ describe("sync between devices", () => {
 
     on_phone.set_body_reading("weight", "2026-11-10", 82.5);
     on_phone.set_body_note("2026-11-10", "After the long run");
-    const calf = on_phone.save_body_metric({ name: "Calf", kind: "length", unit: "", goal: 0, comment: "" });
+    const calf = on_phone.save_body_metric({ name: "Calf", kind: "length", unit: "", comment: "" });
     push(phone, desktop);
     push(desktop, phone);
 

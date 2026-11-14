@@ -1,12 +1,12 @@
-// The rules behind body metrics that need no database: what a metric is, the days around a date, and the numbers a
-// series of readings gives, such as its moving average and BMI.
+// The rules behind body metrics and goals that need no database: what a metric is, what a goal can be about, the days
+// around a date, and the numbers a series of readings gives, such as its moving average and BMI.
 
 // ── Imports ──────────────────────────────────────────────────────────────────
 
 import { add_days, format_local, parse_local } from "@x-tech-laboratories/x-libs/dates";
 
 import { skinfolds, type Skinfold } from "../calculators/formulas.ts";
-import { shape_roles, type ShapeRole } from "./shape.ts";
+import { shape_roles, type Girth, type ShapeRole } from "./shape.ts";
 
 // ── Metrics ──────────────────────────────────────────────────────────────────
 
@@ -27,8 +27,6 @@ export interface BodyMetric {
   kind: MetricKind;
   // The label of a custom metric, such as "bpm"; empty for the other kinds.
   unit: string;
-  // In the stored unit; 0 means no goal.
-  goal: number;
   comment: string;
   position: number;
   role: MetricRole;
@@ -70,17 +68,56 @@ export function trimmed_text(raw: unknown): string {
   return typeof raw === "string" ? raw.trim() : "";
 }
 
-// A metric as saved: a name, a known kind and role, and a goal that is a positive number or 0.
+// A metric as saved: a name, a known kind and role.
 export function normalize_metric(input: MetricInput): Omit<BodyMetric, "id" | "position"> {
   const kind = kind_of(input.kind);
   return {
     name: trimmed_text(input.name) || "Metric",
     kind,
     unit: kind === "custom" ? trimmed_text(input.unit) : "",
-    goal: positive_number(input.goal),
     comment: trimmed_text(input.comment),
     role: metric_role_of(input.role),
   };
+}
+
+// ── Goals ────────────────────────────────────────────────────────────────────
+
+// What a body goal is about: the weight, the body fat or a girth; a goal needs no metric to exist.
+export type BodyGoalKey = "weight" | "body_fat" | Girth;
+
+export interface BodyGoal {
+  key: BodyGoalKey;
+  // In kg for the weight, percent for the body fat and cm for a girth; always above 0.
+  value: number;
+}
+
+// Every goal there can be, weight, body fat and waist first, each with the kind of number it is kept as.
+export const body_goal_keys: { key: BodyGoalKey; label: string; kind: MetricKind }[] = [
+  { key: "weight", label: "Weight", kind: "weight" },
+  { key: "body_fat", label: "Body fat", kind: "percent" },
+  { key: "waist", label: "Waist", kind: "length" },
+  { key: "neck", label: "Neck", kind: "length" },
+  { key: "chest", label: "Chest", kind: "length" },
+  { key: "underbust", label: "Underbust", kind: "length" },
+  { key: "hips", label: "Hips", kind: "length" },
+  { key: "upper_arm", label: "Upper arm", kind: "length" },
+  { key: "wrist", label: "Wrist", kind: "length" },
+  { key: "thigh", label: "Thigh", kind: "length" },
+  { key: "knee", label: "Knee", kind: "length" },
+  { key: "calf", label: "Calf", kind: "length" },
+  { key: "ankle", label: "Ankle", kind: "length" },
+];
+
+// The goal key named, or null for anything that is not one.
+export function body_goal_key_of(key: unknown): BodyGoalKey | null {
+  return body_goal_keys.find((candidate) => candidate.key === key)?.key ?? null;
+}
+
+// The goal a metric shows: the weight goal for the weight metric, its role's goal for a body fat or girth metric, else none.
+export function metric_goal_key(metric: Pick<BodyMetric, "kind" | "role">, is_weight_metric: boolean): BodyGoalKey | null {
+  if (is_weight_metric) return "weight";
+  const goal = body_goal_keys.find((candidate) => candidate.key !== "weight" && candidate.key === metric.role);
+  return goal && goal.kind === metric.kind ? goal.key : null;
 }
 
 // ── Days ─────────────────────────────────────────────────────────────────────

@@ -36,7 +36,7 @@ A feature is two folders:
   - `after_write`, when given, runs after every write the page, API or MCP makes and before history records it; the
     calculators use it to keep the diet's targets following their plan.
   - `on_open`, when given, runs each time the database opens, after the migrations, for an upgrade SQL cannot do; it
-    must change nothing the second time. The calculators use it to carry an old stored body plan into the metrics' goals.
+    must change nothing the second time. The calculators use it to carry an old stored body plan into the body goals.
   - Settings keys are namespaced, such as `workouts.default_rest`, with their defaults in `setting_defaults`.
 - `src/web/<feature>/index.tsx` exports its view, which gets the route's parts after `#/<feature>`, its pages, which the
   sidebar lists under the feature and the view picks by `#/<feature>/<page>`, and a function giving its sections for the
@@ -45,11 +45,20 @@ A feature is two folders:
 The sidebar (`src/web/Sidebar.tsx`) is an X-Libs `Tree`: Overview, then each feature folding open onto its pages, then
 Settings at the foot; a feature with one page is a single row. The Overview (`src/web/overview/`) draws from the features' own read calls.
 A web section can draw on another's store: Goals (`src/web/goals/`) and Workouts → Training show the calculators' calls
-and settings from `src/shared/calculators/`. Goals reads where you are now, edits the weight, body fat and waist
-metrics' own goals, and holds the diet plan; the training settings (bar, plates, METs, the lifts and run read) sit under
+and settings from `src/shared/calculators/`. Goals reads where you are now, holds the body goals, and holds the diet
+plan; the training settings (bar, plates, METs, the lifts and run read) sit under
 Settings → Workouts, and each workout's energy under Workouts → Reports.
 
 `src/shared/store.ts` and `src/web/features.tsx` list the features; nothing else knows them.
+
+## Body goals
+
+A body goal is its own row in `body_goals`, keyed by what it is about: `weight`, `body_fat` or a girth such as `waist`
+(`goal_keys` in `src/shared/body/readings.ts`), in kg, percent or cm. It needs no metric: metrics say what is measured,
+goals where the person wants to be, and only Goals sets them (`set_body_goal`). Whatever shows a goal beside readings
+finds it by key: the first weight metric shows the `weight` goal, a body fat or girth metric the goal of its role, and
+the 3D body at the goals takes each goal in place of its reading. Goals sync and keep versions like the other body
+rows.
 
 ## History
 

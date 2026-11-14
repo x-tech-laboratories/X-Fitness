@@ -7,6 +7,7 @@ import { create_history, type History, type HistoryWatch, type Version, type Ver
 import type { SqlDatabase } from "@x-tech-laboratories/x-libs/sql";
 
 import { id_of, text } from "../api_schemas.ts";
+import { body_goal_keys } from "../body/readings.ts";
 import { define_feature } from "../feature.ts";
 
 // ── Snapshots ────────────────────────────────────────────────────────────────
@@ -48,9 +49,11 @@ function apply_snapshot(database: SqlDatabase, levels: Level[], item_id: string,
     if (values.length) database.prepare(`DELETE FROM ${level.table} WHERE ${level.column} IN (${values.map(() => "?").join(", ")})`).run(...(values as string[]));
   }
   for (const level of levels) {
+    // A version made before a column was dropped puts back only the columns the table still has.
+    const existing = new Set((database.prepare(`SELECT name FROM pragma_table_info('${level.table}')`).all() as { name: string }[]).map((column) => column.name));
     for (const row of snapshot[level.table] ?? []) {
-      const columns = Object.keys(row);
-      database.prepare(`INSERT INTO ${level.table} (${columns.join(", ")}) VALUES (${columns.map(() => "?").join(", ")})`).run(...(Object.values(row) as never[]));
+      const columns = Object.keys(row).filter((column) => existing.has(column));
+      database.prepare(`INSERT INTO ${level.table} (${columns.join(", ")}) VALUES (${columns.map(() => "?").join(", ")})`).run(...(columns.map((column) => row[column]) as never[]));
     }
   }
 }
@@ -73,6 +76,18 @@ const count = (snapshot: Snapshot, table: string, word: string) => {
   const total = snapshot[table]?.length ?? 0;
   return `${total} ${word}${total === 1 ? "" : "s"}`;
 };
+
+// A body goal's plain name, such as Waist.
+function goal_label(key: string): string {
+  return body_goal_keys.find((goal) => goal.key === key)?.label ?? "Body";
+}
+
+// A body goal's value in the unit it is kept in, such as "75 kg".
+function goal_summary(row: Record<string, unknown> | undefined): string {
+  if (!row) return "";
+  const kind = body_goal_keys.find((goal) => goal.key === row.key)?.kind;
+  return `${Number(row.value)} ${kind === "weight" ? "kg" : kind === "percent" ? "%" : "cm"}`;
+}
 
 export const item_kinds: ItemKind[] = [
   {
@@ -174,6 +189,16 @@ export const item_kinds: ItemKind[] = [
     watches: [{ table: "body_days", item_columns: ["date"] }, { table: "body_readings", item_columns: ["date"] }],
     name_of: (snapshot) => `Body on ${String(first(snapshot, "body_days")?.date ?? first(snapshot, "body_readings")?.date ?? "")}`.trim(),
     summary: (snapshot) => count(snapshot, "body_readings", "reading"),
+  },
+  {
+    kind: "body_goal",
+    label: "Body goal",
+    item_table: "body_goals",
+    item_key: "key",
+    levels: [{ table: "body_goals", column: "key" }],
+    watches: [{ table: "body_goals", item_columns: ["key"] }],
+    name_of: (snapshot) => `${goal_label(String(first(snapshot, "body_goals")?.key ?? ""))} goal`,
+    summary: (snapshot) => goal_summary(first(snapshot, "body_goals")),
   },
 ];
 
@@ -293,7 +318,7 @@ export const history_feature = define_feature({
       description: "Lists one item's versions, newest first: when each was made, whether it was created, edited, deleted or restored, and on this device or another.",
       params: [
         { name: "kind", schema: { type: "string", enum: kinds, description: "What the item is." } },
-        { name: "item_id", schema: { ...id_of("item"), description: "The item's id; for a body day, its date." } },
+        { name: "item_id", schema: { ...id_of("item"), description: "The item's id; for a body day, its date, and for a body goal, its key such as weight." } },
       ],
     },
     list_recent_changes: {

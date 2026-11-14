@@ -11,7 +11,6 @@ export const body_metrics = sqliteTable("body_metrics", {
   name: text().notNull(),
   kind: text().notNull(),
   unit: text().notNull().default(""),
-  goal: real().notNull().default(0),
   comment: text().notNull().default(""),
   position: integer().notNull().default(0),
   // What the metric stands for, such as "waist" or "skinfold_thigh"; empty for nothing.
@@ -35,5 +34,11 @@ export const body_days = sqliteTable("body_days", {
   comment: text().notNull(),
 });
 
+// One goal per thing it is about: weight, body_fat or a girth such as waist, in kg, percent or cm; no metric is needed.
+export const body_goals = sqliteTable("body_goals", {
+  key: text().primaryKey(),
+  value: real().notNull(),
+});
+
 // Parents first, as sync applies them.
-export const body_tables = [body_metrics, body_readings, body_days];
+export const body_tables = [body_metrics, body_readings, body_days, body_goals];

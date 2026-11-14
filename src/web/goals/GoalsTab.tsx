@@ -1,5 +1,5 @@
-// The Goals page in three parts: where I am now, from the latest readings; where I want to be, the body metrics'
-// goals; and how I get there, the plan with the diet's daily targets it gives and when the goal weight is reached.
+// The Goals page in three parts: where I am now, from the latest readings; where I want to be, the body goals, kept
+// apart from the metrics; and how I get there, the plan with the diet's daily targets it gives and when the goal weight is reached.
 
 // ── Imports ──────────────────────────────────────────────────────────────────
 

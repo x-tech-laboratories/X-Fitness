@@ -1,4 +1,4 @@
-// The Goals section: a plan that sets the body metrics' goals and the diet's targets.
+// The Goals section: the body goals and a plan that sets the diet's targets.
 
 // ── Imports ──────────────────────────────────────────────────────────────────
 

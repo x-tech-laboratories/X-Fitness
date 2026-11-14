@@ -4,8 +4,8 @@
 
 import type { MethodSpec } from "@x-tech-laboratories/x-libs/api_spec";
 
-import { day, id_of, number, step, text } from "../api_schemas.ts";
-import { metric_roles } from "./readings.ts";
+import { day, id_of, step, text } from "../api_schemas.ts";
+import { body_goal_keys, metric_roles } from "./readings.ts";
 
 // ── Calls ────────────────────────────────────────────────────────────────────
 
@@ -17,7 +17,7 @@ export const body_api = {
     params: [],
   },
   save_body_metric: {
-    description: "Adds a body metric, or changes the one with the id given. Gives back its id.",
+    description: "Adds a body metric, or changes the one with the id given. Gives back its id. A metric says only what is measured; goals are set with set_body_goal.",
     params: [
       {
         name: "metric",
@@ -28,7 +28,6 @@ export const body_api = {
             name: text("Such as Weight or Waist."),
             kind: { type: "string", enum: ["weight", "length", "percent", "custom"], description: "weight is kept in kg, length in cm." },
             unit: text("The unit's label for a custom metric, such as bpm."),
-            goal: number("The goal in the stored unit; 0 for none."),
             comment: text("A note on the metric."),
             role: {
               type: "string",
@@ -58,13 +57,29 @@ export const body_api = {
   },
   set_body_note: { description: "Sets the note for a day; an empty note removes it.", params: [{ name: "date", schema: day }, { name: "comment", schema: text("The note.") }] },
   get_body_report: {
-    description: "One metric's readings over a range, with a moving average, statistics, how far is left to the goal, and BMI for the weight metric from the height reading on its latest day.",
+    description:
+      "One metric's readings over a range, with a moving average, statistics, the goal it stands for (the weight goal for the first weight metric, else the goal named by its role, from list_body_goals) and how far is left to it, and BMI for the weight metric from the height reading on its latest day.",
     params: [{ name: "metric_id", schema: id_of("metric") }, { name: "days", schema: days_back }, { name: "today", schema: day }],
   },
   get_body_shape: {
     description:
-      "What the 3D body is drawn from on a day: the sex from the body.sex setting, the latest height, weight, body fat and girths by role on or before the day in kg, percent and cm, the same at the goals, and every day with such a reading.",
+      "What the 3D body is drawn from on a day: the sex from the body.sex setting, the latest height, weight, body fat and girths by role on or before the day in kg, percent and cm, the same at the body goals (each goal in place of its reading where one is set), and every day with such a reading.",
     params: [{ name: "date", schema: day }],
+  },
+  list_body_goals: {
+    description:
+      "Lists the body goals set: where the person wants to be, each kept apart from the metrics and needing none. Each has a key (weight, body_fat or a girth such as waist) and a value in kg, percent or cm. Weight, body fat and waist come first.",
+    params: [],
+  },
+  set_body_goal: {
+    description: "Sets the body goal for one key, replacing any goal it had; null or 0 removes it. The Goals page shows these under Where I want to be.",
+    params: [
+      {
+        name: "key",
+        schema: { type: "string", enum: body_goal_keys.map((goal) => goal.key), description: "What the goal is about: weight, body_fat, or a girth such as waist, hips or upper_arm." },
+      },
+      { name: "value", schema: { type: ["number", "null"], description: "The goal in kg for weight, percent for body_fat and cm for a girth; null or 0 removes it." } },
+    ],
   },
   list_body_history: {
     description: "Every day with a reading or note in a range, newest first, its values by metric id.",

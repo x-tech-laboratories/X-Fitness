@@ -1,159 +1,211 @@
-// Where I want to be: the goals of the weight, body fat and waist metrics, edited here as on Body → Metrics, each with
-// how far it is from now and helpers that fill the weight and waist goals in from a BMI, a body fat or the height.
+// Where I want to be: the body goals the person has set, each its own number apart from the metrics, with how far it is
+// from the latest reading, a Remove button, an Add goal menu offering the rest, and helpers that fill the weight goal in
+// from a BMI and the waist goal from the height.
 
 // ── Imports ──────────────────────────────────────────────────────────────────
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { format_number } from "@x-tech-laboratories/x-libs/units";
-import { NumberField } from "@x-tech-laboratories/x-libs/web/react/controls";
+import { ContextMenu } from "@x-tech-laboratories/x-libs/web/react/menus";
 import { Card, Cards, Section, Toolbar } from "@x-tech-laboratories/x-libs/web/react/layout";
 
-import type { BodyMetric } from "../../shared/body/readings.ts";
-import { body_mass_index, round_to, weight_at_bmi, weight_at_body_fat } from "../../shared/calculators/formulas.ts";
+import { body_goal_keys, type BodyGoalKey, type MetricKind } from "../../shared/body/readings.ts";
+import { body_mass_index, round_to, weight_at_bmi } from "../../shared/calculators/formulas.ts";
 import type { CalculationsReport } from "../../shared/calculators/store.ts";
 import { calls, succeeds } from "../api.ts";
 import { format_value, to_shown_value, to_stored_value, unit_of } from "../body/format.ts";
 import { UnitNumber } from "../unit_field.tsx";
 import type { ShownUnits } from "../units.ts";
-import { distance_words, role_labels } from "./wording.ts";
+import { distance_words } from "./wording.ts";
 
 // ── Shared ───────────────────────────────────────────────────────────────────
 
-type GoalMeasure = "weight" | "body_fat" | "waist";
+interface GoalInfo {
+  key: BodyGoalKey;
+  label: string;
+  // How the goal is kept and shown, as a metric of this kind would be.
+  measured: { kind: MetricKind; unit: string };
+}
 
 const suggested_bmi = 22;
 
-// Saves a metric's goal in its stored unit, 0 for none, as Body → Metrics does.
-async function save_goal(metric: BodyMetric, goal: number): Promise<void> {
-  await succeeds(() => calls().save_body_metric({ id: metric.id, name: metric.name, kind: metric.kind, unit: metric.unit, goal, comment: metric.comment, role: metric.role }));
+function info_of(key: BodyGoalKey): GoalInfo {
+  const goal = body_goal_keys.find((each) => each.key === key)!;
+  return { key, label: goal.label, measured: { kind: goal.kind, unit: "" } };
 }
 
-// Where the metric is now and how far its goal is, such as "now 82 kg · 7.4 kg to lose", or only the first without a goal.
-function distance_text(metric: BodyMetric, goal: number, now: number | null, units: ShownUnits, estimated = false): string | null {
-  if (now === null || !(now > 0)) return null;
-  const where = `now ${format_value(metric, now, units)}${estimated ? " (estimated)" : ""}`;
+// Saves a goal in its stored unit; 0 removes it.
+async function save_goal(key: BodyGoalKey, value: number): Promise<boolean> {
+  return succeeds(() => calls().set_body_goal(key, value > 0 ? value : null));
+}
+
+// The latest reading a goal is measured against, and whether it is only an estimate, or null without one.
+function now_of(report: CalculationsReport, key: BodyGoalKey): { value: number; estimated: boolean } | null {
+  const reading = report.sources[key]?.reading;
+  if (reading && reading.value > 0) return { value: reading.value, estimated: false };
+  if (key === "body_fat" && report.calculations.body_fat !== null && report.calculations.body_fat > 0) return { value: report.calculations.body_fat, estimated: true };
+  return null;
+}
+
+// Where the measure is now and how far the goal is, such as "now 108.9 kg · 18.1 kg to lose", or null without a reading.
+function distance_text(info: GoalInfo, goal: number, report: CalculationsReport, units: ShownUnits): string | null {
+  const now = now_of(report, info.key);
+  if (now === null) return null;
+  const where = `now ${format_value(info.measured, now.value, units)}${now.estimated ? " (estimated)" : ""}`;
   if (!(goal > 0)) return where;
-  return `${where} · ${distance_words(goal - now, (gap) => format_value(metric, gap, units), metric.kind === "weight")}`;
+  return `${where} · ${distance_words(goal - now.value, (gap) => format_value(info.measured, gap, units), info.key === "weight")}`;
 }
 
-function GoalField({ metric, units, label }: { metric: BodyMetric; units: ShownUnits; label: string }) {
-  return (
-    <UnitNumber
-      label={label}
-      value={metric.goal}
-      to_shown={(stored) => to_shown_value(metric, stored, units)}
-      to_stored={(shown) => to_stored_value(metric, shown, units)}
-      min={0}
-      step={metric.kind === "percent" ? 0.5 : 0.1}
-      unit={unit_of(metric, units) || undefined}
-      on_change={(goal) => void save_goal(metric, goal)}
-    />
-  );
+// ── Helpers ──────────────────────────────────────────────────────────────────
+
+// What the goal means beside its height, such as "BMI 28" for the weight or "0.50 of your height" for the waist.
+function height_note(key: BodyGoalKey, goal: number, report: CalculationsReport): string | null {
+  const { height } = report.measures;
+  if (!(goal > 0) || !(height > 0)) return null;
+  const bmi = key === "weight" ? body_mass_index(goal, height) : null;
+  if (bmi !== null) return `BMI ${format_number(bmi)}`;
+  if (key === "waist") return `${(goal / height).toFixed(2)} of your height`;
+  return null;
 }
 
-// A goal without a metric to hold it says where to give one the role.
-function NoMetric({ measure }: { measure: GoalMeasure }) {
-  return (
-    <p className="muted">
-      No metric has the {role_labels[measure]} role; give one under <a href="#/body/metrics">Body → Metrics</a>.
-    </p>
-  );
+// The button that fills the goal in from the height: the weight for a BMI of 22, or the waist at half the height.
+function FillButton({ info, report, units }: { info: GoalInfo; report: CalculationsReport; units: ShownUnits }) {
+  const { height } = report.measures;
+  const shown = (value: number) => format_value(info.measured, round_to(value, 0.1), units);
+  if (info.key === "weight") {
+    const at_bmi = weight_at_bmi(suggested_bmi, height);
+    return (
+      <button type="button" disabled={at_bmi === null} aria-label={`Set the goal weight for a BMI of ${suggested_bmi}`} onClick={() => at_bmi !== null && void save_goal("weight", round_to(at_bmi, 0.1))}>
+        {at_bmi === null ? `BMI ${suggested_bmi} (needs a height)` : `BMI ${suggested_bmi} → ${shown(at_bmi)}`}
+      </button>
+    );
+  }
+  if (info.key === "waist") {
+    const half = height > 0 ? height / 2 : null;
+    return (
+      <button type="button" disabled={half === null} aria-label="Set the goal waist to half your height" onClick={() => half !== null && void save_goal("waist", round_to(half, 0.1))}>
+        {half === null ? "Half your height (needs a height)" : `Half your height → ${shown(half)}`}
+      </button>
+    );
+  }
+  return null;
 }
 
-// ── Weight ───────────────────────────────────────────────────────────────────
+// ── Goal ─────────────────────────────────────────────────────────────────────
 
-function WeightGoal({ report, units }: { report: CalculationsReport; units: ShownUnits }) {
-  const metric = report.sources.weight?.metric;
-  const [body_fat, set_body_fat] = useState<number | null>(15);
-  if (!metric) return <NoMetric measure="weight" />;
-  const { measures, calculations } = report;
-  const lean = calculations.composition?.lean_mass ?? 0;
-  const goal = metric.goal;
-  const at_bmi = weight_at_bmi(suggested_bmi, measures.height);
-  const at_body_fat = body_fat ? weight_at_body_fat(lean, body_fat) : null;
-  const goal_bmi = goal > 0 ? body_mass_index(goal, measures.height) : null;
-  const goal_body_fat = goal > 0 && lean > 0 && goal > lean ? (1 - lean / goal) * 100 : null;
-  const meaning = [goal_bmi !== null && `BMI ${format_number(goal_bmi)}`, goal_body_fat !== null && `${format_number(goal_body_fat)}% body fat at today's lean mass`].filter(Boolean).join(" · ");
-  const distance = distance_text(metric, goal, measures.weight || null, units);
-  const weight = (kg: number) => format_value(metric, round_to(kg, 0.1), units);
+interface GoalCardProps {
+  info: GoalInfo;
+  // In the stored unit; 0 while the goal is added but not yet given a value.
+  goal: number;
+  report: CalculationsReport;
+  units: ShownUnits;
+  on_cleared: () => void;
+  on_removed: () => void;
+}
 
+function GoalCard({ info, goal, report, units, on_cleared, on_removed }: GoalCardProps) {
+  const note = [distance_text(info, goal, report, units), height_note(info.key, goal, report)].filter(Boolean).join(" · ");
+  const healthy = info.key === "weight" ? report.calculations.healthy_weight : null;
+  const weight = (kg: number) => format_value(info.measured, round_to(kg, 0.1), units);
+  const change = async (value: number) => {
+    if ((await save_goal(info.key, value)) && !(value > 0)) on_cleared();
+  };
+  const remove = async () => {
+    if (goal > 0 && !(await save_goal(info.key, 0))) return;
+    on_removed();
+  };
   return (
-    <div className="stack tight">
-      <GoalField metric={metric} units={units} label="Goal weight" />
-      {(distance || meaning) && <p className="muted small">{[distance, meaning].filter(Boolean).join(" · ")}</p>}
+    <Card title={info.label}>
       <div className="stack tight">
-        <span className="small">Fill it in from</span>
+        <UnitNumber
+          bare
+          label={`${info.label} goal`}
+          value={goal}
+          to_shown={(stored) => to_shown_value(info.measured, stored, units)}
+          to_stored={(shown) => to_stored_value(info.measured, shown, units)}
+          min={0}
+          step={info.measured.kind === "percent" ? 0.5 : 0.1}
+          unit={unit_of(info.measured, units) || undefined}
+          on_change={(value) => void change(value)}
+        />
+        {note && <p className="muted small">{note}</p>}
+        {healthy && <p className="muted small">{`A healthy BMI at your height is ${weight(healthy.low)} – ${weight(healthy.high)}.`}</p>}
         <Toolbar>
-          <button type="button" disabled={at_bmi === null} aria-label={`Set the goal weight for a BMI of ${suggested_bmi}`} onClick={() => at_bmi !== null && void save_goal(metric, round_to(at_bmi, 0.1))}>
-            {at_bmi === null ? `BMI ${suggested_bmi}` : `BMI ${suggested_bmi} → ${weight(at_bmi)}`}
+          <FillButton info={info} report={report} units={units} />
+          <button type="button" className="danger" aria-label={`Remove the ${info.label.toLowerCase()} goal`} onClick={() => void remove()}>
+            Remove
           </button>
         </Toolbar>
-        <div className="inline-row">
-          <NumberField bare label="Body fat for the goal weight" value={body_fat} min={3} max={60} step={1} unit="%" on_change={set_body_fat} />
-          <button type="button" disabled={at_body_fat === null} aria-label={`Set the goal weight for ${body_fat ?? 0}% body fat`} onClick={() => at_body_fat !== null && void save_goal(metric, round_to(at_body_fat, 0.1))}>
-            {at_body_fat === null ? "Needs a body fat" : `→ ${weight(at_body_fat)}`}
-          </button>
-        </div>
-        {calculations.healthy_weight && (
-          <p className="muted small">{`A healthy BMI at your height is ${weight(calculations.healthy_weight.low)} – ${weight(calculations.healthy_weight.high)}.`}</p>
-        )}
-        {measures.height > 0 ? null : <p className="muted small">The BMI needs a height reading.</p>}
       </div>
-    </div>
+    </Card>
   );
 }
 
-// ── Body fat and waist ───────────────────────────────────────────────────────
+// ── Adding ───────────────────────────────────────────────────────────────────
 
-function BodyFatGoal({ report, units }: { report: CalculationsReport; units: ShownUnits }) {
-  const metric = report.sources.body_fat?.metric;
-  if (!metric) return <NoMetric measure="body_fat" />;
-  const distance = distance_text(metric, metric.goal, report.calculations.body_fat, units, !report.sources.body_fat?.reading);
+// A button that opens a menu of the goals not yet set, hung below it.
+function AddGoal({ free, on_add }: { free: GoalInfo[]; on_add: (key: BodyGoalKey) => void }) {
+  const [open, set_open] = useState(false);
+  const button = useRef<HTMLButtonElement>(null);
+  const place = button.current?.getBoundingClientRect();
+  // A press on the button closes an open menu before the click lands, so the click goes by how it was at the press.
+  const open_at_press = useRef<boolean | null>(null);
   return (
-    <div className="stack tight">
-      <GoalField metric={metric} units={units} label="Goal body fat" />
-      {distance && <p className="muted small">{distance}</p>}
-    </div>
-  );
-}
-
-function WaistGoal({ report, units }: { report: CalculationsReport; units: ShownUnits }) {
-  const metric = report.sources.waist?.metric;
-  if (!metric) return <NoMetric measure="waist" />;
-  const { height } = report.measures;
-  const half = height > 0 ? height / 2 : null;
-  const distance = distance_text(metric, metric.goal, report.measures.waist || null, units);
-  const ratio = metric.goal > 0 && height > 0 ? `${(metric.goal / height).toFixed(2)} of your height` : null;
-  return (
-    <div className="stack tight">
-      <GoalField metric={metric} units={units} label="Goal waist" />
-      {(distance || ratio) && <p className="muted small">{[distance, ratio].filter(Boolean).join(" · ")}</p>}
-      <Toolbar>
-        <button type="button" disabled={half === null} aria-label="Set the goal waist to half your height" onClick={() => half !== null && void save_goal(metric, round_to(half, 0.1))}>
-          {half === null ? "Half your height (needs a height)" : `Half your height → ${format_value(metric, round_to(half, 0.1), units)}`}
-        </button>
-      </Toolbar>
-    </div>
+    <>
+      <button
+        ref={button}
+        type="button"
+        className="accent"
+        disabled={free.length === 0}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        onPointerDown={() => { open_at_press.current = open; }}
+        onClick={() => {
+          const was_open = open_at_press.current ?? open;
+          open_at_press.current = null;
+          set_open(!was_open);
+        }}
+      >
+        Add goal
+      </button>
+      {open && (
+        <ContextMenu
+          x={place?.left ?? 0}
+          y={place?.bottom ?? 0}
+          label="Add a goal"
+          items={free.map((info) => ({ label: info.label, run: () => on_add(info.key) }))}
+          on_close={() => set_open(false)}
+        />
+      )}
+    </>
   );
 }
 
 // ── Section ──────────────────────────────────────────────────────────────────
 
 export function GoalsSection({ report, units }: { report: CalculationsReport; units: ShownUnits }) {
+  // Goals added here that have no value yet, shown as empty cards until one is typed.
+  const [added, set_added] = useState<BodyGoalKey[]>([]);
+  const goals = report.body_goals;
+  const shown = body_goal_keys.filter(({ key }) => (goals[key] ?? 0) > 0 || added.includes(key)).map(({ key }) => info_of(key));
+  const free = body_goal_keys.filter(({ key }) => !shown.some((info) => info.key === key)).map(({ key }) => info_of(key));
+  const keep = (key: BodyGoalKey) => set_added((current) => (current.includes(key) ? current : [...current, key]));
+  const drop = (key: BodyGoalKey) => set_added((current) => current.filter((each) => each !== key));
+
   return (
-    <Section title="Where I want to be">
-      <p className="muted">These are the goals of your Weight, Body fat and Waist metrics, the same ones Body → Metrics shows. Leave a field empty for no goal.</p>
-      <Cards>
-        <Card title="Weight">
-          <WeightGoal report={report} units={units} />
-        </Card>
-        <Card title="Body fat">
-          <BodyFatGoal report={report} units={units} />
-        </Card>
-        <Card title="Waist">
-          <WaistGoal report={report} units={units} />
-        </Card>
-      </Cards>
+    <Section title="Where I want to be" tools={<AddGoal free={free} on_add={keep} />}>
+      <p className="muted">
+        Your goals, each a number of its own: the weight, body fat or a girth you want to reach. They are apart from the metrics on Body → Metrics, which say only what you measure.
+      </p>
+      {shown.length === 0 ? (
+        <p className="muted">No goals yet; add one with Add goal.</p>
+      ) : (
+        <Cards>
+          {shown.map((info) => (
+            <GoalCard key={info.key} info={info} goal={goals[info.key] ?? 0} report={report} units={units} on_cleared={() => keep(info.key)} on_removed={() => drop(info.key)} />
+          ))}
+        </Cards>
+      )}
     </Section>
   );
 }

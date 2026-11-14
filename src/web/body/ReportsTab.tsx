@@ -28,7 +28,7 @@ const compare_colors = ["var(--series-1)", "var(--series-2)", "var(--series-3)",
 const ranges: [days: number, label: string][] = [[30, "30 days"], [90, "90 days"], [180, "6 months"], [365, "1 year"], [0, "All time"]];
 
 function MetricReport({ report, units }: { report: BodyReport; units: ShownUnits }) {
-  const { metric, stats } = report;
+  const { metric, stats, goal } = report;
   if (!stats) return <Empty title={`No ${metric.name} readings in this range.`} />;
   const format = (value: number) => format_value(metric, value, units);
   const shown = (points: BodyReport["series"]) => points.map((point): [number, number] => [epoch_of(point.date), to_shown_value(metric, point.value, units)]);
@@ -43,7 +43,7 @@ function MetricReport({ report, units }: { report: BodyReport; units: ShownUnits
         <Tile label="Lowest" value={format(stats.lowest)} />
         <Tile label="Highest" value={format(stats.highest)} />
         <Tile label="Readings" value={String(stats.count)} />
-        {metric.goal > 0 && <Tile label="Goal" value={format(metric.goal)} />}
+        {goal !== null && <Tile label="Goal" value={format(goal)} />}
         {report.to_go !== null && <Tile label="To Go" value={format_change(metric, report.to_go, units)} />}
         {report.bmi !== null && <Tile label="BMI" value={format_number(report.bmi)} />}
       </Tiles>
@@ -55,7 +55,7 @@ function MetricReport({ report, units }: { report: BodyReport; units: ShownUnits
           { label: "Readings", color: "var(--series-1)", draw: "dots", points: shown(report.series) },
           ...(report.average.length > 1 ? [{ label: `${average_days}-day average`, color: "var(--series-2)", points: shown(report.average) }] : []),
         ]}
-        limits={metric.goal > 0 ? [{ label: "Goal", value: to_shown_value(metric, metric.goal, units), color: "var(--status-success)" }] : []}
+        limits={goal !== null ? [{ label: "Goal", value: to_shown_value(metric, goal, units), color: "var(--status-success)" }] : []}
         format={(value) => `${format_number(value)} ${unit}`.trim()}
         empty_message="Nothing to plot yet."
       />

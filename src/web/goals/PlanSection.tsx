@@ -49,7 +49,7 @@ function Pace({ report, settings, units }: { report: CalculationsReport; setting
   const direction: Direction = weekly < 0 ? "lose" : weekly > 0 ? "gain" : "keep";
   const rate = Math.abs(weekly);
   const daily = daily_energy_change(weekly);
-  const goal = report.sources.weight?.metric.goal ?? 0;
+  const goal = report.body_goals.weight ?? 0;
   const weight = report.measures.weight;
   const away = goal > 0 && weight > 0 && ((weekly < 0 && goal > weight) || (weekly > 0 && goal < weight));
   const choose = (next: Direction) => {

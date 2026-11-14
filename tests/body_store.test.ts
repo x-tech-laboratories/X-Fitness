@@ -17,7 +17,8 @@ describe("body metrics store", () => {
     const { body } = open_body();
     const skinfold_ids = ["chest", "abdomen", "thigh", "triceps", "suprailiac", "midaxillary", "subscapular"].map((site) => `skinfold_${site}`);
     expect(body.list_body_metrics().map((metric) => metric.id)).toEqual(["weight", "bodyfat", "waist", "chest", "hips", "arm", "thigh", "neck", "restinghr", "height", ...skinfold_ids]);
-    expect(body.list_body_metrics().at(8)).toMatchObject({ name: "Resting Heart Rate", kind: "custom", unit: "bpm", goal: 0, readings: 0, last_date: "" });
+    expect(body.list_body_metrics().at(8)).toMatchObject({ name: "Resting Heart Rate", kind: "custom", unit: "bpm", readings: 0, last_date: "" });
+    expect(body.list_body_metrics().at(8)).not.toHaveProperty("goal");
     expect(body.list_body_metrics().at(9)).toMatchObject({ name: "Height", kind: "length", role: "height" });
     expect(body.list_body_metrics().at(-1)).toMatchObject({ name: "Shoulder Blade Skinfold", kind: "length", role: "skinfold_subscapular" });
     expect(body.list_body_metrics().slice(10).map((metric) => metric.role)).toEqual(skinfold_ids);
@@ -62,10 +63,10 @@ describe("body metrics store", () => {
 
   it("adds, edits, reorders and deletes metrics, a metric's readings going with it", () => {
     const { body } = open_body();
-    const id = body.save_body_metric({ name: " Blood Pressure ", kind: "custom", unit: "mmHg", goal: 120, comment: "" });
-    expect(body.list_body_metrics().at(-1)).toMatchObject({ id, name: "Blood Pressure", unit: "mmHg", goal: 120, position: 17 });
-    body.save_body_metric({ id, name: "Systolic", kind: "percent", unit: "mmHg", goal: -3 });
-    expect(body.list_body_metrics().at(-1)).toMatchObject({ id, name: "Systolic", kind: "percent", unit: "", goal: 0 });
+    const id = body.save_body_metric({ name: " Blood Pressure ", kind: "custom", unit: "mmHg", comment: "" });
+    expect(body.list_body_metrics().at(-1)).toMatchObject({ id, name: "Blood Pressure", unit: "mmHg", position: 17 });
+    body.save_body_metric({ id, name: "Systolic", kind: "percent", unit: "mmHg" });
+    expect(body.list_body_metrics().at(-1)).toMatchObject({ id, name: "Systolic", kind: "percent", unit: "" });
 
     body.move_body_metric("bodyfat", -1);
     body.move_body_metric("bodyfat", -1);
@@ -82,7 +83,7 @@ describe("body metrics store", () => {
   it("reports a range with its change, extremes, 7-day average, distance to goal and BMI", () => {
     const { body } = open_body();
     body.set_body_reading("height", "2026-01-01", 200);
-    body.save_body_metric({ id: "weight", name: "Weight", kind: "weight", goal: 75 });
+    body.set_body_goal("weight", 75);
     const readings: [string, number][] = [["2026-06-01", 90], ["2026-10-20", 84], ["2026-10-25", 82], ["2026-11-01", 80], ["2026-11-02", 81]];
     for (const [date, value] of readings) body.set_body_reading("weight", date, value);
 
@@ -90,12 +91,13 @@ describe("body metrics store", () => {
     expect(report.series.map((point) => point.date)).toEqual(["2026-10-20", "2026-10-25", "2026-11-01", "2026-11-02"]);
     expect(report.stats).toMatchObject({ first: { value: 84 }, latest: { date: "2026-11-02", value: 81 }, change: -3, lowest: 80, highest: 84, count: 4 });
     expect(report.average.map((point) => point.value)).toEqual([84, 83, 80, 80.5]);
+    expect(report.goal).toBe(75);
     expect(report.to_go).toBe(-6);
     expect(report.bmi).toBeCloseTo(81 / 4);
 
     expect(body.get_body_report("weight", 0, "2026-11-10").stats?.count).toBe(5);
     const waist = body.get_body_report("waist", 90, "2026-11-10");
-    expect(waist).toMatchObject({ stats: null, to_go: null, bmi: null });
+    expect(waist).toMatchObject({ stats: null, goal: null, to_go: null, bmi: null });
   });
 
   it("lists history newest first with each day's readings and note", () => {
@@ -159,7 +161,7 @@ describe("the 3D body's readings", () => {
     const { body } = open_body();
     body.set_body_reading("height", "2026-01-01", 180);
     body.set_setting("body.sex", "male");
-    body.save_body_metric({ id: "waist", name: "Waist", kind: "length", role: "waist", goal: 84 });
+    body.set_body_goal("waist", 84);
     body.set_body_reading("weight", "2026-11-01", 85);
     body.set_body_reading("waist", "2026-11-01", 92);
     body.set_body_reading("waist", "2026-11-05", 90);

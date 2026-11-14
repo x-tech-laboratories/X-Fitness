@@ -119,9 +119,9 @@ describe("where to pinch a skinfold", () => {
 });
 
 describe("body reports", () => {
-  it("shows the figures, the trend chart with its goal and the history", async () => {
+  it("shows the figures, the trend chart with the weight goal from Goals and the history", async () => {
     const store = fake_page();
-    store.save_body_metric({ id: "weight", name: "Weight", kind: "weight", goal: 75 });
+    store.set_body_goal("weight", 75);
     store.set_body_reading("weight", "2026-11-01", 83);
     store.set_body_reading("weight", "2026-11-10", 81.5);
     store.set_body_note("2026-11-10", "morning");
@@ -133,6 +133,7 @@ describe("body reports", () => {
     expect(screen.getByText("To Go").parentElement?.textContent).toContain("-6.5 kg");
     const chart = screen.getByRole("img", { name: "Weight (kg)" });
     expect(chart.querySelectorAll("circle")).toHaveLength(2);
+    expect(screen.getByText("Goal", { selector: ".tile-label" }).parentElement?.textContent).toContain("75 kg");
     expect(within(chart).getByText("Goal: 75 kg")).toBeTruthy();
     expect(await screen.findByText("morning")).toBeTruthy();
   });
@@ -165,7 +166,7 @@ describe("body reports", () => {
 });
 
 describe("body metrics dialog", () => {
-  it("adds a metric with a custom unit and goal, which its row then shows", async () => {
+  it("adds a metric with a custom unit and no goal, which its row then shows", async () => {
     const store = fake_page();
     show(["metrics"]);
 
@@ -175,13 +176,15 @@ describe("body metrics dialog", () => {
     fireEvent.change(within(dialog).getByLabelText("Name"), { target: { value: "Blood Pressure" } });
     fireEvent.change(within(dialog).getByLabelText("Measured in"), { target: { value: "custom" } });
     fireEvent.change(within(dialog).getByLabelText("Unit"), { target: { value: "mmHg" } });
-    const goal = within(dialog).getByRole("textbox", { name: "Goal" });
-    fireEvent.change(goal, { target: { value: "120" } });
-    fireEvent.blur(goal);
+    expect(within(dialog).queryByRole("textbox", { name: "Goal" })).toBeNull();
+    expect(within(dialog).queryByText("Goal")).toBeNull();
     fireEvent.click(within(dialog).getByRole("button", { name: "Save" }));
 
-    await waitFor(() => expect(store.list_body_metrics().at(-1)).toMatchObject({ name: "Blood Pressure", kind: "custom", unit: "mmHg", goal: 120 }));
-    await waitFor(() => expect(screen.getByRole("row", { name: /Blood Pressure/ }).textContent).toContain("120 mmHg"));
+    await waitFor(() => expect(store.list_body_metrics().at(-1)).toMatchObject({ name: "Blood Pressure", kind: "custom", unit: "mmHg" }));
+    expect(store.list_body_metrics().at(-1)).not.toHaveProperty("goal");
+    expect(store.list_body_goals()).toEqual([]);
+    await waitFor(() => expect(screen.getByRole("row", { name: /Blood Pressure/ })).toBeTruthy());
+    expect(screen.queryByRole("columnheader", { name: "Goal" })).toBeNull();
   });
 
   it("edits a metric from its row's one button, with its readings named in the dialog", async () => {

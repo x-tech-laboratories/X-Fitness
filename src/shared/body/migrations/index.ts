@@ -49,5 +49,25 @@ export const migrations: DrizzleMigration[] = [
     "statements": [
       "-- A metric for each caliper skinfold, with fixed ids so two devices hold the same ones, unless one already has the role.\nWITH `seed` (`id`, `name`, `comment`, `place`) AS (VALUES\n\t('skinfold_chest', 'Chest Skinfold', 'A diagonal pinch halfway between the armpit and the nipple; a third of the way for women.', 1),\n\t('skinfold_abdomen', 'Belly Skinfold', 'A vertical pinch 2 cm to the right of the navel (abdomen).', 2),\n\t('skinfold_thigh', 'Thigh Skinfold', 'A vertical pinch on the front of the thigh, halfway between the hip and the knee.', 3),\n\t('skinfold_triceps', 'Back of Arm Skinfold', 'A vertical pinch on the back of the upper arm, halfway between the shoulder and the elbow (triceps).', 4),\n\t('skinfold_suprailiac', 'Above Hip Skinfold', 'A diagonal pinch just above the front of the hip bone (suprailiac).', 5),\n\t('skinfold_midaxillary', 'Side of Ribs Skinfold', 'A vertical pinch on the side of the ribs, straight below the armpit at the height of the bottom of the breastbone (midaxillary).', 6),\n\t('skinfold_subscapular', 'Shoulder Blade Skinfold', 'A diagonal pinch just below the bottom corner of the shoulder blade (subscapular).', 7)\n)\nINSERT INTO `body_metrics` (`id`, `name`, `kind`, `unit`, `comment`, `position`, `role`)\nSELECT `seed`.`id`, `seed`.`name`, 'length', '', `seed`.`comment`, coalesce((SELECT max(`position`) FROM `body_metrics`), -1) + `seed`.`place`, `seed`.`id`\nFROM `seed`\nWHERE NOT EXISTS (SELECT 1 FROM `body_metrics` WHERE `role` = `seed`.`id` OR `id` = `seed`.`id`);"
     ]
+  },
+  {
+    "name": "20261114160642_body_goals",
+    "statements": [
+      "CREATE TABLE `body_goals` (\n\t`key` text PRIMARY KEY,\n\t`value` real NOT NULL\n);"
+    ]
+  },
+  {
+    "name": "20261114160644_carry_metric_goals",
+    "statements": [
+      "-- The first weight metric's goal becomes the weight goal, as BMI and the plan read the first weight metric.\nINSERT OR IGNORE INTO `body_goals` (`key`, `value`)\nSELECT 'weight', `goal` FROM `body_metrics` WHERE `id` = (SELECT `id` FROM `body_metrics` WHERE `kind` = 'weight' ORDER BY `position`, `name` LIMIT 1) AND `goal` > 0;",
+      "-- The goal of each body fat or girth metric becomes the goal under its role, the first such metric by position winning; other metrics' goals are not kept.\nINSERT OR IGNORE INTO `body_goals` (`key`, `value`)\nSELECT `role`, `goal` FROM (\n\tSELECT `role`, `goal`, row_number() OVER (PARTITION BY `role` ORDER BY `position`, `name`, `id`) AS `place`\n\tFROM `body_metrics`\n\tWHERE `goal` > 0 AND (\n\t\t(`role` = 'body_fat' AND `kind` = 'percent')\n\t\tOR (`role` IN ('neck', 'chest', 'underbust', 'waist', 'hips', 'upper_arm', 'wrist', 'thigh', 'knee', 'calf', 'ankle') AND `kind` = 'length')\n\t)\n)\nWHERE `place` = 1;"
+    ]
+  },
+  {
+    "name": "20261114160724_drop_metric_goal",
+    "statements": [
+      "-- Sync's update trigger names every column, so it goes before the column does; sync makes it afresh once the migrations are done.\nDROP TRIGGER IF EXISTS `sync_body_metrics_update`;",
+      "ALTER TABLE `body_metrics` DROP COLUMN `goal`;"
+    ]
   }
 ];

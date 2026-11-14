@@ -11,7 +11,7 @@ import { day } from "../api_schemas.ts";
 export const calculators_api = {
   get_calculations: {
     description:
-      "Works out BMI, body fat by the US Navy tape, Jackson-Pollock calipers and from BMI, lean and fat mass, FFMI, waist ratios, basal metabolic rate, daily energy burned and water a day from the latest body readings on or before a day (weight, height, body fat, girths and skinfolds, each from the metric with that role, its goal being the body goal) and the body.sex, body.birth_date and calculators.activity settings. Also the weight trend a week and the energy burned a day as measured from the diary and that trend over calculators.measured_days, the weeks left to the weight metric's goal at the trend's and the plan's pace, and the daily calories, protein, fat and carbs the plan (calculators.weekly_change in kg, protein_per_kg, fat_percent, energy_source) leads to, beside the diet targets in force now. In kg, cm, percent, kcal, litres and grams.",
+      "Works out BMI, body fat by the US Navy tape, Jackson-Pollock calipers and from BMI, lean and fat mass, FFMI, waist ratios, basal metabolic rate, daily energy burned and water a day from the latest body readings on or before a day (weight, height, body fat, girths and skinfolds, each from the metric with that role) and the body.sex, body.birth_date and calculators.activity settings. Also the weight trend a week and the energy burned a day as measured from the diary and that trend over calculators.measured_days, the body goals set (as list_body_goals gives them, by key), the weeks left to the weight goal at the trend's and the plan's pace, and the daily calories, protein, fat and carbs the plan (calculators.weekly_change in kg, protein_per_kg, fat_percent, energy_source) leads to, beside the diet targets in force now. In kg, cm, percent, kcal, litres and grams.",
     params: [{ name: "today", schema: day }],
   },
   get_training_calculations: {
@@ -26,7 +26,7 @@ export const calculators_api = {
   },
   apply_calculated_goals: {
     description:
-      "Sets the diet's daily targets named to what get_calculations gives from the plan. Targets without the measures they need are left alone. Gives back how many changed. The body goals are each metric's own goal, set with save_body_metric.",
+      "Sets the diet's daily targets named to what get_calculations gives from the plan. Targets without the measures they need are left alone. Gives back how many changed. The body goals are set apart with set_body_goal.",
     params: [
       {
         name: "keys",

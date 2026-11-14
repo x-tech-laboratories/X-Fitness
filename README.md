@@ -16,10 +16,10 @@ whenever it can be reached.
   each metric is also added and edited and your sex and birth date sit above them, with a picture of where to pinch
   beside each caliper skinfold; Reports shows goals and trends, and
   3D a body shaped to your readings and to your goals.
-- **Goals:** where you are now, where you want to be (the weight, body fat and waist metrics' goals, with helpers that
-  fill them in from a BMI, a body fat or your height), and how you get there: a pace, the daily energy and protein and
-  fat that make the diet targets, set once or kept following the plan, and when the goal weight is reached at the
-  plan's rate and at your trend.
+- **Goals:** where you are now, where you want to be (goals for your weight, body fat and any girth, each a number of
+  its own apart from the metrics, with helpers that fill the weight in from a BMI and the waist from your height), and
+  how you get there: a pace, the daily energy and protein and fat that make the diet targets, set once or kept
+  following the plan, and when the goal weight is reached at the plan's rate and at your trend.
 - **Calculators:** BMI, body fat by the US Navy tape, by Jackson-Pollock 3- and 7-site calipers and from BMI, lean
   mass and FFMI, waist-to-height and waist-to-hip, BMR and TDEE, water a day, and the TDEE your diary and weight trend
   actually show, filled in from your latest readings, with the seven skinfold sites drawn and numbered over their fields.
@@ -84,8 +84,8 @@ belongs to that device or server and is never synced.
 
 ## History
 
-Every change to a workout (its exercises and sets included), program, exercise, food, recipe, diary entry, body metric
-or day of body readings is kept as a version, whichever device, page, API call or MCP tool made it. **History** in the
+Every change to a workout (its exercises and sets included), program, exercise, food, recipe, diary entry, body metric,
+day of body readings or body goal is kept as a version, whichever device, page, API call or MCP tool made it. **History** in the
 sidebar lists the latest changes, and **History** beside any of those items lists its versions: any version can be
 restored, and a deleted item brought back with what was deleted along with it. Versions sync, so every device sees the
 same history. Changes older than **Settings → General → History** (180 days unless set) are pruned, each item keeping

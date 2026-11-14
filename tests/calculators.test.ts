@@ -192,10 +192,10 @@ describe("the calculators store", () => {
     store.set_body_reading("weight", "2026-11-13", 90);
 
     expect(store.get_settings()["diet.target_calories"]).toBeGreaterThan(calories);
-    expect(store.list_body_metrics().find((metric) => metric.id === "weight")?.goal).toBe(0);
+    expect(store.list_body_goals()).toEqual([]);
   });
 
-  it("carries an old stored body plan over into the metrics' goals once, keeping goals already set", () => {
+  it("carries an old stored body plan over into the body goals once, keeping goals already set", () => {
     const database = new DatabaseSync(":memory:");
     open_store(database);
     const store = bind_methods(() => database, () => undefined);
@@ -203,18 +203,18 @@ describe("the calculators store", () => {
     store.set_setting("body.birth_date", "1996-01-01");
     store.set_body_reading("height", "2026-01-01", 180);
     store.set_body_reading("weight", "2026-11-10", 80);
-    store.save_body_metric({ id: "waist", name: "Waist", kind: "length", role: "waist", goal: 85 });
+    store.set_body_goal("waist", 85);
     for (const [key, value] of [["calculators.goal_bmi", 22], ["calculators.goal_waist_to_height", 0.45], ["calculators.follow_body_goals", true]] as const) {
       database.prepare("INSERT INTO settings (key, value) VALUES (?, ?)").run(key, JSON.stringify(value));
     }
 
     open_store(database);
-    const goals = () => Object.fromEntries(store.list_body_metrics().map((metric) => [metric.id, metric.goal]));
-    expect(goals()).toMatchObject({ weight: 71.3, bodyfat: 0, waist: 85 });
+    const goals = () => Object.fromEntries(store.list_body_goals().map((goal) => [goal.key, goal.value]));
+    expect(goals()).toEqual({ weight: 71.3, waist: 85 });
     expect(store.get_settings()["calculators.goal_bmi"]).toBeUndefined();
 
-    store.save_body_metric({ id: "weight", name: "Weight", kind: "weight", goal: 0 });
+    store.set_body_goal("weight", null);
     open_store(database);
-    expect(goals()).toMatchObject({ weight: 0, waist: 85 });
+    expect(goals()).toEqual({ waist: 85 });
   });
 });

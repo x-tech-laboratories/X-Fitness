@@ -5,13 +5,13 @@
 // ── Imports ──────────────────────────────────────────────────────────────────
 
 import { format_local } from "@x-tech-laboratories/x-libs/dates";
-import { between, eq } from "@x-tech-laboratories/x-libs/drizzle";
+import { between } from "@x-tech-laboratories/x-libs/drizzle";
 import { in_transaction, type SqlDatabase } from "@x-tech-laboratories/x-libs/sql";
 
-import { shift_day, skinfold_of, type BodyMetric, type MetricRole, type Point } from "../body/readings.ts";
-import { body_metrics } from "../body/schema.ts";
+import { shift_day, skinfold_of, type BodyGoalKey, type BodyMetric, type MetricRole, type Point } from "../body/readings.ts";
+import { body_goals } from "../body/schema.ts";
 import { body_setting_defaults } from "../body/settings.ts";
-import { latest_on_or_before, list_metrics, metric_series, weight_metric } from "../body/store.ts";
+import { goals_by_key, latest_on_or_before, list_metrics, metric_series, weight_metric } from "../body/store.ts";
 import { target_of } from "../diet/labels.ts";
 import { target_key, type NutrientKey } from "../diet/model.ts";
 import { diet_setting_defaults } from "../diet/settings.ts";
@@ -77,8 +77,10 @@ export interface CalculationsReport {
   date: string;
   birth_date: string;
   measures: Measures;
-  // By measure, such as weight, height, body_fat, waist or skinfold_thigh; each metric's goal is the body goal.
+  // By measure, such as weight, height, body_fat, waist or skinfold_thigh.
   sources: Record<string, MeasureSource>;
+  // The body goals set, by what each is about, such as weight or waist; apart from the metrics.
+  body_goals: Partial<Record<BodyGoalKey, number>>;
   calculations: Calculations;
   plan: GoalPlan;
   // The diet's daily targets from the plan.
@@ -213,8 +215,9 @@ function report(database: SqlDatabase, date: string): CalculationsReport {
   const following_diet = setting_of(database, "calculators.follow_diet_targets") === true;
   const trend = change_per_day(weights);
   const weight_trend = trend === null ? null : trend * 7;
-  const progress = goal_progress(measures.weight, sources.weight?.metric.goal ?? 0, weight_trend, plan.weekly_change);
-  return { date, birth_date, measures, sources, calculations, plan, goals, following_diet, measured, measured_days: window_days, energy_source, weight_trend, progress };
+  const body_goals = goals_by_key(database);
+  const progress = goal_progress(measures.weight, body_goals.weight ?? 0, weight_trend, plan.weekly_change);
+  return { date, birth_date, measures, sources, body_goals, calculations, plan, goals, following_diet, measured, measured_days: window_days, energy_source, weight_trend, progress };
 }
 
 // ── Training ─────────────────────────────────────────────────────────────────
@@ -384,10 +387,10 @@ function follow_plan(database: SqlDatabase): void {
 
 // ── Carrying over ────────────────────────────────────────────────────────────
 
-// The plan's body targets as they were once stored as settings, before the goals became the metrics' own.
+// The plan's body targets as they were once stored as settings, before the body goals were kept on their own.
 const old_body_plan = { body_fat: "calculators.goal_body_fat", bmi: "calculators.goal_bmi", waist_to_height: "calculators.goal_waist_to_height", follow: "calculators.follow_body_goals" };
 
-// Writes the goals an old stored body plan gave into the weight, body fat and waist metrics that have none, then drops
+// Writes the goals an old stored body plan gave as the weight, body fat and waist goals where none is set, then drops
 // the old settings, so it does its work once and running it again changes nothing.
 export function carry_over_body_goals(database: SqlDatabase): void {
   const stored = new Map(
@@ -401,19 +404,18 @@ export function carry_over_body_goals(database: SqlDatabase): void {
   const body_fat = old(old_body_plan.body_fat, 0);
   const bmi = old(old_body_plan.bmi, 22);
   const waist_to_height = old(old_body_plan.waist_to_height, 0.5);
-  const { measures, calculations, sources } = report(database, today_here());
+  const { measures, calculations } = report(database, today_here());
   const lean = calculations.composition?.lean_mass ?? 0;
   const weight = (body_fat > 0 ? weight_at_body_fat(lean, body_fat) : null) ?? weight_at_bmi(bmi, measures.height);
-  const goals: Record<string, number | null> = {
+  const goals: Partial<Record<BodyGoalKey, number | null>> = {
     weight: weight === null ? null : round_to(weight, 0.1),
     body_fat: body_fat > 0 ? body_fat : null,
     waist: waist_to_height > 0 && measures.height > 0 ? round_to(waist_to_height * measures.height, 0.1) : null,
   };
   in_transaction(database, () => {
-    for (const [measure, goal] of Object.entries(goals)) {
-      const metric = sources[measure]?.metric;
-      if (goal === null || !metric || metric.goal > 0) continue;
-      drizzle_of(database).update(body_metrics).set({ goal }).where(eq(body_metrics.id, metric.id)).run();
+    for (const [key, value] of Object.entries(goals)) {
+      if (value === null || !(value > 0)) continue;
+      drizzle_of(database).insert(body_goals).values({ key, value }).onConflictDoNothing().run();
     }
     for (const key of stored.keys()) database.prepare("DELETE FROM settings WHERE key = ?").run(key);
   });

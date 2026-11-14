@@ -192,7 +192,7 @@ describe("the training store", () => {
     store.set_body_reading("weight", "2026-11-01", null);
     store.set_body_reading("weight", "2026-10-30", 80);
     store.set_body_reading("weight", "2026-11-13", 79);
-    store.save_body_metric({ id: "weight", name: "Weight", kind: "weight", goal: 75 });
+    store.set_body_goal("weight", 75);
 
     expect(store.get_calculations("2026-11-13").progress).toMatchObject({ weight: 79, goal: 75, trend_weekly_change: -0.5, trend_weeks: 8 });
   });

@@ -1,5 +1,5 @@
-// The Metrics page: one day at a time, a reading per metric with the one before it and its goal, BMI and the day's
-// note, and each metric added here or opened with Edit to change, move or delete it.
+// The Metrics page: one day at a time, a reading per metric with the one before it, BMI and the day's note, and each
+// metric added here or opened with Edit to change, move or delete it; goals are set on the Goals page.
 
 // ── Imports ──────────────────────────────────────────────────────────────────
 
@@ -27,8 +27,6 @@ interface Draft {
   name: string;
   kind: MetricKind;
   unit: string;
-  // In the unit shown.
-  goal: number | null;
   comment: string;
   role: MetricRole;
 }
@@ -59,19 +57,17 @@ function readings_text(metric: MetricSummary): string {
   return `${metric.readings} reading${metric.readings === 1 ? "" : "s"}, last taken ${metric.last_date}.`;
 }
 
-function MetricDialog({ metric, units, on_close }: { metric: BodyMetric | null; units: ShownUnits; on_close: () => void }) {
+function MetricDialog({ metric, on_close }: { metric: BodyMetric | null; on_close: () => void }) {
   const [draft, set_draft] = useState<Draft>(() => ({
     name: metric?.name ?? "",
     kind: metric?.kind ?? "weight",
     unit: metric?.unit ?? "",
-    goal: metric && metric.goal > 0 ? to_shown_value(metric, metric.goal, units) : null,
     comment: metric?.comment ?? "",
     role: metric?.role ?? "",
   }));
   const update = (changes: Partial<Draft>) => set_draft((current) => ({ ...current, ...changes }));
   const roles = roles_for(draft.kind);
   const role = roles.some(([key]) => key === draft.role) ? draft.role : "";
-  const unit = unit_of({ ...draft, role }, units);
   // The list is read afresh, so moving the metric from here shows at once.
   const fold = skinfold_of(role);
   const metrics = use_data((api) => api.list_body_metrics());
@@ -80,10 +76,7 @@ function MetricDialog({ metric, units, on_close }: { metric: BodyMetric | null; 
   const summary = list[index];
 
   async function save(): Promise<void> {
-    // A goal kept as it was is not converted back, so switching units never nudges it.
-    const kept = metric && metric.kind === draft.kind && metric.role === role && draft.goal === (metric.goal > 0 ? to_shown_value(metric, metric.goal, units) : null);
-    const goal = kept ? metric.goal : draft.goal ? to_stored_value({ ...draft, role }, draft.goal, units) : 0;
-    if (await succeeds(() => calls().save_body_metric({ id: metric?.id, name: draft.name, kind: draft.kind, unit: draft.unit, goal, comment: draft.comment, role }))) on_close();
+    if (await succeeds(() => calls().save_body_metric({ id: metric?.id, name: draft.name, kind: draft.kind, unit: draft.unit, comment: draft.comment, role }))) on_close();
   }
 
   return (
@@ -117,9 +110,6 @@ function MetricDialog({ metric, units, on_close }: { metric: BodyMetric | null; 
       <FormRow label="Unit" id="body-metric-unit" hidden={draft.kind !== "custom"}>
         <input id="body-metric-unit" type="text" placeholder="bpm, mmHg, ..." value={draft.unit} onChange={(event) => update({ unit: event.currentTarget.value })} />
       </FormRow>
-      <FormRow label="Goal" id="body-metric-goal" hint="Leave empty for none.">
-        <NumberField bare label="Goal" value={draft.goal} min={0} step={0.1} unit={unit || undefined} on_change={(goal) => update({ goal: goal || null })} />
-      </FormRow>
       <FormRow label="Stands for" id="body-metric-role" hidden={roles.length < 2} hint="Body fat and girths shape the 3D body, and every role feeds the calculators; weight always does both. Skinfolds are shown in mm.">
         <Select label="Stands for" bare options={roles} value={role} on_change={(value) => update({ role: value })} />
       </FormRow>
@@ -135,8 +125,8 @@ function MetricDialog({ metric, units, on_close }: { metric: BodyMetric | null; 
   );
 }
 
-export function edit_metric(metric: BodyMetric | null, units: ShownUnits): void {
-  open_dialog((close) => <MetricDialog metric={metric} units={units} on_close={close} />);
+export function edit_metric(metric: BodyMetric | null): void {
+  open_dialog((close) => <MetricDialog metric={metric} on_close={close} />);
 }
 
 // ── Readings ─────────────────────────────────────────────────────────────────
@@ -199,8 +189,7 @@ const columns: TableColumn<ReadingRow>[] = [
         </span>
       ) : "—",
   },
-  { label: "Goal", class: wide_only, groupable: false, filterable: false, cell: (row) => (row.metric.goal > 0 ? format_value(row.metric, row.metric.goal, row.units) : "—") },
-  row_actions_column<ReadingRow>({ name: (row) => row.metric.name, edit: (row) => edit_metric(row.metric, row.units) }),
+  row_actions_column<ReadingRow>({ name: (row) => row.metric.name, edit: (row) => edit_metric(row.metric) }),
 ];
 
 // ── Page ─────────────────────────────────────────────────────────────────────
@@ -214,7 +203,7 @@ export function MetricsTab({ units }: { units: ShownUnits }) {
       <Toolbar>
         <DayStepper day={date} on_change={set_date} />
         <HistoryButton kind="body_day" item_id={date} name={`Body on ${date}`} />
-        <button type="button" className="accent solid" onClick={() => edit_metric(null, units)}>Add metric</button>
+        <button type="button" className="accent solid" onClick={() => edit_metric(null)}>Add metric</button>
       </Toolbar>
       <Loaded resource={day}>
         {(loaded) => (
