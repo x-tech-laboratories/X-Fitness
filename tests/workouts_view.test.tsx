@@ -15,6 +15,10 @@ import { calls, set_page_api } from "../src/web/api.ts";
 import { SettingsView } from "../src/web/settings/SettingsView.tsx";
 import { WorkoutsView } from "../src/web/workouts/index.tsx";
 
+// jsdom cannot draw, so a picture is "shrunk" to a fixed small one.
+const shrunk = "data:image/webp;base64,UklGRg==";
+vi.mock("@x-tech-laboratories/x-libs/web/pictures", () => ({ shrink_picture: vi.fn(async () => shrunk) }));
+
 afterEach(() => {
   cleanup();
   vi.useRealTimers();
@@ -163,16 +167,14 @@ describe("workouts plans and library", () => {
     await waitFor(() => expect(store.list_workouts(today()).map((workout) => workout.name)).toEqual(["Strength - Day A"]));
   });
 
-  it("looks an exercise up in wger, fills the form from it, and saves it to the library", async () => {
+  it("looks an exercise up in wger, fills the form and its picture from it, and saves it to the library", async () => {
+    const rowing = { id: 9, category: { name: "Cardio" }, equipment: [], muscles: [{ name: "Quadriceps femoris", name_en: "Quads" }], translations: [{ language: 2, name: "Rowing Machine" }], images: [{ image: "https://wger.de/media/exercise-images/9/rowing.png", is_main: true }] };
     vi.stubGlobal(
       "fetch",
-      vi.fn(async (url: string) =>
-        Response.json(
-          url.includes("/language/")
-            ? { results: [{ id: 2, short_name: "en" }] }
-            : { results: [{ id: 9, category: { name: "Cardio" }, equipment: [], muscles: [{ name: "Quadriceps femoris", name_en: "Quads" }], translations: [{ language: 2, name: "Rowing Machine" }] }] },
-        ),
-      ),
+      vi.fn(async (url: string) => {
+        if (url.includes("/media/")) return new Response(new Uint8Array([1, 2, 3]), { headers: { "content-type": "image/png" } });
+        return Response.json(url.includes("/language/") ? { results: [{ id: 2, short_name: "en" }] } : { results: [rowing] });
+      }),
     );
     const store = open_page();
     view(["exercises"]);
@@ -183,12 +185,45 @@ describe("workouts plans and library", () => {
     fireEvent.click(within(dialog).getByRole("button", { name: "Search" }));
     fireEvent.click(await within(dialog).findByRole("button", { name: /Rowing Machine/ }));
     expect((within(dialog).getByRole("textbox", { name: "Name" }) as HTMLInputElement).value).toBe("Rowing Machine");
+    expect(((await within(dialog).findByRole("img", { name: "The exercise's picture" })) as HTMLImageElement).src).toBe(shrunk);
     fireEvent.click(within(dialog).getByRole("button", { name: "Save" }));
 
-    await waitFor(() => expect(store.get_workout_library().exercises).toMatchObject([{ name: "Rowing Machine", measurement: "cardio", muscles: ["Quads"] }]));
+    await waitFor(() => expect(store.get_workout_library().exercises).toMatchObject([{ name: "Rowing Machine", measurement: "cardio", muscles: ["Quads"], has_picture: true }]));
+    expect(Object.values(store.list_exercise_pictures())).toEqual([shrunk]);
     expect(store.get_workout_library().exercises[0]!.categories).toEqual([store.get_workout_library().categories[0]!.id]);
     expect(store.get_workout_library().categories[0]).toMatchObject({ name: "Cardio", parent_id: null });
     expect(await screen.findByRole("cell", { name: "Rowing Machine" })).toBeTruthy();
+  });
+
+  it("shows exercises as a grid of pictures, opens one in place, and changes or removes its picture", async () => {
+    const store = open_page();
+    const squat = store.save_exercise({ name: "Squat", equipment: "Barbell", picture: "data:image/png;base64,AAAA" });
+    store.save_exercise({ name: "Plank", measurement: "duration" });
+    view(["exercises"]);
+
+    fireEvent.click(await screen.findByRole("radio", { name: "Grid" }));
+    const grid = await screen.findByRole("list", { name: "Exercises" });
+    const tiles = within(grid).getAllByRole("listitem");
+    expect(tiles.map((tile) => tile.textContent)).toEqual([expect.stringContaining("Plank"), expect.stringContaining("Weight & Reps · Barbell")]);
+    await waitFor(() => expect(tiles[1]!.querySelector("img")?.getAttribute("src")).toBe("data:image/png;base64,AAAA"));
+    expect(tiles[0]!.querySelector("img")).toBeNull();
+
+    const hash = location.hash;
+    fireEvent.click(within(tiles[1]!).getByRole("link", { name: "Squat" }));
+    expect(location.hash).toBe(hash);
+    let dialog = await screen.findByRole("dialog");
+    expect(((await within(dialog).findByRole("img", { name: "The exercise's picture" })) as HTMLImageElement).src).toBe("data:image/png;base64,AAAA");
+    fireEvent.change(within(dialog).getByLabelText("Picture file"), { target: { files: [new File(["x"], "squat.jpg", { type: "image/jpeg" })] } });
+    await waitFor(() => expect((within(dialog).getByRole("img", { name: "The exercise's picture" }) as HTMLImageElement).src).toBe(shrunk));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(store.get_exercise_picture(squat)).toBe(shrunk));
+
+    fireEvent.click(await within(grid).findByRole("link", { name: "Squat" }));
+    dialog = await screen.findByRole("dialog");
+    fireEvent.click(await within(dialog).findByRole("button", { name: "Remove" }));
+    expect(within(dialog).getByText("No picture.")).toBeTruthy();
+    fireEvent.click(within(dialog).getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(store.get_exercise_picture(squat)).toBe(""));
   });
 
   it("files exercises under nested categories, opened like folders, and renames one keeping what is inside", async () => {

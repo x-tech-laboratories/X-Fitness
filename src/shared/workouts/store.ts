@@ -3,7 +3,7 @@
 
 // ── Imports ──────────────────────────────────────────────────────────────────
 
-import { asc, eq, inArray, max, sql, synced_tables, type SQLiteTable } from "@x-tech-laboratories/x-libs/drizzle";
+import { asc, eq, inArray, max, ne, sql, synced_tables, type SQLiteTable } from "@x-tech-laboratories/x-libs/drizzle";
 import { in_transaction, type SqlDatabase } from "@x-tech-laboratories/x-libs/sql";
 
 import { add_category, delete_category, import_category_paths, move_category, read_categories, rename_category, save_category_refs, type Retag } from "../category_store.ts";
@@ -38,7 +38,7 @@ import { category_sets, daily_activity, exercise_history, exercise_stats, exerci
 import { exercises, program_sessions, programs, session_exercises, workout_categories, workout_exercises, workout_sets, workout_tables, workouts } from "./schema.ts";
 import { workout_setting_defaults } from "./settings.ts";
 import { read_trilium_database, write_trilium_database, type FileUnits } from "./trilium.ts";
-import { search_wger, type WgerResult } from "./wger.ts";
+import { search_wger, wger_picture, type WgerResult } from "./wger.ts";
 
 // ── Rows ─────────────────────────────────────────────────────────────────────
 
@@ -107,6 +107,10 @@ function to_set(row: SetRow): LoggedSet {
 
 export function load_exercises(database: SqlDatabase): Exercise[] {
   return drizzle_of(database).select().from(exercises).orderBy(sql`${exercises.name} COLLATE NOCASE`).all().map(to_exercise);
+}
+
+function pictured_exercise_ids(database: SqlDatabase): Set<string> {
+  return new Set(drizzle_of(database).select({ id: exercises.id }).from(exercises).where(ne(exercises.picture, "")).all().map((row) => row.id));
 }
 
 function find_exercise(database: SqlDatabase, id: string): Exercise | null {
@@ -202,7 +206,8 @@ function next_position(database: SqlDatabase, table: SQLiteTable, position: Posi
     .get()!.position;
 }
 
-function write_exercise(database: SqlDatabase, exercise: Exercise): void {
+// A picture left out keeps the one stored.
+function write_exercise(database: SqlDatabase, exercise: Exercise, picture?: string): void {
   const fields = {
     name: exercise.name,
     measurement: exercise.measurement,
@@ -210,6 +215,7 @@ function write_exercise(database: SqlDatabase, exercise: Exercise): void {
     muscles: JSON.stringify(exercise.muscles),
     categories: JSON.stringify(exercise.categories),
     notes: exercise.notes,
+    ...(picture === undefined ? {} : { picture }),
   };
   drizzle_of(database)
     .insert(exercises)
@@ -324,7 +330,18 @@ function with_known_categories<Item extends { categories: string[] }>(item: Item
 
 // ── Inputs ───────────────────────────────────────────────────────────────────
 
-export type ExerciseInput = Partial<Exercise> & { name: string };
+// A picture is a data URL of an image, empty to remove it, or left out to keep the one stored.
+export type ExerciseInput = Partial<Exercise> & { name: string; picture?: string };
+
+// Big enough for a photo shrunk for a tile, small enough that syncing and history stay light.
+const picture_limit = 1_000_000;
+
+function normalize_picture(picture: string | undefined): string | undefined {
+  if (picture === undefined || picture === "") return picture;
+  if (!/^data:image\/[\w.+-]+;base64,[A-Za-z0-9+/=]+$/.test(picture)) throw new Error("A picture must be a data URL of an image, such as data:image/webp;base64,….");
+  if (picture.length > picture_limit) throw new Error("The picture is too large; shrink it under 1 MB.");
+  return picture;
+}
 
 export interface SessionEntryInput extends Partial<SetValues> {
   id?: string;
@@ -362,6 +379,7 @@ function normalize_entry(input: SessionEntryInput): SessionEntry {
 
 export interface LibraryExercise extends Exercise {
   last_done: string | null;
+  has_picture: boolean;
 }
 
 export interface WorkoutLibrary {
@@ -486,8 +504,9 @@ export const workouts_feature = define_feature({
         .groupBy(workout_exercises.exercise_id)
         .all();
       const last_done = new Map(done.map((row) => [row.id, row.date]));
+      const pictured = pictured_exercise_ids(database);
       return {
-        exercises: exercises.map((exercise) => ({ ...exercise, last_done: last_done.get(exercise.id) ?? null })),
+        exercises: exercises.map((exercise) => ({ ...exercise, last_done: last_done.get(exercise.id) ?? null, has_picture: pictured.has(exercise.id) })),
         programs,
         categories: placed_categories(categories),
         equipment: normalize_names(exercises.map((exercise) => exercise.equipment)),
@@ -508,8 +527,19 @@ export const workouts_feature = define_feature({
         categories: normalize_category_refs(input.categories),
         notes: trimmed(input.notes),
       };
-      in_transaction(database, () => write_exercise(database, { ...exercise, categories: save_category_refs(database, workout_categories, exercise.categories) }));
+      const picture = normalize_picture(input.picture);
+      in_transaction(database, () => write_exercise(database, { ...exercise, categories: save_category_refs(database, workout_categories, exercise.categories) }, picture));
       return exercise.id;
+    },
+
+    get_exercise_picture: (database: SqlDatabase, id: string): string => {
+      return drizzle_of(database).select({ picture: exercises.picture }).from(exercises).where(eq(exercises.id, id)).get()?.picture ?? "";
+    },
+
+    // Only the exercises that have one, by id.
+    list_exercise_pictures: (database: SqlDatabase): Record<string, string> => {
+      const rows = drizzle_of(database).select({ id: exercises.id, picture: exercises.picture }).from(exercises).where(ne(exercises.picture, "")).all();
+      return Object.fromEntries(rows.map((row) => [row.id, row.picture]));
     },
 
     // Sessions and logged sets keep the id, and show it as a deleted exercise.
@@ -518,6 +548,9 @@ export const workouts_feature = define_feature({
     },
 
     search_wger_exercises: (_database: SqlDatabase, term: string): Promise<WgerResult[]> => search_wger(term),
+
+    // Fetched here rather than by the page, since wger's pictures do not allow a page on another site to read them.
+    lookup_wger_picture: (_database: SqlDatabase, wger_id: number): Promise<string> => wger_picture(wger_id),
 
     // ── Categories ──
 

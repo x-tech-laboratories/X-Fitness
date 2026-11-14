@@ -148,3 +148,26 @@
 .workouts-set .number-field-inputs > input {
   width: 4.5em;
 }
+
+.workouts-picture-field {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+.workouts-picture {
+  width: 8rem;
+  aspect-ratio: 1;
+  object-fit: contain;
+}
+
+/* Exercise pictures are drawings and photos of a person, so the tiles are square. */
+.workouts-exercise-grid {
+  --media-aspect: 1;
+}
+
+/* An exercise's drawing shows whole rather than cropped to the tile. */
+.workouts-exercise-grid .media-picture img {
+  object-fit: contain;
+}

@@ -31,5 +31,11 @@ export const migrations: DrizzleMigration[] = [
       "DROP TABLE `workout_categories`;",
       "ALTER TABLE `__new_workout_categories` RENAME TO `workout_categories`;"
     ]
+  },
+  {
+    "name": "20261114030310_exercise_picture",
+    "statements": [
+      "ALTER TABLE `exercises` ADD `picture` text DEFAULT '' NOT NULL;"
+    ]
   }
 ];

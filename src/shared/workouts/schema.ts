@@ -24,6 +24,8 @@ export const exercises = sqliteTable("exercises", {
   muscles: text().notNull().default("[]"),
   categories: text().notNull().default("[]"),
   notes: text().notNull().default(""),
+  // A data URL of a small picture, or empty for none.
+  picture: text().notNull().default(""),
 });
 
 export const programs = sqliteTable("programs", {
