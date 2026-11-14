@@ -15,6 +15,7 @@ import { attempt, calls, set_setting } from "../api.ts";
 import { activity_options } from "../calculators/options.ts";
 import { UnitNumber } from "../unit_field.tsx";
 import { format_mass, format_mass_change, to_shown_tenth, type ShownUnits } from "../units.ts";
+import { distance_words } from "./wording.ts";
 
 // ── Shared ───────────────────────────────────────────────────────────────────
 
@@ -223,7 +224,7 @@ function Timeline({ report, units }: { report: CalculationsReport; units: ShownU
       rows={[
         ["From", format_mass(progress.weight, units)],
         ["To", format_mass(progress.goal, units)],
-        ["To go", format_mass_change(progress.goal - progress.weight, units)],
+        ["To go", distance_words(progress.goal - progress.weight, (kg) => format_mass(kg, units), true)],
         ["At the plan's rate", when(progress.plan_weeks, report.plan.weekly_change === 0 ? "The plan keeps the weight" : "The plan heads the other way")],
         ["At your trend", when(progress.trend_weeks, trend === null ? "Needs two weights a week apart" : "Not heading there")],
       ]}

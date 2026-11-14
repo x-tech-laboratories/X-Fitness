@@ -15,7 +15,7 @@ import { calls, succeeds } from "../api.ts";
 import { format_value, to_shown_value, to_stored_value, unit_of } from "../body/format.ts";
 import { UnitNumber } from "../unit_field.tsx";
 import type { ShownUnits } from "../units.ts";
-import { role_labels } from "./wording.ts";
+import { distance_words, role_labels } from "./wording.ts";
 
 // ── Shared ───────────────────────────────────────────────────────────────────
 
@@ -28,13 +28,12 @@ async function save_goal(metric: BodyMetric, goal: number): Promise<void> {
   await succeeds(() => calls().save_body_metric({ id: metric.id, name: metric.name, kind: metric.kind, unit: metric.unit, goal, comment: metric.comment, role: metric.role }));
 }
 
-// How far the goal is from now, such as "7.4 kg to lose".
-function distance_text(metric: BodyMetric, goal: number, now: number | null, units: ShownUnits): string | null {
-  if (!(goal > 0) || now === null || !(now > 0)) return null;
-  const difference = goal - now;
-  if (Math.abs(difference) < 0.05) return "Reached";
-  const verb = metric.kind === "weight" ? (difference < 0 ? "to lose" : "to gain") : difference < 0 ? "to go down" : "to go up";
-  return `${format_value(metric, Math.abs(difference), units)} ${verb}`;
+// Where the metric is now and how far its goal is, such as "now 82 kg · 7.4 kg to lose", or only the first without a goal.
+function distance_text(metric: BodyMetric, goal: number, now: number | null, units: ShownUnits, estimated = false): string | null {
+  if (now === null || !(now > 0)) return null;
+  const where = `now ${format_value(metric, now, units)}${estimated ? " (estimated)" : ""}`;
+  if (!(goal > 0)) return where;
+  return `${where} · ${distance_words(goal - now, (gap) => format_value(metric, gap, units), metric.kind === "weight")}`;
 }
 
 function GoalField({ metric, units, label }: { metric: BodyMetric; units: ShownUnits; label: string }) {
@@ -109,11 +108,11 @@ function WeightGoal({ report, units }: { report: CalculationsReport; units: Show
 function BodyFatGoal({ report, units }: { report: CalculationsReport; units: ShownUnits }) {
   const metric = report.sources.body_fat?.metric;
   if (!metric) return <NoMetric measure="body_fat" />;
-  const distance = distance_text(metric, metric.goal, report.calculations.body_fat, units);
+  const distance = distance_text(metric, metric.goal, report.calculations.body_fat, units, !report.sources.body_fat?.reading);
   return (
     <div className="stack tight">
       <GoalField metric={metric} units={units} label="Goal body fat" />
-      {distance && <p className="muted small">{report.sources.body_fat?.reading ? distance : `${distance}, from an estimate`}</p>}
+      {distance && <p className="muted small">{distance}</p>}
     </div>
   );
 }

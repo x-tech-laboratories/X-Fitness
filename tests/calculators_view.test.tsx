@@ -53,21 +53,21 @@ describe("calculators", () => {
     show("calculators");
 
     expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("Calculators");
-    expect(await screen.findByText("24.7")).toBeTruthy();
+    expect(await screen.findByText("24.7 · Healthy weight")).toBeTruthy();
     expect(screen.getAllByText("2026-11-10")).not.toHaveLength(0);
     const weight = screen.getByRole("textbox", { name: "Weight" });
     fireEvent.change(weight, { target: { value: "90" } });
     fireEvent.blur(weight);
-    expect(await screen.findByText("27.8")).toBeTruthy();
+    expect(await screen.findByText("27.8 · Overweight")).toBeTruthy();
     expect(screen.getByText("Changed")).toBeTruthy();
     expect(store.get_body_day("2026-11-13").rows[0]?.value).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Reset Weight" }));
-    expect(await screen.findByText("24.7")).toBeTruthy();
+    expect(await screen.findByText("24.7 · Healthy weight")).toBeTruthy();
     expect(screen.queryByText("Changed")).toBeNull();
     fireEvent.change(weight, { target: { value: "90" } });
     fireEvent.blur(weight);
     fireEvent.click(await screen.findByRole("button", { name: "Use my readings" }));
-    expect(await screen.findByText("24.7")).toBeTruthy();
+    expect(await screen.findByText("24.7 · Healthy weight")).toBeTruthy();
   });
 
   it("logs a body fat worked out by the Navy method as today's reading", async () => {
@@ -114,9 +114,12 @@ describe("goals", () => {
     show("goals");
     const goal_of = (id: string) => store.list_body_metrics().find((metric) => metric.id === id)?.goal;
 
+    expect(await screen.findByText("now 80 kg")).toBeTruthy();
+    expect(screen.getByText("now 90 cm")).toBeTruthy();
+    expect(screen.getByText(/^now [\d.]+ ?% \(estimated\)$/)).toBeTruthy();
     fireEvent.click(await screen.findByRole("button", { name: "Set the goal weight for a BMI of 22" }));
     await waitFor(() => expect(goal_of("weight")).toBeCloseTo(71.3));
-    expect(await screen.findByText(/8\.7 kg to lose/)).toBeTruthy();
+    expect(await screen.findByText(/now 80 kg · 8\.7 kg to lose/)).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Set the goal waist to half your height" }));
     await waitFor(() => expect(goal_of("waist")).toBe(90));
     const body_fat = screen.getByRole("textbox", { name: "Goal body fat" });
@@ -167,7 +170,7 @@ describe("goals", () => {
     show("goals");
 
     expect(await screen.findByText("When you get there")).toBeTruthy();
-    expect(screen.getByText("-5 kg")).toBeTruthy();
+    expect(screen.getByText("5 kg to lose")).toBeTruthy();
     expect(screen.getByText("The plan heads the other way")).toBeTruthy();
     expect(screen.getAllByText("Needs two weights a week apart")).not.toHaveLength(0);
     expect(screen.getByText("The plan gains weight, but the goal of 75 kg is below your 80 kg.")).toBeTruthy();
