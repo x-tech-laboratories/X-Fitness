@@ -77,7 +77,7 @@ export function height_targets(): string[] {
   return sexes.flatMap((sex) => levels.flatMap((muscle) => levels.flatMap((weight) => ["min", "max"].map((height) => `${sex}-young-${muscle}muscle-${weight}weight-${height}height`))));
 }
 
-// How much of the min, average and max targets a slider from 0 to 1 takes, as MakeHuman blends them.
+// How much of the min, average and max targets a slider takes, as MakeHuman blends them; past 1 the average's share turns negative.
 function level_weights(value: number): Record<Level, number> {
   const min = Math.max(0, 1 - value * 2);
   const max = Math.max(0, value * 2 - 1);
@@ -159,13 +159,16 @@ function part_of(model: BodyModel, vertices: number[]): BodyModel {
 export interface ShapeParameters {
   // 0 female, 1 male, between them a mix.
   sex: number;
-  // Each from 0 to 1, 0.5 being average.
+  // Each from 0 to 1, 0.5 being average; the weight goes on past 1, up to heaviest_weight.
   muscle: number;
   weight: number;
   height: number;
   // Each from -1 to 1, 0 leaving the girth as the rest of the shape makes it.
   girths: Partial<Record<Girth, number>>;
 }
+
+// The furthest the weight slider goes: past 1 a body keeps growing by as much again as the heaviest target adds.
+export const heaviest_weight = 1.75;
 
 export const average_shape: ShapeParameters = { sex: 0.5, muscle: 0.5, weight: 0.5, height: 0.5, girths: {} };
 
@@ -182,7 +185,7 @@ export function target_weights(parameters: ShapeParameters): Map<string, number>
     for (const muscle_level of levels) {
       for (const weight_level of levels) {
         const share = sex_share * muscle[muscle_level] * weight[weight_level];
-        if (share <= 0) continue;
+        if (share === 0) continue;
         weights.set(`universal-${sex}-young-${muscle_level}muscle-${weight_level}weight`, share);
         for (const height_level of ["min", "max"] as const) {
           if (height[height_level] > 0) weights.set(`${sex}-young-${muscle_level}muscle-${weight_level}weight-${height_level}height`, share * height[height_level]);
@@ -334,13 +337,30 @@ function usual_body_fat(sex: number): number {
   return 28 - sex * 10;
 }
 
-// Muscle from lean mass for the height, or from body fat when the mass or height is missing.
+// The lean mass for the height most adults of each sex carry, in kg per square metre.
+function usual_lean_index(sex: number): number {
+  return 15 + sex * 4;
+}
+
+// A third of the fat carried above the usual comes with lean mass of its own, which is not muscle.
+const lean_share_of_extra_fat = 1 / 3;
+
+// The lean index above the usual that counts as fully muscular.
+const lean_index_reach = 6;
+
+// Muscle from lean mass for the height, less what extra fat brings and softened by it, or from body fat alone when the mass or height is missing.
 function muscle_from(measures: BodyMeasures, sex: number): number {
   const clamp = (value: number) => Math.min(1, Math.max(0, value));
+  const extra_body_fat = Math.max(0, measures.body_fat - usual_body_fat(sex));
   if (measures.body_fat > 0 && measures.mass > 0 && measures.height > 0) {
-    const lean_index = (measures.mass * (1 - measures.body_fat / 100)) / (measures.height / 100) ** 2;
-    const usual_lean_index = 15 + sex * 4;
-    return clamp(0.5 + (lean_index - usual_lean_index) / 8);
+    const square_metres = (measures.height / 100) ** 2;
+    const lean_index = (measures.mass * (1 - measures.body_fat / 100)) / square_metres;
+    const fat_index = (measures.mass * measures.body_fat) / 100 / square_metres;
+    const usual_fat_index = (usual_lean_index(sex) * usual_body_fat(sex)) / (100 - usual_body_fat(sex));
+    const muscle_index = lean_index - Math.max(0, fat_index - usual_fat_index) * lean_share_of_extra_fat;
+    const muscle = clamp(0.5 + (muscle_index - usual_lean_index(sex)) / (2 * lean_index_reach));
+    const definition = 1 - clamp(extra_body_fat / 40);
+    return muscle > 0.5 ? 0.5 + (muscle - 0.5) * definition : muscle;
   }
   if (measures.body_fat > 0) return clamp(0.5 + (usual_body_fat(sex) - measures.body_fat) / 30);
   return 0.5;
@@ -375,7 +395,7 @@ export function fit_shape(model: BodyModel, measures: BodyMeasures): BodyFit {
 
   for (let pass = 0; pass < 3; pass++) {
     if (measures.height > 0) parameters.height = solve(0, 1, (value) => ((parameters.height = value), height_at()), measures.height);
-    if (measures.mass > 0) parameters.weight = solve(0, 1, (value) => ((parameters.weight = value), mass_at()), measures.mass);
+    if (measures.mass > 0) parameters.weight = solve(0, heaviest_weight, (value) => ((parameters.weight = value), mass_at()), measures.mass);
     for (const [girth, wanted] of wanted_girths) {
       parameters.girths[girth] = solve(-1, 1, (value) => ((parameters.girths[girth] = value), girth_at(girth)), wanted);
     }

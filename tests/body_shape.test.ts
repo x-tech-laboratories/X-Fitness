@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 
 import { describe, expect, it } from "vitest";
 
-import { average_shape, change_of_positions, shared_measures, fit_shape, girth_of_positions, height_of_positions, parse_body_model, shape_positions, volume_of_positions } from "../src/shared/body/shape.ts";
+import { average_shape, change_of_positions, shared_measures, fit_shape, heaviest_weight, girth_of_positions, height_of_positions, parse_body_model, shape_positions, volume_of_positions } from "../src/shared/body/shape.ts";
 
 const file = readFileSync(new URL("../src/web/body/body_model.bin", import.meta.url));
 const model = parse_body_model(file.buffer.slice(file.byteOffset, file.byteOffset + file.byteLength));
@@ -32,6 +32,25 @@ describe("the 3D body", () => {
 
     expect(fit.parameters.sex).toBe(1);
     for (const line of fit.lines) expect(Math.abs(line.reached - line.wanted) / line.wanted).toBeLessThan(0.01);
+  });
+
+  it("reads lean mass that comes with extra fat as less muscle, and keeps the full muscle for a lean, heavy build", () => {
+    const heavy = fit_shape(model, { sex: "male", height: 186.69, mass: 108.86, body_fat: 28, girths: {} });
+    const built = fit_shape(model, { sex: "male", height: 180, mass: 92, body_fat: 12, girths: {} });
+    const usual = fit_shape(model, { sex: "male", height: 180, mass: 75, body_fat: 18, girths: {} });
+
+    expect(heavy.parameters.muscle).toBeGreaterThan(0.55);
+    expect(heavy.parameters.muscle).toBeLessThan(0.7);
+    expect(built.parameters.muscle).toBeGreaterThan(0.9);
+    expect(usual.parameters.muscle).toBeCloseTo(0.5, 1);
+  });
+
+  it("goes on past the heaviest target to reach a mass the targets alone fall short of", () => {
+    const fit = fit_shape(model, { sex: "male", height: 186.69, mass: 108.86, body_fat: 28, girths: {} });
+
+    expect(fit.parameters.weight).toBeGreaterThan(1);
+    expect(fit.parameters.weight).toBeLessThan(heaviest_weight);
+    expect(fit.lines.find((line) => line.name === "mass")!.reached).toBeCloseTo(108.86, 0);
   });
 
   it("stops at the furthest shape it can make and says how near it came", () => {
