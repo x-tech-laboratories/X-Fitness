@@ -17,10 +17,12 @@ import {
   food_units,
   is_in_category,
   normalize_categories,
+  nutrient_groups,
   nutrients,
   serving_unit,
   uncategorized,
   type Food,
+  type NutrientInfo,
   type NutrientKey,
   type Nutrients,
 } from "../../shared/diet/model.ts";
@@ -191,23 +193,56 @@ export function use_category_view<Item extends { id: string; categories: string[
 
 // ── Nutrients ────────────────────────────────────────────────────────────────
 
-const steps: Record<"energy" | "g" | "mg", number> = { energy: 10, g: 1, mg: 10 };
+const steps: Record<NutrientInfo["shown"], number> = { energy: 10, g: 1, mg: 1, "µg": 1 };
 
-// One field per nutrient in the units they are shown in; on_change gets the value as stored.
-export function NutrientFields({ values, energy, on_change }: { values: Nutrients; energy: EnergyUnit; on_change: (key: NutrientKey, stored: number) => void }) {
+interface NutrientFieldsProps {
+  values: Nutrients;
+  energy: EnergyUnit;
+  on_change: (key: NutrientKey, stored: number) => void;
+}
+
+// Each group's fields under its heading, the first group's without one when bare_first.
+function NutrientGroups({ infos, values, energy, on_change, bare_first = false }: NutrientFieldsProps & { infos: NutrientInfo[]; bare_first?: boolean }) {
+  const groups = nutrient_groups.map((group) => ({ ...group, infos: infos.filter((info) => info.group === group.id) })).filter((group) => group.infos.length > 0);
   return (
-    <div className="diet-nutrient-grid">
-      {nutrients.map((info) => (
-        <NumberField
-          key={info.key}
-          label={info.label}
-          unit={shown_unit(info, energy)}
-          min={0}
-          step={steps[info.shown]}
-          value={field_value(to_shown_value(info, values[info.key], energy))}
-          on_change={(shown) => on_change(info.key, to_stored_value(info, shown ?? 0, energy))}
-        />
+    <div className="stack">
+      {groups.map((group, index) => (
+        <div key={group.id} className="stack tight">
+          {!(bare_first && index === 0) && <h3>{group.label}</h3>}
+          <div className="diet-nutrient-grid">
+            {group.infos.map((info) => (
+              <NumberField
+                key={info.id}
+                label={info.label}
+                unit={shown_unit(info, energy)}
+                min={0}
+                step={steps[info.shown]}
+                value={field_value(to_shown_value(info, values[info.key], energy))}
+                on_change={(shown) => on_change(info.key, to_stored_value(info, shown ?? 0, energy))}
+              />
+            ))}
+          </div>
+        </div>
       ))}
+    </div>
+  );
+}
+
+// A field per nutrient Settings shows, in the units they are shown in, and the rest folded away until a food has some of
+// them; on_change gets the value as stored.
+export function NutrientFields({ shown, ...props }: NutrientFieldsProps & { shown: NutrientInfo[] }) {
+  // Salt is only another view of sodium, so it stays out of the rest.
+  const rest = nutrients.filter((info) => !shown.includes(info) && !info.scale);
+  const [open, set_open] = useState(() => rest.some((info) => props.values[info.key] > 0));
+  return (
+    <div className="stack">
+      <NutrientGroups {...props} infos={shown} bare_first />
+      {rest.length > 0 && (
+        <details open={open} onToggle={(event) => set_open(event.currentTarget.open)}>
+          <summary>More nutrients</summary>
+          <NutrientGroups {...props} infos={rest} />
+        </details>
+      )}
     </div>
   );
 }

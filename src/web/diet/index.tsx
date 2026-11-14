@@ -8,10 +8,12 @@ import type { SettingsSection } from "@x-tech-laboratories/x-libs/web/react/layo
 import { PageHeading } from "@x-tech-laboratories/x-libs/web/react/layout";
 import { Loaded } from "@x-tech-laboratories/x-libs/web/react/states";
 
+import { shown_nutrients } from "../../shared/diet/labels.ts";
+import { nutrient_groups } from "../../shared/diet/model.ts";
 import { use_data, use_settings } from "../api.ts";
 import type { FeaturePage, FeatureSettingsProps } from "../features.tsx";
 import { CategoriesTab, UnitsTab } from "./CategoriesTab.tsx";
-import { DataSettings, GrocerySettings, LookupSettings, TargetSettings } from "./DietSettings.tsx";
+import { DataSettings, GrocerySettings, LabelSettings, LookupSettings, NutrientSettings } from "./DietSettings.tsx";
 import { DiaryTab } from "./DiaryTab.tsx";
 import { FoodsTab } from "./FoodsTab.tsx";
 import { energy_unit_of } from "./format.ts";
@@ -53,7 +55,7 @@ export function DietView({ parts }: { parts: string[] }) {
                 <>
                   {tab === "diary" && <DiaryTab data={diet} settings={values} energy={energy} />}
                   {tab === "recipes" && <RecipesTab data={diet} energy={energy} />}
-                  {tab === "foods" && <FoodsTab data={diet} energy={energy} has_usda_key={String(values["diet.usda_api_key"] ?? "").trim() !== ""} />}
+                  {tab === "foods" && <FoodsTab data={diet} energy={energy} shown={shown_nutrients(values)} has_usda_key={String(values["diet.usda_api_key"] ?? "").trim() !== ""} />}
                   {tab === "grocery" && <GroceryTab data={diet} settings={values} />}
                   {tab === "categories" && <CategoriesTab data={diet} />}
                   {tab === "units" && <UnitsTab data={diet} />}
@@ -71,15 +73,18 @@ export function DietView({ parts }: { parts: string[] }) {
 
 export function diet_settings(props: FeatureSettingsProps): SettingsSection[] {
   return [
-    {
-      id: "diet-targets",
-      heading: "Daily targets",
+    { id: "diet-label", heading: "Nutrition label and targets", content: <LabelSettings {...props} /> },
+    ...nutrient_groups.map((group) => ({
+      id: `diet-nutrients-${group.id}`,
+      heading: group.label,
       hint:
-        props.settings["calculators.follow_diet_targets"] === true
-          ? "Each day's diary totals are measured against these. Calories, protein, fat and carbs follow the plan on Calculators → Goals, which sets them again after every change."
-          : "Each day's diary totals are measured against these. A target of 0 means no target.",
-      content: <TargetSettings {...props} />,
-    },
+        group.id !== "macros"
+          ? undefined
+          : props.settings["calculators.follow_diet_targets"] === true
+            ? "Switch a nutrient on to show it in the diary and the food editor. Calories, protein, fat and carbs follow the plan on Calculators → Goals, which sets them again after every change; the rest follow the preset unless set by hand."
+            : "Switch a nutrient on to show it in the diary and the food editor. A target of 0 means none; Reset goes back to the preset's.",
+      content: <NutrientSettings {...props} group={group.id} />,
+    })),
     { id: "diet-lookup", heading: "Food lookup", content: <LookupSettings {...props} /> },
     { id: "diet-grocery", heading: "Grocery", content: <GrocerySettings {...props} /> },
     { id: "diet-data", heading: "Import and export", content: <DataSettings /> },

@@ -38,7 +38,8 @@ export const settings_feature = define_feature({
   },
   api: {
     get_settings: {
-      description: "The settings stored, by key, such as mass_unit, workouts.default_rest or diet.target_calories; a key missing here has its default.",
+      description:
+        "The settings stored, by key, such as mass_unit or workouts.default_rest; a key missing here has its default. diet.label (us, eu, ca, anz or all) picks the nutrients shown and diet.targets (us, eu, ca or anz) the reference amounts each day's targets start from; diet.target_<nutrient>, such as diet.target_protein, is a target set by hand, in kcal or grams, that a null or missing value leaves to the preset.",
       params: [],
     },
     set_setting: {

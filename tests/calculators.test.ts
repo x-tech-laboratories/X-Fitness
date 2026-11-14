@@ -15,6 +15,7 @@ import {
   type GoalPlan,
   type Measures,
 } from "../src/shared/calculators/formulas.ts";
+import { target_of } from "../src/shared/diet/labels.ts";
 import { bind_methods, open_store } from "../src/shared/store.ts";
 import { format_change, to_stored_value, unit_of } from "../src/web/body/format.ts";
 
@@ -166,7 +167,11 @@ describe("the calculators store", () => {
     expect(store.list_body_metrics().find((metric) => metric.id === "weight")?.goal).toBeCloseTo(71.3);
     expect(store.list_body_metrics().find((metric) => metric.id === "waist")?.goal).toBe(90);
     expect(store.get_settings()["diet.target_calories"]).toBeGreaterThan(2000);
-    expect(store.get_settings()["diet.target_fat"]).toBe(65);
+    // Fat was not named, so it still follows the target preset, while the plan's protein overrides any preset.
+    expect(store.get_settings()["diet.target_fat"]).toBeUndefined();
+    store.set_setting("diet.targets", "eu");
+    expect(target_of(store.get_settings(), "protein")).toBe(store.get_settings()["diet.target_protein"]);
+    expect(target_of(store.get_settings(), "fat")).toBe(70);
     expect(store.apply_calculated_goals(["weight", "waist"], "2026-11-13")).toBe(0);
   });
 

@@ -60,7 +60,7 @@ describe("diet diary", () => {
     show(["diary"]);
 
     expect(await screen.findByText("190 kcal / 300 kcal")).toBeTruthy();
-    expect(screen.getByText("6.5 g / 100 g")).toBeTruthy();
+    expect(screen.getByText("6.5 g / 50 g")).toBeTruthy();
     expect(screen.getByRole("cell", { name: "Oats (Quaker)" })).toBeTruthy();
 
     fireEvent.change(screen.getByRole("combobox", { name: "Food" }), { target: { value: id } });
@@ -75,6 +75,29 @@ describe("diet diary", () => {
     fireEvent.click(screen.getByRole("button", { name: "Next day" }));
     fireEvent.click(await screen.findByRole("button", { name: "Today" }));
     expect(await screen.findByText("665 kcal / 300 kcal · over")).toBeTruthy();
+  });
+
+  it("shows the label's nutrients and those switched on, vitamins and minerals never as over", async () => {
+    const { methods } = start({ "diet.shown": { vitamin_c: true } });
+    const id = methods.save_food({ ...oats, nutrients: { ...oats.nutrients, vitamin_c: 0.12, iron: 0.0047, magnesium: 0.1 } });
+    methods.add_diary_entry({ date: today(), kind: "food", ref_id: id, amount: 1 });
+    show(["diary"]);
+
+    expect(await screen.findByRole("heading", { name: "Vitamins" })).toBeTruthy();
+    expect(screen.getByText("120 mg / 90 mg")).toBeTruthy();
+    expect(screen.getByText("4.7 mg / 18 mg")).toBeTruthy();
+    // Magnesium is not on the US label.
+    expect(screen.queryByText("Magnesium")).toBeNull();
+  });
+
+  it("shows salt against the EU reference intake on the EU label", async () => {
+    const { methods } = start({ "diet.label": "eu", "diet.targets": "eu" });
+    const id = methods.save_food({ ...oats, nutrients: { ...oats.nutrients, sodium: 0.4 } });
+    methods.add_diary_entry({ date: today(), kind: "food", ref_id: id, amount: 1 });
+    show(["diary"]);
+
+    expect(await screen.findByText("1 g / 6 g")).toBeTruthy();
+    expect(screen.queryByText("Sodium")).toBeNull();
   });
 
   it("removes an entry with an Undo that puts it back", async () => {
@@ -104,7 +127,7 @@ describe("diet foods and recipes", () => {
   it("adds a food from an Open Food Facts lookup and lists it", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn(async () => new Response(JSON.stringify({ products: [{ code: "301", product_name: "Peanut Butter", brands: "Nutty", nutriments: { "energy-kcal_100g": 600, proteins_100g: 25, sodium_100g: 0.4 } }] }))),
+      vi.fn(async () => new Response(JSON.stringify({ products: [{ code: "301", product_name: "Peanut Butter", brands: "Nutty", nutriments: { "energy-kcal_100g": 600, proteins_100g: 25, sodium_100g: 0.4, "vitamin-e_100g": 0.009 } }] }))),
     );
     const { methods } = start();
     show(["foods"]);
@@ -119,6 +142,8 @@ describe("diet foods and recipes", () => {
     expect((screen.getByRole("textbox", { name: "Name" }) as HTMLInputElement).value).toBe("Peanut Butter");
     expect((screen.getByRole("textbox", { name: "Calories" }) as HTMLInputElement).value).toBe("600");
     expect((screen.getByRole("textbox", { name: "Sodium" }) as HTMLInputElement).value).toBe("400");
+    expect((screen.getByRole("textbox", { name: "Vitamin E" }) as HTMLInputElement).value).toBe("9");
+    type_number(screen.getByRole("textbox", { name: "Selenium" }), "4.1");
     fireEvent.change(screen.getByRole("combobox", { name: "Categories" }), { target: { value: "Spreads" } });
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
@@ -126,6 +151,8 @@ describe("diet foods and recipes", () => {
     const [food] = methods.get_diet().foods;
     expect(food).toMatchObject({ name: "Peanut Butter", categories: ["Spreads"], serving_size: 100, serving_unit: "g" });
     expect(food!.nutrients.sodium).toBeCloseTo(0.4);
+    expect(food!.nutrients.vitamin_e).toBeCloseTo(0.009);
+    expect(food!.nutrients.selenium).toBeCloseTo(0.0000041, 10);
   });
 
   it("works out a recipe's nutrition per serving from its ingredients as they are added", async () => {
@@ -233,6 +260,17 @@ describe("diet grocery, categories and units", () => {
 });
 
 describe("diet settings", () => {
+  it("leaves the targets the plan follows to the plan, with no reset", async () => {
+    start({ "calculators.follow_diet_targets": true, "diet.target_protein": 140, "diet.target_iron": 0.02 });
+    render(<SettingsView />);
+
+    expect(((await screen.findByRole("textbox", { name: "Protein target" })) as HTMLInputElement).value).toBe("140");
+    expect(screen.getAllByText("Set by the plan on Calculators → Goals.")).toHaveLength(4);
+    expect(screen.queryByRole("button", { name: "Reset Protein target" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Reset Iron target" })).toBeTruthy();
+    expect(screen.getByText("Custom: 1 target(s) set by hand.")).toBeTruthy();
+  });
+
   it("saves targets in the stored units and imports the add-on's database from a file", async () => {
     const { methods } = start();
     render(
@@ -246,6 +284,21 @@ describe("diet settings", () => {
     expect((sodium as HTMLInputElement).value).toBe("2300");
     type_number(sodium, "1500");
     await waitFor(() => expect(methods.get_settings()["diet.target_sodium"]).toBeCloseTo(1.5));
+
+    const vitamin_d = screen.getByRole("textbox", { name: "Vitamin D target" });
+    expect((vitamin_d as HTMLInputElement).value).toBe("20");
+    type_number(vitamin_d, "25");
+    await waitFor(() => expect(methods.get_settings()["diet.target_vitamin_d"]).toBeCloseTo(0.000025, 10));
+    fireEvent.click(await screen.findByRole("button", { name: "Reset Vitamin D target" }));
+    await waitFor(() => expect(methods.get_settings()["diet.target_vitamin_d"]).toBeNull());
+
+    fireEvent.change(screen.getByRole("combobox", { name: "Targets" }), { target: { value: "eu" } });
+    await waitFor(() => expect((screen.getByRole("textbox", { name: "Vitamin D target" }) as HTMLInputElement).value).toBe("5"));
+
+    fireEvent.click(screen.getByRole("switch", { name: "Show Magnesium" }));
+    await waitFor(() => expect(methods.get_settings()["diet.shown"]).toEqual({ magnesium: true }));
+    fireEvent.click(await screen.findByRole("button", { name: "Reset to label" }));
+    await waitFor(() => expect(methods.get_settings()["diet.shown"]).toEqual({}));
 
     const file = new File([JSON.stringify({ foods: { a1: { name: "Rice", servingSize: 100, servingUnit: "g", nutrients: { calories: 130, sodium: 5 } } } })], "database.json");
     fireEvent.change(screen.getByLabelText("Diet Manager database file"), { target: { files: [file] } });

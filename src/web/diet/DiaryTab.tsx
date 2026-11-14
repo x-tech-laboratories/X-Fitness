@@ -13,7 +13,8 @@ import { Loaded } from "@x-tech-laboratories/x-libs/web/react/states";
 import { DataTable, type TableColumn } from "@x-tech-laboratories/x-libs/web/react/table";
 import { toast } from "@x-tech-laboratories/x-libs/web/react/toasts";
 
-import { by_id, nutrients, serving_unit, target_key, target_progress, type EntryKind, type Nutrients } from "../../shared/diet/model.ts";
+import { shown_nutrients, target_of } from "../../shared/diet/labels.ts";
+import { by_id, nutrient_groups, nutrients, serving_unit, target_progress, type EntryKind, type NutrientInfo, type Nutrients } from "../../shared/diet/model.ts";
 import type { DayEntry, DietData } from "../../shared/diet/store.ts";
 import { calls, use_data } from "../api.ts";
 import { HistoryButton } from "../history/HistoryView.tsx";
@@ -41,10 +42,11 @@ function session_storage(): Storage | undefined {
 
 // ── Totals ───────────────────────────────────────────────────────────────────
 
-export function target_meters(totals: Nutrients, settings: Record<string, unknown>, energy: EnergyUnit): Meter[] {
-  return nutrients.map((info) => {
+// One meter per nutrient listed.
+export function target_meters(totals: Nutrients, settings: Record<string, unknown>, energy: EnergyUnit, infos: NutrientInfo[]): Meter[] {
+  return infos.map((info) => {
     const value = totals[info.key];
-    const progress = target_progress(value, Number(settings[target_key(info.key)] ?? 0));
+    const progress = target_progress(value, target_of(settings, info.key), info.goal);
     const shown = format_nutrient(info, value, energy);
     const target_text = progress.target === null ? "" : ` / ${format_nutrient(info, progress.target, energy)}`;
     return {
@@ -57,6 +59,23 @@ export function target_meters(totals: Nutrients, settings: Record<string, unknow
       title: progress.target === null ? "No target" : progress.over ? `Over the ${shown_unit(info, energy)} target` : null,
     };
   });
+}
+
+// The nutrients Settings shows, a heading over each group after the first.
+export function NutrientTotals({ totals, settings, energy }: { totals: Nutrients; settings: Record<string, unknown>; energy: EnergyUnit }) {
+  const shown = shown_nutrients(settings);
+  const groups = nutrient_groups.map((group) => ({ ...group, infos: shown.filter((info) => info.group === group.id) })).filter((group) => group.infos.length > 0);
+  if (groups.length === 0) return <p className="muted">No nutrients are shown; switch some on in Settings.</p>;
+  return (
+    <div className="stack">
+      {groups.map((group, index) => (
+        <div key={group.id} className="stack tight">
+          {index > 0 && <h3>{group.label}</h3>}
+          <Meters rows={target_meters(totals, settings, energy, group.infos)} message="Nothing tracked." />
+        </div>
+      ))}
+    </div>
+  );
 }
 
 // ── Logging ──────────────────────────────────────────────────────────────────
@@ -159,7 +178,7 @@ export function DiaryTab({ data, settings, energy }: { data: DietData; settings:
         {(loaded) => (
           <>
             <Section title="Day totals">
-              <Meters rows={target_meters(loaded.totals, settings, energy)} message="Nothing tracked." />
+              <NutrientTotals totals={loaded.totals} settings={settings} energy={energy} />
             </Section>
             <Section title="Eaten">
               <div className="stack tight">

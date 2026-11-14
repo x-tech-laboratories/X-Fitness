@@ -16,7 +16,8 @@ import { format_change, format_value, shown_units, to_shown_value, type ShownUni
 import { readings_of } from "../body/ReportsTab.tsx";
 import { target_meters, today } from "../diet/DiaryTab.tsx";
 import { energy_unit_of, format_nutrient } from "../diet/format.ts";
-import { nutrients, target_key, type NutrientKey } from "../../shared/diet/model.ts";
+import { target_of } from "../../shared/diet/labels.ts";
+import { nutrients, type NutrientKey } from "../../shared/diet/model.ts";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -31,7 +32,7 @@ const epoch_of = (day: string) => Date.parse(`${day}T00:00:00Z`) / 1000;
 function DietToday({ day, settings, energy }: { day: DiaryDay; settings: Record<string, unknown>; energy: EnergyUnit }) {
   return (
     <Section title="Eaten today" tools={<a href="#/diet/diary">Diary</a>}>
-      {day.entries.length === 0 ? <p className="muted">Nothing logged today.</p> : <Meters rows={target_meters(day.totals, settings, energy).filter((_, index) => nutrients[index]!.group === "macros")} message="Nothing tracked." />}
+      {day.entries.length === 0 ? <p className="muted">Nothing logged today.</p> : <Meters rows={target_meters(day.totals, settings, energy, nutrients.filter((info) => info.group === "macros"))} message="Nothing tracked." />}
     </Section>
   );
 }
@@ -90,7 +91,7 @@ function Headline({ day, report, settings, energy, weekly_target }: { day: Diary
   // A nutrient eaten today, with its target after it when one is set.
   const eaten = (key: NutrientKey) => {
     const info = nutrients.find((item) => item.key === key)!;
-    const target = Number(settings[target_key(key)] ?? 0);
+    const target = target_of(settings, key);
     return `${format_nutrient(info, day.totals[key], energy)}${target > 0 ? ` / ${format_nutrient(info, target, energy)}` : ""}`;
   };
   return (

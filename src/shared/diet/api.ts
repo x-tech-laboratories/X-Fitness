@@ -13,7 +13,7 @@ const nutrients: JsonSchema = {
   type: "object",
   properties: Object.fromEntries(nutrient_keys.map((key) => [key, { type: "number" }])),
   additionalProperties: false,
-  description: "Per serving: calories in kcal and every other nutrient in grams, sodium and cholesterol too.",
+  description: "Per serving: calories in kcal and every other nutrient in grams, sodium, cholesterol, the vitamins and the minerals too; a nutrient left out counts as 0.",
 };
 
 const portion: JsonSchema = {

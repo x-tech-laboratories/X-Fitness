@@ -1,5 +1,5 @@
-// How the Diet section shows its numbers: energy in the unit chosen in Settings, sodium and cholesterol in mg, the rest in
-// grams, and a failed call as a toast.
+// How the Diet section shows its numbers: energy in the unit chosen in Settings, each nutrient in its own g, mg or µg,
+// and a failed call as a toast.
 
 // ── Imports ──────────────────────────────────────────────────────────────────
 
@@ -18,21 +18,24 @@ export function shown_unit(info: NutrientInfo, energy: EnergyUnit): string {
   return info.shown === "energy" ? energy : info.shown;
 }
 
+const per_gram = { g: 1, mg: 1000, "µg": 1_000_000 };
+
 export function to_shown_value(info: NutrientInfo, stored: number, energy: EnergyUnit): number {
   if (info.shown === "energy") return to_shown(stored, energy);
-  return info.shown === "mg" ? stored * 1000 : stored;
+  return stored * per_gram[info.shown] * (info.scale ?? 1);
 }
 
 export function to_stored_value(info: NutrientInfo, shown: number, energy: EnergyUnit): number {
   if (info.shown === "energy") return to_stored(shown, energy);
-  return info.shown === "mg" ? shown / 1000 : shown;
+  return shown / per_gram[info.shown] / (info.scale ?? 1);
 }
 
-// Grams to one decimal, energy and mg as whole numbers.
+// Grams to one decimal, energy as a whole number, mg and µg whole from 10 up and to one decimal below.
 export function format_nutrient(info: NutrientInfo, stored: number, energy: EnergyUnit): string {
   if (info.shown === "energy") return format_measure(stored, energy, 0);
-  const decimals = info.shown === "mg" ? 0 : 1;
-  const shown = Number(to_shown_value(info, stored, energy).toFixed(decimals));
+  const exact = to_shown_value(info, stored, energy);
+  const decimals = info.shown === "g" || Math.abs(exact) < 10 ? 1 : 0;
+  const shown = Number(exact.toFixed(decimals));
   return `${shown.toLocaleString(undefined, { maximumFractionDigits: decimals })} ${info.shown}`;
 }
 

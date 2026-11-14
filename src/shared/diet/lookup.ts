@@ -52,8 +52,9 @@ function finite(raw: unknown): number {
 
 // ── Open Food Facts ──────────────────────────────────────────────────────────
 
-// Every value is per 100 g in grams, and energy in kcal.
-const off_nutriment_keys: Record<NutrientKey, string> = {
+// Every value is per 100 g in grams, and energy in kcal; the first field a product has wins, and a nutrient missing here is
+// one Open Food Facts does not give, alcohol among them since it is kept in % vol.
+const off_nutriment_keys: Partial<Record<NutrientKey, string | string[]>> = {
   calories: "energy-kcal_100g",
   protein: "proteins_100g",
   carbs: "carbohydrates_100g",
@@ -63,6 +64,46 @@ const off_nutriment_keys: Record<NutrientKey, string> = {
   saturated_fat: "saturated-fat_100g",
   sodium: "sodium_100g",
   cholesterol: "cholesterol_100g",
+  vitamin_a: "vitamin-a_100g",
+  vitamin_c: "vitamin-c_100g",
+  vitamin_d: "vitamin-d_100g",
+  vitamin_e: "vitamin-e_100g",
+  vitamin_k: "vitamin-k_100g",
+  thiamin: "vitamin-b1_100g",
+  riboflavin: "vitamin-b2_100g",
+  niacin: "vitamin-pp_100g",
+  pantothenic_acid: "pantothenic-acid_100g",
+  vitamin_b6: "vitamin-b6_100g",
+  // Folates in all, or folic acid where a product gives no more.
+  folate: ["folates_100g", "vitamin-b9_100g"],
+  vitamin_b12: "vitamin-b12_100g",
+  choline: "choline_100g",
+  calcium: "calcium_100g",
+  iron: "iron_100g",
+  magnesium: "magnesium_100g",
+  phosphorus: "phosphorus_100g",
+  potassium: "potassium_100g",
+  zinc: "zinc_100g",
+  copper: "copper_100g",
+  manganese: "manganese_100g",
+  selenium: "selenium_100g",
+  iodine: "iodine_100g",
+  added_sugars: "added-sugars_100g",
+  starch: "starch_100g",
+  sugar_alcohols: "polyols_100g",
+  trans_fat: "trans-fat_100g",
+  monounsaturated_fat: "monounsaturated-fat_100g",
+  polyunsaturated_fat: "polyunsaturated-fat_100g",
+  omega_3: "omega-3-fat_100g",
+  omega_6: "omega-6-fat_100g",
+  biotin: "biotin_100g",
+  beta_carotene: "beta-carotene_100g",
+  chromium: "chromium_100g",
+  molybdenum: "molybdenum_100g",
+  chloride: "chloride_100g",
+  fluoride: "fluoride_100g",
+  caffeine: "caffeine_100g",
+  water: "water_100g",
 };
 
 export function open_food_facts_url(query: string): string {
@@ -78,7 +119,10 @@ export function parse_open_food_facts(body: unknown): LookupResult[] {
     .map((product) => {
       const nutriments = (product.nutriments ?? {}) as Record<string, unknown>;
       const nutrients = empty_nutrients();
-      for (const [key, field] of Object.entries(off_nutriment_keys)) nutrients[key as NutrientKey] = finite(nutriments[field]);
+      for (const [key, fields] of Object.entries(off_nutriment_keys)) {
+        const field = [fields].flat().find((name) => nutriments[name] !== undefined);
+        if (field) nutrients[key as NutrientKey] = finite(nutriments[field]);
+      }
       return {
         source: "Open Food Facts" as const,
         key: `off-${String(product.code ?? product.product_name)}`,
@@ -97,17 +141,81 @@ export async function search_open_food_facts(query: string, fetcher: Fetch = fet
 
 // ── USDA FoodData Central ────────────────────────────────────────────────────
 
-// Nutrient numbers, with the unit FoodData Central reports each in when a result does not say.
-const usda_nutrient_numbers: Record<NutrientKey, [number: string, unit: string]> = {
-  calories: ["208", "KCAL"],
-  protein: ["203", "G"],
-  carbs: ["205", "G"],
-  fat: ["204", "G"],
-  fiber: ["291", "G"],
-  sugar: ["269", "G"],
-  saturated_fat: ["606", "G"],
-  sodium: ["307", "MG"],
-  cholesterol: ["601", "MG"],
+// Nutrient numbers and the unit FoodData Central reports them in when a result does not say. Each inner list is one part,
+// the first number a result reports winning, and the parts add up, as omega-3 is ALA, EPA, DHA and DPA together. A
+// nutrient missing here is one FoodData Central does not give.
+const usda_nutrient_numbers: Partial<Record<NutrientKey, [parts: string[][], unit: string]>> = {
+  // Energy as reported, or by the specific then the general Atwater factors.
+  calories: [[["208", "958", "957"]], "KCAL"],
+  protein: [[["203"]], "G"],
+  carbs: [[["205"]], "G"],
+  fat: [[["204"]], "G"],
+  fiber: [[["291"]], "G"],
+  sugar: [[["269", "269.3"]], "G"],
+  saturated_fat: [[["606"]], "G"],
+  sodium: [[["307"]], "MG"],
+  cholesterol: [[["601"]], "MG"],
+  vitamin_a: [[["320"]], "UG"],
+  vitamin_c: [[["401"]], "MG"],
+  vitamin_d: [[["328"]], "UG"],
+  vitamin_e: [[["323"]], "MG"],
+  vitamin_k: [[["430"]], "UG"],
+  thiamin: [[["404"]], "MG"],
+  riboflavin: [[["405"]], "MG"],
+  niacin: [[["406"]], "MG"],
+  pantothenic_acid: [[["410"]], "MG"],
+  vitamin_b6: [[["415"]], "MG"],
+  // Folate as dietary folate equivalents, or the total where a food has no DFE figure.
+  folate: [[["435", "417"]], "UG"],
+  vitamin_b12: [[["418"]], "UG"],
+  choline: [[["421"]], "MG"],
+  calcium: [[["301"]], "MG"],
+  iron: [[["303"]], "MG"],
+  magnesium: [[["304"]], "MG"],
+  phosphorus: [[["305"]], "MG"],
+  potassium: [[["306"]], "MG"],
+  zinc: [[["309"]], "MG"],
+  copper: [[["312"]], "MG"],
+  manganese: [[["315"]], "MG"],
+  selenium: [[["317"]], "UG"],
+  iodine: [[["314"]], "UG"],
+  added_sugars: [[["539"]], "G"],
+  starch: [[["209"]], "G"],
+  sugar_alcohols: [[["299"]], "G"],
+  trans_fat: [[["605"]], "G"],
+  monounsaturated_fat: [[["645"]], "G"],
+  polyunsaturated_fat: [[["646"]], "G"],
+  omega_3: [[["851", "619"], ["629"], ["621"], ["631"]], "G"],
+  omega_6: [[["675", "618"], ["855", "620"]], "G"],
+  biotin: [[["416"]], "UG"],
+  beta_carotene: [[["321"]], "UG"],
+  lycopene: [[["337"]], "UG"],
+  lutein_zeaxanthin: [[["338"]], "UG"],
+  fluoride: [[["313"]], "UG"],
+  chromium: [[["310"]], "UG"],
+  molybdenum: [[["316"]], "UG"],
+  chloride: [[["302"]], "MG"],
+  tryptophan: [[["501"]], "G"],
+  threonine: [[["502"]], "G"],
+  isoleucine: [[["503"]], "G"],
+  leucine: [[["504"]], "G"],
+  lysine: [[["505"]], "G"],
+  methionine: [[["506"]], "G"],
+  cystine: [[["507"]], "G"],
+  phenylalanine: [[["508"]], "G"],
+  tyrosine: [[["509"]], "G"],
+  valine: [[["510"]], "G"],
+  arginine: [[["511"]], "G"],
+  histidine: [[["512"]], "G"],
+  alanine: [[["513"]], "G"],
+  aspartic_acid: [[["514"]], "G"],
+  glutamic_acid: [[["515"]], "G"],
+  glycine: [[["516"]], "G"],
+  proline: [[["517"]], "G"],
+  serine: [[["518"]], "G"],
+  alcohol: [[["221"]], "G"],
+  caffeine: [[["262"]], "MG"],
+  water: [[["255"]], "G"],
 };
 
 const grams_per_unit: Record<string, number> = { G: 1, MG: 0.001, UG: 0.000001, KCAL: 1 };
@@ -125,11 +233,13 @@ export function parse_usda(body: unknown): LookupResult[] {
     .map((food) => {
       const reported = (Array.isArray(food.foodNutrients) ? food.foodNutrients : []) as Record<string, unknown>[];
       const nutrients = empty_nutrients();
-      for (const [key, [number, default_unit]] of Object.entries(usda_nutrient_numbers)) {
-        const match = reported.find((nutrient) => String(nutrient.nutrientNumber) === number);
-        if (!match) continue;
-        const unit = typeof match.unitName === "string" ? match.unitName.toUpperCase() : default_unit;
-        nutrients[key as NutrientKey] = finite(match.value) * (grams_per_unit[unit] ?? grams_per_unit[default_unit]!);
+      for (const [key, [parts, default_unit]] of Object.entries(usda_nutrient_numbers)) {
+        for (const numbers of parts) {
+          const match = numbers.map((number) => reported.find((nutrient) => String(nutrient.nutrientNumber) === number)).find(Boolean);
+          if (!match) continue;
+          const unit = typeof match.unitName === "string" ? match.unitName.toUpperCase() : default_unit;
+          nutrients[key as NutrientKey] += finite(match.value) * (grams_per_unit[unit] ?? grams_per_unit[default_unit]!);
+        }
       }
       const brand = [food.brandName, food.brandOwner].find((value) => typeof value === "string" && value.trim());
       return {

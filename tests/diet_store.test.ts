@@ -2,7 +2,8 @@ import { DatabaseSync } from "node:sqlite";
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { food_units, food_unit_problems, normalize_food, target_progress } from "../src/shared/diet/model.ts";
+import { shown_nutrients, target_of, with_shown } from "../src/shared/diet/labels.ts";
+import { empty_nutrients, food_units, food_unit_problems, normalize_food, nutrients, target_progress } from "../src/shared/diet/model.ts";
 import { bind_methods, open_store, setting_defaults, sync_engine } from "../src/shared/store.ts";
 
 afterEach(() => {
@@ -33,8 +34,10 @@ describe("diet store", () => {
     const { database } = open_methods();
     const tables = database.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name LIKE 'diet_%'").all().map((row) => row.name);
     expect(tables).toEqual(expect.arrayContaining(["diet_foods", "diet_recipes", "diet_ingredients", "diet_diary", "diet_grocery", "diet_categories", "diet_units"]));
-    expect(setting_defaults["diet.target_calories"]).toBe(2000);
-    expect(setting_defaults["diet.target_sodium"]).toBe(2.3);
+    expect(setting_defaults["diet.label"]).toBe("us");
+    expect(setting_defaults["diet.targets"]).toBe("us");
+    // A target has no default of its own; it follows the preset until set by hand.
+    expect(setting_defaults["diet.target_calories"]).toBeUndefined();
     expect(setting_defaults["diet.usda_api_key"]).toBe("");
   });
 
@@ -127,6 +130,32 @@ describe("diet store", () => {
     expect(target_progress(2500, 2000)).toEqual({ target: 2000, percent: 100, over: true });
     expect(target_progress(500, 2000)).toEqual({ target: 2000, percent: 25, over: false });
     expect(target_progress(500, 0)).toEqual({ target: null, percent: 0, over: false });
+    // A vitamin's target is a goal, so passing it is never over.
+    expect(target_progress(0.2, 0.09, true)).toEqual({ target: 0.09, percent: 100, over: false });
+  });
+
+  it("shows each label's nutrients, with the ones switched by hand laid over it", () => {
+    const ids = (settings: Record<string, unknown>) => shown_nutrients(settings).map((info) => info.id);
+    expect(ids({})).toEqual(["calories", "protein", "carbs", "fat", "fiber", "sugar", "added_sugars", "saturated_fat", "trans_fat", "cholesterol", "vitamin_d", "sodium", "potassium", "calcium", "iron"]);
+    expect(ids({ "diet.label": "eu" })).toEqual(["calories", "protein", "carbs", "fat", "sugar", "saturated_fat", "salt"]);
+    expect(ids({ "diet.label": "all" })).toHaveLength(nutrients.length - 1);
+    expect(ids({ "diet.label": "anz", "diet.shown": { magnesium: true, sugar: false, nonsense: true } })).toEqual(["calories", "protein", "carbs", "fat", "saturated_fat", "sodium", "magnesium"]);
+
+    const magnesium = nutrients.find((info) => info.id === "magnesium")!;
+    const settings = { "diet.label": "us", "diet.shown": { magnesium: true } };
+    // Switching back to what the label shows drops the override.
+    expect(with_shown(settings, magnesium, false)).toEqual({});
+    expect(with_shown(settings, nutrients.find((info) => info.id === "iron")!, false)).toEqual({ magnesium: true, iron: false });
+  });
+
+  it("takes each target from the preset unless it is set by hand", () => {
+    expect(target_of({}, "protein")).toBe(50);
+    expect(target_of({ "diet.targets": "eu" }, "vitamin_c")).toBeCloseTo(0.08);
+    expect(target_of({ "diet.targets": "eu", "diet.target_vitamin_c": 0.2 }, "vitamin_c")).toBe(0.2);
+    expect(target_of({ "diet.targets": "eu", "diet.target_vitamin_c": null }, "vitamin_c")).toBeCloseTo(0.08);
+    // Set by hand to 0 means no target, whatever the preset says.
+    expect(target_of({ "diet.target_protein": 0 }, "protein")).toBe(0);
+    expect(target_of({}, "leucine")).toBe(0);
   });
 
   it("replaces a recipe's ingredients and drops them with the recipe", () => {
@@ -281,13 +310,24 @@ describe("Trilium Diet Manager import", () => {
     other.import_trilium_diet(JSON.stringify(exported));
     expect(other.get_diet()).toEqual(methods.get_diet());
   });
+
+  it("carries vitamins and minerals through an export and back in grams", () => {
+    const { methods } = open_methods();
+    const id = methods.save_food({ ...oats, nutrients: { ...oats.nutrients, vitamin_b12: 0.0000024, iron: 0.0047 } });
+    const exported = JSON.parse(methods.export_diet_json());
+    expect(exported.foods[id].nutrients).toMatchObject({ vitaminB12: 0.0000024, iron: 0.0047 });
+
+    const { methods: other } = open_methods();
+    other.import_trilium_diet(JSON.stringify(exported));
+    expect(other.get_diet().foods[0]!.nutrients).toEqual(methods.get_diet().foods[0]!.nutrients);
+  });
 });
 
 // ── Lookup ───────────────────────────────────────────────────────────────────
 
 const open_food_facts_reply = {
   products: [
-    { code: "301", product_name: "Peanut Butter", brands: "Nutty, Other", nutriments: { "energy-kcal_100g": 600, proteins_100g: 25, "saturated-fat_100g": 8, sodium_100g: 0.4, cholesterol_100g: 0 } },
+    { code: "301", product_name: "Peanut Butter", brands: "Nutty, Other", nutriments: { "energy-kcal_100g": 600, proteins_100g: 25, "saturated-fat_100g": 8, sodium_100g: 0.4, cholesterol_100g: 0, "vitamin-e_100g": 0.009, "vitamin-pp_100g": 0.013, iron_100g: 0.0019, "trans-fat_100g": 0.1 } },
     { code: "302", nutriments: {} },
   ],
 };
@@ -303,6 +343,11 @@ const usda_reply = {
         { nutrientNumber: "203", unitName: "G", value: 22.2 },
         { nutrientNumber: "307", unitName: "MG", value: 459 },
         { nutrientNumber: "601", value: 0 },
+        { nutrientNumber: "328", unitName: "UG", value: 1.5 },
+        { nutrientNumber: "417", unitName: "UG", value: 87 },
+        { nutrientNumber: "851", unitName: "G", value: 0.03 },
+        { nutrientNumber: "621", unitName: "G", value: 0.01 },
+        { nutrientNumber: "504", unitName: "G", value: 1.5 },
       ],
     },
   ],
@@ -336,7 +381,7 @@ describe("food lookup", () => {
         brand: "Nutty",
         serving_size: 100,
         serving_unit: "g",
-        nutrients: { calories: 600, protein: 25, carbs: 0, fat: 0, fiber: 0, sugar: 0, saturated_fat: 8, sodium: 0.4, cholesterol: 0 },
+        nutrients: { ...empty_nutrients(), calories: 600, protein: 25, saturated_fat: 8, sodium: 0.4, vitamin_e: 0.009, niacin: 0.013, iron: 0.0019, trans_fat: 0.1 },
       },
     ]);
   });
@@ -355,6 +400,12 @@ describe("food lookup", () => {
     const usda = reply.results[1]!;
     expect(usda.nutrients.calories).toBe(597);
     expect(usda.nutrients.sodium).toBeCloseTo(0.459);
+    expect(usda.nutrients.vitamin_d).toBeCloseTo(0.0000015, 10);
+    // Without a DFE figure, folate falls back to the total.
+    expect(usda.nutrients.folate).toBeCloseTo(0.000087, 10);
+    // Omega-3 is its fatty acids added up.
+    expect(usda.nutrients.omega_3).toBeCloseTo(0.04);
+    expect(usda.nutrients.leucine).toBe(1.5);
     expect(usda.key).toBe("usda-171705");
   });
 

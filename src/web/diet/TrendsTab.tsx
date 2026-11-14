@@ -5,16 +5,17 @@
 
 import { add_days, format_local, parse_local } from "@x-tech-laboratories/x-libs/dates";
 import { to_shown, type EnergyUnit } from "@x-tech-laboratories/x-libs/units";
-import { Donut, LineChart, Meters, StackedBarChart, Strip } from "@x-tech-laboratories/x-libs/web/react/charts";
+import { Donut, LineChart, StackedBarChart, Strip } from "@x-tech-laboratories/x-libs/web/react/charts";
 import { Segmented } from "@x-tech-laboratories/x-libs/web/react/controls";
 import { Section, Toolbar } from "@x-tech-laboratories/x-libs/web/react/layout";
 import { use_pref } from "@x-tech-laboratories/x-libs/web/react/prefs";
 import { Empty, Loaded } from "@x-tech-laboratories/x-libs/web/react/states";
 
-import { add_nutrients, empty_nutrients, scale_nutrients, target_key, target_progress, type Nutrients } from "../../shared/diet/model.ts";
+import { target_of } from "../../shared/diet/labels.ts";
+import { add_nutrients, empty_nutrients, scale_nutrients, target_progress, type Nutrients } from "../../shared/diet/model.ts";
 import type { DayTotals } from "../../shared/diet/store.ts";
 import { use_data } from "../api.ts";
-import { target_meters, today } from "./DiaryTab.tsx";
+import { NutrientTotals, today } from "./DiaryTab.tsx";
 
 // ── Figures ──────────────────────────────────────────────────────────────────
 
@@ -41,7 +42,7 @@ export function average_logged_day(days: DayTotals[]): { count: number; average:
 function Charts({ days, settings, energy }: { days: DayTotals[]; settings: Record<string, unknown>; energy: EnergyUnit }) {
   const { count, average } = average_logged_day(days);
   if (count === 0) return <Empty title="Nothing logged in these days." hint="Log foods in the Diary to see trends here." />;
-  const target = Number(settings[target_key("calories")] ?? 0);
+  const target = target_of(settings, "calories");
   const logged = days.filter((day) => day.entries > 0);
 
   return (
@@ -77,7 +78,7 @@ function Charts({ days, settings, energy }: { days: DayTotals[]; settings: Recor
         />
       </Section>
       <Section title={`Average of ${count} logged day${count === 1 ? "" : "s"}`}>
-        <Meters rows={target_meters(average, settings, energy)} message="Nothing tracked." />
+        <NutrientTotals totals={average} settings={settings} energy={energy} />
       </Section>
     </>
   );

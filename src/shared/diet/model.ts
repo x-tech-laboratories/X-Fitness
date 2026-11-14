@@ -4,31 +4,188 @@
 
 // ── Nutrients ────────────────────────────────────────────────────────────────
 
-export const nutrient_keys = ["calories", "protein", "carbs", "fat", "fiber", "sugar", "saturated_fat", "sodium", "cholesterol"] as const;
+export const nutrient_keys = [
+  "calories",
+  "protein",
+  "carbs",
+  "fat",
+  "fiber",
+  "sugar",
+  "saturated_fat",
+  "sodium",
+  "cholesterol",
+  "vitamin_a",
+  "vitamin_c",
+  "vitamin_d",
+  "vitamin_e",
+  "vitamin_k",
+  "thiamin",
+  "riboflavin",
+  "niacin",
+  "pantothenic_acid",
+  "vitamin_b6",
+  "folate",
+  "vitamin_b12",
+  "choline",
+  "calcium",
+  "iron",
+  "magnesium",
+  "phosphorus",
+  "potassium",
+  "zinc",
+  "copper",
+  "manganese",
+  "selenium",
+  "iodine",
+  "added_sugars",
+  "starch",
+  "sugar_alcohols",
+  "trans_fat",
+  "monounsaturated_fat",
+  "polyunsaturated_fat",
+  "omega_3",
+  "omega_6",
+  "biotin",
+  "beta_carotene",
+  "lycopene",
+  "lutein_zeaxanthin",
+  "chromium",
+  "molybdenum",
+  "chloride",
+  "fluoride",
+  "tryptophan",
+  "threonine",
+  "isoleucine",
+  "leucine",
+  "lysine",
+  "methionine",
+  "cystine",
+  "phenylalanine",
+  "tyrosine",
+  "valine",
+  "arginine",
+  "histidine",
+  "alanine",
+  "aspartic_acid",
+  "glutamic_acid",
+  "glycine",
+  "proline",
+  "serine",
+  "alcohol",
+  "caffeine",
+  "water",
+] as const;
 
 export type NutrientKey = (typeof nutrient_keys)[number];
 
 // Energy in kcal and every other nutrient in grams, per the food's own serving.
 export type Nutrients = Record<NutrientKey, number>;
 
+export const nutrient_groups = [
+  { id: "macros", label: "Energy and macronutrients" },
+  { id: "carbs", label: "Carbohydrates" },
+  { id: "fats", label: "Fats" },
+  { id: "vitamins", label: "Vitamins" },
+  { id: "minerals", label: "Minerals" },
+  { id: "amino_acids", label: "Amino acids" },
+  { id: "other", label: "Other" },
+] as const;
+
+export type NutrientGroup = (typeof nutrient_groups)[number]["id"];
+
+// One way the page shows a stored nutrient; salt is sodium seen another way, so two of these can share a key.
 export interface NutrientInfo {
+  id: string;
   key: NutrientKey;
   label: string;
-  // Energy follows the energy unit chosen in Settings; sodium and cholesterol read better in mg.
-  shown: "energy" | "g" | "mg";
-  group: "macros" | "other";
+  // Energy follows the energy unit chosen in Settings; small amounts read better in mg or µg.
+  shown: "energy" | "g" | "mg" | "µg";
+  group: NutrientGroup;
+  // The target is an amount to reach, so going past it is fine; otherwise it is a limit.
+  goal?: true;
+  // What the stored amount is multiplied by before it is shown, 1 when absent.
+  scale?: number;
 }
 
+function nutrient(key: NutrientKey, label: string, shown: NutrientInfo["shown"], group: NutrientGroup, more: Partial<NutrientInfo> = {}): NutrientInfo {
+  return { id: key, key, label, shown, group, ...more };
+}
+
+const goal = { goal: true } as const;
+
+// In the order the page lists them, the first four being energy and the macros.
 export const nutrients: NutrientInfo[] = [
-  { key: "calories", label: "Calories", shown: "energy", group: "macros" },
-  { key: "protein", label: "Protein", shown: "g", group: "macros" },
-  { key: "carbs", label: "Carbs", shown: "g", group: "macros" },
-  { key: "fat", label: "Fat", shown: "g", group: "macros" },
-  { key: "fiber", label: "Fiber", shown: "g", group: "other" },
-  { key: "sugar", label: "Sugar", shown: "g", group: "other" },
-  { key: "saturated_fat", label: "Saturated Fat", shown: "g", group: "other" },
-  { key: "sodium", label: "Sodium", shown: "mg", group: "other" },
-  { key: "cholesterol", label: "Cholesterol", shown: "mg", group: "other" },
+  nutrient("calories", "Calories", "energy", "macros"),
+  nutrient("protein", "Protein", "g", "macros"),
+  nutrient("carbs", "Carbs", "g", "macros"),
+  nutrient("fat", "Fat", "g", "macros"),
+  nutrient("fiber", "Fiber", "g", "carbs"),
+  nutrient("sugar", "Sugar", "g", "carbs"),
+  nutrient("added_sugars", "Added Sugars", "g", "carbs"),
+  nutrient("starch", "Starch", "g", "carbs"),
+  nutrient("sugar_alcohols", "Sugar Alcohols", "g", "carbs"),
+  nutrient("saturated_fat", "Saturated Fat", "g", "fats"),
+  nutrient("trans_fat", "Trans Fat", "g", "fats"),
+  nutrient("monounsaturated_fat", "Monounsaturated Fat", "g", "fats"),
+  nutrient("polyunsaturated_fat", "Polyunsaturated Fat", "g", "fats"),
+  nutrient("omega_3", "Omega-3", "g", "fats"),
+  nutrient("omega_6", "Omega-6", "g", "fats"),
+  nutrient("cholesterol", "Cholesterol", "mg", "fats"),
+  nutrient("vitamin_a", "Vitamin A", "µg", "vitamins", goal),
+  nutrient("beta_carotene", "Beta-Carotene", "µg", "vitamins", goal),
+  nutrient("lycopene", "Lycopene", "µg", "vitamins", goal),
+  nutrient("lutein_zeaxanthin", "Lutein + Zeaxanthin", "µg", "vitamins", goal),
+  nutrient("vitamin_c", "Vitamin C", "mg", "vitamins", goal),
+  nutrient("vitamin_d", "Vitamin D", "µg", "vitamins", goal),
+  nutrient("vitamin_e", "Vitamin E", "mg", "vitamins", goal),
+  nutrient("vitamin_k", "Vitamin K", "µg", "vitamins", goal),
+  nutrient("thiamin", "Thiamin (B1)", "mg", "vitamins", goal),
+  nutrient("riboflavin", "Riboflavin (B2)", "mg", "vitamins", goal),
+  nutrient("niacin", "Niacin (B3)", "mg", "vitamins", goal),
+  nutrient("pantothenic_acid", "Pantothenic Acid (B5)", "mg", "vitamins", goal),
+  nutrient("vitamin_b6", "Vitamin B6", "mg", "vitamins", goal),
+  nutrient("biotin", "Biotin (B7)", "µg", "vitamins", goal),
+  nutrient("folate", "Folate (B9)", "µg", "vitamins", goal),
+  nutrient("vitamin_b12", "Vitamin B12", "µg", "vitamins", goal),
+  nutrient("choline", "Choline", "mg", "vitamins", goal),
+  nutrient("sodium", "Sodium", "mg", "minerals"),
+  // Salt as EU labels give it: sodium × 2.5.
+  nutrient("sodium", "Salt", "g", "minerals", { id: "salt", scale: 2.5 }),
+  nutrient("potassium", "Potassium", "mg", "minerals", goal),
+  nutrient("calcium", "Calcium", "mg", "minerals", goal),
+  nutrient("iron", "Iron", "mg", "minerals", goal),
+  nutrient("magnesium", "Magnesium", "mg", "minerals", goal),
+  nutrient("phosphorus", "Phosphorus", "mg", "minerals", goal),
+  nutrient("zinc", "Zinc", "mg", "minerals", goal),
+  nutrient("copper", "Copper", "mg", "minerals", goal),
+  nutrient("manganese", "Manganese", "mg", "minerals", goal),
+  nutrient("selenium", "Selenium", "µg", "minerals", goal),
+  nutrient("iodine", "Iodine", "µg", "minerals", goal),
+  nutrient("chromium", "Chromium", "µg", "minerals", goal),
+  nutrient("molybdenum", "Molybdenum", "µg", "minerals", goal),
+  nutrient("chloride", "Chloride", "mg", "minerals", goal),
+  nutrient("fluoride", "Fluoride", "mg", "minerals", goal),
+  nutrient("tryptophan", "Tryptophan", "g", "amino_acids", goal),
+  nutrient("threonine", "Threonine", "g", "amino_acids", goal),
+  nutrient("isoleucine", "Isoleucine", "g", "amino_acids", goal),
+  nutrient("leucine", "Leucine", "g", "amino_acids", goal),
+  nutrient("lysine", "Lysine", "g", "amino_acids", goal),
+  nutrient("methionine", "Methionine", "g", "amino_acids", goal),
+  nutrient("cystine", "Cystine", "g", "amino_acids", goal),
+  nutrient("phenylalanine", "Phenylalanine", "g", "amino_acids", goal),
+  nutrient("tyrosine", "Tyrosine", "g", "amino_acids", goal),
+  nutrient("valine", "Valine", "g", "amino_acids", goal),
+  nutrient("arginine", "Arginine", "g", "amino_acids", goal),
+  nutrient("histidine", "Histidine", "g", "amino_acids", goal),
+  nutrient("alanine", "Alanine", "g", "amino_acids", goal),
+  nutrient("aspartic_acid", "Aspartic Acid", "g", "amino_acids", goal),
+  nutrient("glutamic_acid", "Glutamic Acid", "g", "amino_acids", goal),
+  nutrient("glycine", "Glycine", "g", "amino_acids", goal),
+  nutrient("proline", "Proline", "g", "amino_acids", goal),
+  nutrient("serine", "Serine", "g", "amino_acids", goal),
+  nutrient("alcohol", "Alcohol", "g", "other"),
+  nutrient("caffeine", "Caffeine", "mg", "other"),
+  nutrient("water", "Water", "g", "other", goal),
 ];
 
 export function empty_nutrients(): Nutrients {
@@ -58,7 +215,7 @@ export function add_nutrients(total: Nutrients, part: Nutrients): Nutrients {
   return result;
 }
 
-// The day's settings key for a nutrient's target, such as "diet.target_saturated_fat".
+// The settings key for a nutrient's target set by hand, such as "diet.target_saturated_fat"; labels.ts resolves it against the preset.
 export function target_key(key: NutrientKey): string {
   return `diet.target_${key}`;
 }
@@ -71,9 +228,10 @@ export interface TargetProgress {
   over: boolean;
 }
 
-export function target_progress(value: number, target: number): TargetProgress {
+// A goal is never over, however far past it the day goes.
+export function target_progress(value: number, target: number, goal = false): TargetProgress {
   if (!(target > 0)) return { target: null, percent: 0, over: false };
-  return { target, percent: Math.min(100, (value / target) * 100), over: value > target };
+  return { target, percent: Math.min(100, (value / target) * 100), over: !goal && value > target };
 }
 
 // ── Names ────────────────────────────────────────────────────────────────────

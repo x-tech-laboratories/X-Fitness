@@ -1,39 +1,98 @@
-// The Diet section's settings: the daily targets, the USDA key for food lookup, the grocery comment prefill, and the
+// The Diet section's settings: the nutrition label and target presets, each nutrient's switch and target, the USDA key for food lookup, the grocery comment prefill, and the
 // import and export of the Trilium Diet Manager's database.
 
 // ── Imports ──────────────────────────────────────────────────────────────────
 
 import { useRef, useState } from "react";
-import { CommitInput, NumberField, Switch } from "@x-tech-laboratories/x-libs/web/react/controls";
+import { CommitInput, NumberField, Select, Switch } from "@x-tech-laboratories/x-libs/web/react/controls";
 import { SettingRow } from "@x-tech-laboratories/x-libs/web/react/layout";
 import { toast } from "@x-tech-laboratories/x-libs/web/react/toasts";
 
-import { nutrients, target_key } from "../../shared/diet/model.ts";
+import {
+  is_shown,
+  label_preset_of,
+  label_presets,
+  preset_target,
+  shown_overrides,
+  target_of,
+  target_override,
+  target_preset_of,
+  target_presets,
+  with_shown,
+} from "../../shared/diet/labels.ts";
+import { diet_goal_keys } from "../../shared/calculators/formulas.ts";
+import { nutrient_keys, nutrients, target_key, type NutrientGroup } from "../../shared/diet/model.ts";
 import { calls } from "../api.ts";
 import type { FeatureSettingsProps } from "../features.tsx";
-import { energy_unit_of, error_text, field_value, shown_unit, to_shown_value, to_stored_value } from "./format.ts";
+import { energy_unit_of, error_text, field_value, format_nutrient, shown_unit, to_shown_value, to_stored_value } from "./format.ts";
 
-// ── Targets ──────────────────────────────────────────────────────────────────
+// ── Label and targets ────────────────────────────────────────────────────────
 
-// A target of 0 means none, and the day shows the total alone.
-export function TargetSettings({ settings, set_setting }: FeatureSettingsProps) {
+// The targets the plan on Calculators → Goals sets again after every change, none when it is not followed.
+function plan_keys(settings: Record<string, unknown>): readonly string[] {
+  return settings["calculators.follow_diet_targets"] === true ? diet_goal_keys : [];
+}
+
+// The two presets, each with a way back to it once nutrients have been changed by hand.
+export function LabelSettings({ settings, set_setting }: FeatureSettingsProps) {
+  const changed_shown = Object.keys(shown_overrides(settings)).length;
+  const changed_targets = nutrient_keys.filter((key) => target_override(settings, key) !== null && !plan_keys(settings).includes(key));
+  return (
+    <>
+      <SettingRow
+        label="Nutrition label"
+        hint={changed_shown ? `Custom: ${changed_shown} nutrient(s) switched by hand.` : "Which nutrients the diary and the food editor show; the rest are still kept and can be switched on below."}
+      >
+        <div className="diet-inline">
+          <Select label="Nutrition label" bare options={label_presets.map((preset): [string, string] => [preset.id, preset.label])} value={label_preset_of(settings).id} on_change={(id) => void set_setting("diet.label", id)} />
+          {changed_shown > 0 && <button type="button" onClick={() => void set_setting("diet.shown", {})}>Reset to label</button>}
+        </div>
+      </SettingRow>
+      <SettingRow
+        label="Targets"
+        hint={changed_targets.length ? `Custom: ${changed_targets.length} target(s) set by hand.` : "Which region's reference amounts each day is measured against; any target can be set by hand below."}
+      >
+        <div className="diet-inline">
+          <Select label="Targets" bare options={target_presets.map((preset): [string, string] => [preset.id, preset.label])} value={target_preset_of(settings).id} on_change={(id) => void set_setting("diet.targets", id)} />
+          {changed_targets.length > 0 && (
+            <button type="button" onClick={() => void Promise.all(changed_targets.map((key) => set_setting(target_key(key), null)))}>Reset to preset</button>
+          )}
+        </div>
+      </SettingRow>
+    </>
+  );
+}
+
+// One row per nutrient in a group: whether it shows, and its target, 0 meaning none.
+export function NutrientSettings({ settings, set_setting, group }: FeatureSettingsProps & { group: NutrientGroup }) {
   const energy = energy_unit_of(settings);
   return (
     <>
-      {nutrients.map((info) => {
+      {nutrients.filter((info) => info.group === group).map((info) => {
         const unit = shown_unit(info, energy);
-        const stored = Number(settings[target_key(info.key)] ?? 0);
+        const override = target_override(settings, info.key);
+        const preset = preset_target(settings, info.key);
+        const by_plan = plan_keys(settings).includes(info.key);
+        const preset_text = preset > 0 ? format_nutrient(info, preset, energy) : "none";
         return (
-          <SettingRow key={info.key} label={`${info.label} (${unit})`}>
-            <NumberField
-              label={`${info.label} target`}
-              bare
-              min={0}
-              step={info.shown === "g" ? 5 : 50}
-              unit={unit}
-              value={field_value(to_shown_value(info, stored, energy))}
-              on_change={(shown) => void set_setting(target_key(info.key), to_stored_value(info, shown ?? 0, energy))}
-            />
+          <SettingRow
+            key={info.id}
+            label={`${info.label} (${unit})`}
+            hint={by_plan ? "Set by the plan on Calculators → Goals." : override === null ? undefined : `Set by hand; the preset's is ${preset_text}.`}
+          >
+            <div className="diet-inline">
+              <Switch label={`Show ${info.label}`} checked={is_shown(settings, info)} on_change={(on) => set_setting("diet.shown", with_shown(settings, info, on))} />
+              <NumberField
+                label={`${info.label} target`}
+                bare
+                min={0}
+                step={info.shown === "g" ? 5 : info.shown === "energy" ? 50 : 1}
+                unit={unit}
+                value={field_value(to_shown_value(info, target_of(settings, info.key), energy))}
+                on_change={(shown) => void set_setting(target_key(info.key), to_stored_value(info, shown ?? 0, energy))}
+              />
+              {override !== null && !by_plan && <button type="button" aria-label={`Reset ${info.label} target`} onClick={() => void set_setting(target_key(info.key), null)}>Reset</button>}
+            </div>
           </SettingRow>
         );
       })}

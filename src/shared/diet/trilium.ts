@@ -29,17 +29,8 @@ export interface DietDocument {
   grocery: GroceryItem[];
 }
 
-const camel_keys: Record<NutrientKey, string> = {
-  calories: "calories",
-  protein: "protein",
-  carbs: "carbs",
-  fat: "fat",
-  fiber: "fiber",
-  sugar: "sugar",
-  saturated_fat: "saturatedFat",
-  sodium: "sodium",
-  cholesterol: "cholesterol",
-};
+// The add-on's name for a nutrient, such as saturatedFat; the vitamins and minerals it lacks travel in grams under theirs.
+const camel_keys = Object.fromEntries(nutrient_keys.map((key) => [key, key.replace(/_([a-z0-9])/g, (_, letter: string) => letter.toUpperCase())])) as Record<NutrientKey, string>;
 
 // The nutrients the add-on writes in mg.
 const milligram_keys: NutrientKey[] = ["sodium", "cholesterol"];

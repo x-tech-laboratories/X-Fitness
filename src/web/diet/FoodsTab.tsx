@@ -12,7 +12,7 @@ import { use_pref } from "@x-tech-laboratories/x-libs/web/react/prefs";
 import { DataTable, type TableColumn } from "@x-tech-laboratories/x-libs/web/react/table";
 import { ComboField } from "@x-tech-laboratories/x-libs/web/react/suggestions";
 
-import { food_label, food_unit_problems, normalize_food, nutrients, serving_unit, type Food, type Portion } from "../../shared/diet/model.ts";
+import { food_label, food_unit_problems, normalize_food, nutrients, serving_unit, type Food, type NutrientInfo, type Portion } from "../../shared/diet/model.ts";
 import type { LookupReply, LookupResult } from "../../shared/diet/lookup.ts";
 import type { DietData } from "../../shared/diet/store.ts";
 import { calls } from "../api.ts";
@@ -26,6 +26,8 @@ interface FoodFormProps {
   initial: Food | null;
   data: DietData;
   energy: EnergyUnit;
+  // The nutrients Settings shows, the rest folded away.
+  shown: NutrientInfo[];
   has_usda_key: boolean;
   on_done: () => void;
 }
@@ -116,7 +118,7 @@ function PortionRows({ food, units, on_change }: { food: Food; units: string[]; 
   );
 }
 
-export function FoodForm({ initial, data, energy, has_usda_key, on_done }: FoodFormProps) {
+export function FoodForm({ initial, data, energy, shown, has_usda_key, on_done }: FoodFormProps) {
   const [food, set_food] = useState<Food>(() => initial ?? normalize_food({}));
   const [draft, set_draft] = useState("");
   const [saving, set_saving] = useState(false);
@@ -163,7 +165,7 @@ export function FoodForm({ initial, data, energy, has_usda_key, on_done }: FoodF
             <textarea id="diet-food-comment" rows={4} placeholder="Notes about this food" value={food.comment} onChange={(event) => change({ comment: event.currentTarget.value })} />
           </FormRow>
         </div>
-        <NutrientFields values={food.nutrients} energy={energy} on_change={(key, value) => set_food((current) => ({ ...current, nutrients: { ...current.nutrients, [key]: value } }))} />
+        <NutrientFields shown={shown} values={food.nutrients} energy={energy} on_change={(key, value) => set_food((current) => ({ ...current, nutrients: { ...current.nutrients, [key]: value } }))} />
         <div className="form-actions diet-inline">
           <button type="submit" className="accent solid" disabled={!food.name.trim() || saving}>Save</button>
           <button type="button" onClick={on_done}>Cancel</button>
@@ -211,7 +213,7 @@ function food_columns(energy: EnergyUnit, on_edit: (food: Food) => void, on_dele
   ];
 }
 
-export function FoodsTab({ data, energy, has_usda_key }: { data: DietData; energy: EnergyUnit; has_usda_key: boolean }) {
+export function FoodsTab({ data, energy, shown, has_usda_key }: { data: DietData; energy: EnergyUnit; shown: NutrientInfo[]; has_usda_key: boolean }) {
   const [editing, set_editing] = useState<Food | "new" | null>(null);
   const view = use_category_view(data.foods, data.categories, "x-fitness-diet-group-foods");
   const [hidden, set_hidden] = use_pref("x-fitness-diet-food-hidden-columns", ["comment"], (value): value is string[] => Array.isArray(value) && value.every((id) => typeof id === "string"));
@@ -230,7 +232,7 @@ export function FoodsTab({ data, energy, has_usda_key }: { data: DietData; energ
     [energy],
   );
 
-  if (editing) return <FoodForm initial={editing === "new" ? null : editing} data={data} energy={energy} has_usda_key={has_usda_key} on_done={() => set_editing(null)} />;
+  if (editing) return <FoodForm initial={editing === "new" ? null : editing} data={data} energy={energy} shown={shown} has_usda_key={has_usda_key} on_done={() => set_editing(null)} />;
 
   return (
     <div className="stack tight">

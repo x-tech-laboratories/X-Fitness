@@ -11,6 +11,8 @@ import { skinfold_of, type BodyMetric, type MetricRole, type Point } from "../bo
 import { body_metrics } from "../body/schema.ts";
 import { body_setting_defaults } from "../body/settings.ts";
 import { latest_on_or_before, list_metrics, weight_metric } from "../body/store.ts";
+import { target_of } from "../diet/labels.ts";
+import { target_key, type NutrientKey } from "../diet/model.ts";
 import { diet_setting_defaults } from "../diet/settings.ts";
 import { define_feature, drizzle_of } from "../feature.ts";
 import { calculators_api } from "./api.ts";
@@ -129,7 +131,9 @@ function report(database: SqlDatabase, date: string): CalculationsReport {
 
 function with_holder(database: SqlDatabase, goal: PlannedGoal, sources: Record<string, MeasureSource>): CalculatedGoal {
   if (diet_goal_keys.includes(goal.key)) {
-    const current = number_setting(database, `diet.target_${goal.key}`);
+    // The target in force, the preset's when none was set by hand or by the plan.
+    const key = goal.key as NutrientKey;
+    const current = target_of({ "diet.targets": setting_of(database, "diet.targets"), [target_key(key)]: setting_of(database, target_key(key)) }, key);
     return { ...goal, current: current > 0 ? current : null, holder: "diet" };
   }
   const metric = sources[goal.key]?.metric;
