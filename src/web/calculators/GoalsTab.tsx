@@ -3,9 +3,10 @@
 
 // ── Imports ──────────────────────────────────────────────────────────────────
 
+import { format_local } from "@x-tech-laboratories/x-libs/dates";
 import { convert, format_measure, type EnergyUnit } from "@x-tech-laboratories/x-libs/units";
 import { NumberField, Select, Switch } from "@x-tech-laboratories/x-libs/web/react/controls";
-import { Section, SettingRow, Toolbar } from "@x-tech-laboratories/x-libs/web/react/layout";
+import { Facts, Section, SettingRow, Toolbar } from "@x-tech-laboratories/x-libs/web/react/layout";
 import { Loaded } from "@x-tech-laboratories/x-libs/web/react/states";
 import { DataTable, type TableColumn } from "@x-tech-laboratories/x-libs/web/react/table";
 import { toast } from "@x-tech-laboratories/x-libs/web/react/toasts";
@@ -13,7 +14,7 @@ import { toast } from "@x-tech-laboratories/x-libs/web/react/toasts";
 import { activities, bmr_formulas, type Activity, type BmrFormula, type GoalKey } from "../../shared/calculators/formulas.ts";
 import type { CalculatedGoal, CalculationsReport } from "../../shared/calculators/store.ts";
 import { calls, use_data } from "../api.ts";
-import { format_number, to_shown_value, to_stored_value, type ShownUnits } from "../body/format.ts";
+import { format_change, format_number, to_shown_value, to_stored_value, type ShownUnits } from "../body/format.ts";
 import { today } from "../body/LogTab.tsx";
 import type { FeatureSettingsProps } from "../features.tsx";
 
@@ -32,7 +33,9 @@ function PlanNumber({ label, hint, value, unit, step, on_change }: { label: stri
   );
 }
 
-// How active the day is and the basal rate's formula, shared by this tab and Settings.
+const energy_sources: ["formula" | "measured", string][] = [["formula", "The BMR formula and activity"], ["measured", "The diary and the weight trend"]];
+
+// How active the day is, the basal rate's formula and where the daily energy comes from, shared by this tab and Settings.
 export function EnergySettings({ settings, set_setting }: { settings: Record<string, unknown>; set_setting: SetSetting }) {
   return (
     <>
@@ -41,6 +44,12 @@ export function EnergySettings({ settings, set_setting }: { settings: Record<str
       </SettingRow>
       <SettingRow label="BMR formula" hint="Katch-McArdle works from lean mass, so it needs a body fat; without one Mifflin-St Jeor is used.">
         <Select bare label="BMR formula" options={bmr_formulas.map((formula): [BmrFormula, string] => [formula.key, formula.label])} value={String(settings["calculators.bmr_formula"]) as BmrFormula} on_change={(value) => void set_setting("calculators.bmr_formula", value)} />
+      </SettingRow>
+      <SettingRow label="Daily energy from" hint="Measured takes what you ate less what your weight trend stored, once the diary has a week of days and the scales two weights a week apart; until then the formula is used.">
+        <Select bare label="Daily energy from" options={energy_sources} value={String(settings["calculators.energy_source"]) === "measured" ? "measured" : "formula"} on_change={(value) => void set_setting("calculators.energy_source", value)} />
+      </SettingRow>
+      <SettingRow label="Days measured over" hint="How far back the diary and the weight trend are read.">
+        <NumberField bare label="Days measured over" value={Number(settings["calculators.measured_days"]) || 28} min={7} step={7} unit="days" on_change={(value) => value && void set_setting("calculators.measured_days", value)} />
       </SettingRow>
     </>
   );
@@ -164,6 +173,35 @@ function Goals({ report, units, energy, set_setting }: { report: CalculationsRep
   );
 }
 
+// ── Time to goal ─────────────────────────────────────────────────────────────
+
+// The day a number of weeks from today lands on.
+function weeks_from(date: string, weeks: number): string {
+  const day = new Date(`${date}T12:00:00`);
+  day.setDate(day.getDate() + Math.round(weeks * 7));
+  return format_local(day, false);
+}
+
+function TimeToGoal({ report, units }: { report: CalculationsReport; units: ShownUnits }) {
+  const { progress } = report;
+  if (progress === null) return <p className="muted">Needs a weight reading and a goal on the weight metric; Use above sets one from the plan.</p>;
+  const weight = (value: number) => `${format_number(to_shown_value(mass, value, units))} ${units.mass}`;
+  const when = (weeks: number | null, why: string) => (weeks === null ? why : weeks === 0 ? "Reached" : `${weeks_from(report.date, weeks)}, in ${format_number(weeks)} weeks`);
+  const trend = progress.trend_weekly_change;
+  return (
+    <Facts
+      rows={[
+        ["Weight now", weight(progress.weight)],
+        ["Goal", weight(progress.goal)],
+        ["To go", format_change(mass, progress.goal - progress.weight, units)],
+        ["Trend", trend === null ? "Needs two weights a week apart" : `${format_change(mass, trend, units)} a week`],
+        ["At the trend", when(progress.trend_weeks, trend === null ? "—" : "Not heading there")],
+        ["At the plan's rate", when(progress.plan_weeks, report.plan.weekly_change === 0 ? "The plan keeps the weight" : "The plan heads the other way")],
+      ]}
+    />
+  );
+}
+
 // ── Tab ──────────────────────────────────────────────────────────────────────
 
 export function GoalsTab({ settings, units, energy }: { settings: Record<string, unknown>; units: ShownUnits; energy: EnergyUnit }) {
@@ -172,7 +210,16 @@ export function GoalsTab({ settings, units, energy }: { settings: Record<string,
 
   return (
     <div className="stack">
-      <Loaded resource={report}>{(loaded) => <Goals report={loaded} units={units} energy={energy} set_setting={set_setting} />}</Loaded>
+      <Loaded resource={report}>
+        {(loaded) => (
+          <>
+            <Goals report={loaded} units={units} energy={energy} set_setting={set_setting} />
+            <Section title="Time to goal">
+              <TimeToGoal report={loaded} units={units} />
+            </Section>
+          </>
+        )}
+      </Loaded>
       <Plan settings={settings} units={units} set_setting={set_setting} />
     </div>
   );

@@ -12,11 +12,14 @@ import { energy_unit_of } from "../diet/format.ts";
 import type { FeaturePage, FeatureSettingsProps } from "../features.tsx";
 import { CalculateTab } from "./CalculateTab.tsx";
 import { EnergySettings, GoalsTab } from "./GoalsTab.tsx";
+import { TrainingTab } from "./TrainingTab.tsx";
+import { units_of } from "../workouts/units.ts";
 
 // ── View ─────────────────────────────────────────────────────────────────────
 
 export const calculators_pages: FeaturePage[] = [
   { id: "calculate", label: "Calculators" },
+  { id: "training", label: "Training" },
   { id: "goals", label: "Goals" },
 ];
 
@@ -34,6 +37,7 @@ export function CalculatorsView({ parts }: { parts: string[] }) {
             const units = shown_units(values);
             const energy = energy_unit_of(values);
             if (page.id === "goals") return <GoalsTab settings={values} units={units} energy={energy} />;
+            if (page.id === "training") return <TrainingTab settings={values} units={units_of(values)} energy={energy} />;
             return <CalculateTab units={units} energy={energy} />;
           }}
         </Loaded>

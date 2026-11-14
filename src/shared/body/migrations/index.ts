@@ -29,5 +29,11 @@ export const migrations: DrizzleMigration[] = [
     "statements": [
       "-- The starting metrics shape the 3D body as their names say.\nUPDATE `body_metrics` SET `role` = CASE `id`\n\tWHEN 'bodyfat' THEN 'body_fat'\n\tWHEN 'waist' THEN 'waist'\n\tWHEN 'chest' THEN 'chest'\n\tWHEN 'hips' THEN 'hips'\n\tWHEN 'arm' THEN 'upper_arm'\n\tWHEN 'thigh' THEN 'thigh'\n\tWHEN 'neck' THEN 'neck'\nEND\nWHERE `role` = '' AND `id` IN ('bodyfat', 'waist', 'chest', 'hips', 'arm', 'thigh', 'neck');"
     ]
+  },
+  {
+    "name": "20261114015323_seed_resting_heart_rate",
+    "statements": [
+      "-- The starting resting heart rate metric gives the calculators the resting pulse.\nUPDATE `body_metrics` SET `role` = 'resting_heart_rate' WHERE `id` = 'restinghr' AND `role` = '';"
+    ]
   }
 ];

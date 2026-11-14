@@ -28,10 +28,15 @@ interface Draft {
   role: MetricRole;
 }
 
-// Body fat comes as a percent, girths and skinfolds as lengths, so each kind offers only the roles it can fill.
+// Body fat comes as a percent, girths and skinfolds as lengths and the resting pulse in its own unit, so each kind offers only the roles it can fill.
 function roles_for(kind: MetricKind): [MetricRole, string][] {
+  const fits = (role: MetricRole) => {
+    if (kind === "percent") return role === "body_fat";
+    if (kind === "custom") return role === "resting_heart_rate";
+    return kind === "length" && role !== "body_fat" && role !== "resting_heart_rate";
+  };
   return metric_roles
-    .filter((role) => role.key === "" || (kind === "percent" ? role.key === "body_fat" : kind === "length" && role.key !== "body_fat"))
+    .filter((role) => role.key === "" || fits(role.key))
     .map((role) => [role.key, role.label]);
 }
 

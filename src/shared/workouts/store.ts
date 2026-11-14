@@ -109,7 +109,7 @@ function to_set(row: SetRow): LoggedSet {
 
 // ── Loading ──────────────────────────────────────────────────────────────────
 
-function load_exercises(database: SqlDatabase): Exercise[] {
+export function load_exercises(database: SqlDatabase): Exercise[] {
   return drizzle_of(database).select().from(exercises).orderBy(sql`${exercises.name} COLLATE NOCASE`).all().map(to_exercise);
 }
 
@@ -153,7 +153,7 @@ function find_session(database: SqlDatabase, session_id: string): Session | null
   return load_sessions(database, eq(program_sessions.id, session_id))[0] ?? null;
 }
 
-function load_workouts(database: SqlDatabase, where?: Condition): Workout[] {
+export function load_workouts(database: SqlDatabase, where?: Condition): Workout[] {
   const db = drizzle_of(database);
   const rows = db.select().from(workouts).where(where).orderBy(asc(workouts.date), asc(workouts.started_at), rowid).all();
   if (rows.length === 0) return [];

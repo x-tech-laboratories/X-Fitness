@@ -15,6 +15,7 @@ import {
   bmr_formulas,
   caliper_sites,
   calculate,
+  least_logged_days,
   skinfolds,
   waist_to_height_category,
   waist_to_hip_category,
@@ -28,7 +29,7 @@ import {
 } from "../../shared/calculators/formulas.ts";
 import type { CalculationsReport } from "../../shared/calculators/store.ts";
 import { calls, use_data } from "../api.ts";
-import { format_number, to_shown_value, to_stored_value, type ShownUnits } from "../body/format.ts";
+import { format_change, format_number, to_shown_value, to_stored_value, type ShownUnits } from "../body/format.ts";
 import { today } from "../body/LogTab.tsx";
 
 // ── Measures ─────────────────────────────────────────────────────────────────
@@ -103,6 +104,7 @@ const body_fat_sources: Record<BodyFatSource, string> = {
   navy: "the US Navy method",
   jackson_pollock_7: "the 7-site caliper method",
   jackson_pollock_3: "the 3-site caliper method",
+  bmi: "BMI, a rough estimate",
 };
 
 function percent(value: number): string {
@@ -114,7 +116,8 @@ function missing(text: string): ReactNode {
 }
 
 // A body fat worked out here can be logged as today's reading of the metric standing for body fat.
-function LogBodyFat({ report, value }: { report: CalculationsReport; value: number }) {
+// The method names the button, since every body fat card has one.
+function LogBodyFat({ report, value, method }: { report: CalculationsReport; value: number; method: string }) {
   const metric = report.sources.body_fat?.metric;
   if (!metric) return null;
   const rounded = Math.round(value * 10) / 10;
@@ -126,7 +129,7 @@ function LogBodyFat({ report, value }: { report: CalculationsReport; value: numb
       toast(error instanceof Error ? error.message : String(error), { tone: "bad" });
     }
   }
-  return <button type="button" onClick={() => void log()}>{`Log as today's ${metric.name}`}</button>;
+  return <button type="button" aria-label={`Log the ${method} body fat as today's ${metric.name}`} onClick={() => void log()}>{`Log as today's ${metric.name}`}</button>;
 }
 
 function caliper_needs(method: CaliperMethod, measures: Measures): string {
@@ -157,7 +160,7 @@ function Results({ report, measures, units, energy }: { report: CalculationsRepo
         {results.navy_body_fat === null ? missing(measures.sex === "female" ? "Needs a height and the neck, waist and hip girths." : "Needs a sex, a height and the neck and waist girths.") : (
           <div className="stack tight">
             <Facts rows={[["Body fat", percent(results.navy_body_fat)]]} />
-            <Toolbar><LogBodyFat report={report} value={results.navy_body_fat} /></Toolbar>
+            <Toolbar><LogBodyFat report={report} value={results.navy_body_fat} method="US Navy" /></Toolbar>
           </div>
         )}
       </Card>
@@ -166,10 +169,18 @@ function Results({ report, measures, units, energy }: { report: CalculationsRepo
           {([["jackson_pollock_3", "3-site", results.jackson_pollock_3], ["jackson_pollock_7", "7-site", results.jackson_pollock_7]] as const).map(([method, label, value]) => (
             <div key={method} className="stack tight">
               <Facts rows={[[label, value === null ? <span className="muted">{caliper_needs(method, measures)}</span> : percent(value)]]} />
-              {value !== null && <Toolbar><LogBodyFat report={report} value={value} /></Toolbar>}
+              {value !== null && <Toolbar><LogBodyFat report={report} value={value} method={label} /></Toolbar>}
             </div>
           ))}
         </div>
+      </Card>
+      <Card title="Body fat: from BMI" subtitle="Deurenberg's estimate from BMI, age and sex; rougher than a tape or calipers">
+        {results.bmi_body_fat === null ? missing("Needs a weight, a height, a sex and an age.") : (
+          <div className="stack tight">
+            <Facts rows={[["Body fat", percent(results.bmi_body_fat)]]} />
+            <Toolbar><LogBodyFat report={report} value={results.bmi_body_fat} method="BMI" /></Toolbar>
+          </div>
+        )}
       </Card>
       <Card title="Lean mass and FFMI" subtitle={results.body_fat_source ? `From ${body_fat_sources[results.body_fat_source]}` : "Fat-free mass and its index"}>
         {composition === null ? missing("Needs a weight and a body fat, read or worked out above.") : (
@@ -205,6 +216,21 @@ function Results({ report, measures, units, energy }: { report: CalculationsRepo
             ]}
           />
         )}
+      </Card>
+      <Card title="Measured energy" subtitle={`What you ate less what your weight trend says was stored, over the last ${report.measured_days} days`}>
+        {report.measured === null ? missing(`Needs at least ${least_logged_days} days in the diary and two weights a week apart in that time.`) : (
+          <Facts
+            rows={[
+              ["TDEE, measured", kcal(report.measured.tdee)],
+              ["Eaten a day", kcal(report.measured.average_intake)],
+              ["Weight trend", `${format_change(mass, report.measured.weekly_change, units)} a week`],
+              ["Days in the diary", String(report.measured.days_logged)],
+            ]}
+          />
+        )}
+      </Card>
+      <Card title="Water" subtitle="About 35 ml a day for each kg of body weight, more with exercise and heat">
+        {results.water === null ? missing("Needs a weight.") : <Facts rows={[["Water a day", `${format_number(results.water)} L`]]} />}
       </Card>
     </Cards>
   );

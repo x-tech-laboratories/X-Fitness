@@ -34,7 +34,7 @@ export const body_api = {
               type: "string",
               enum: metric_roles.map((role) => role.key),
               description:
-                "What the metric stands for: body_fat for a percent metric; a girth, which also shapes the 3D body, or a caliper skinfold such as skinfold_thigh for a length metric; empty for nothing. The calculators read their measures by role.",
+                "What the metric stands for: body_fat for a percent metric; a girth, which also shapes the 3D body, or a caliper skinfold such as skinfold_thigh for a length metric; resting_heart_rate for a custom metric in bpm; empty for nothing. The calculators read their measures by role.",
             },
           },
           required: ["name"],

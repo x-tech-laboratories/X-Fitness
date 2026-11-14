@@ -111,7 +111,7 @@ function find_metric(database: SqlDatabase, id: string): BodyMetric {
 const point_fields = { date: body_readings.date, value: body_readings.value };
 
 // Every reading of one metric, oldest first.
-function metric_series(database: SqlDatabase, metric_id: string): Point[] {
+export function metric_series(database: SqlDatabase, metric_id: string): Point[] {
   return drizzle_of(database).select(point_fields).from(body_readings).where(eq(body_readings.metric_id, metric_id)).orderBy(asc(body_readings.date)).all();
 }
 

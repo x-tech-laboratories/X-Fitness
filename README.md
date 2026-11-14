@@ -10,10 +10,14 @@ whenever it can be reached.
   Australia and NZ) picks the ones shown and a region's reference intakes the targets, each changeable by hand.
 - **Body:** weight, body fat, girths and any measure of your own, with goals and trends, and a 3D body shaped to
   your readings and to your goals.
-- **Calculators:** BMI, body fat by the US Navy tape and by Jackson-Pollock 3- and 7-site calipers, lean mass and
-  FFMI, waist-to-height and waist-to-hip, and BMR and TDEE, filled in from your latest readings. A plan (target body fat
-  or BMI, waist, weekly change, protein and fat) turns them into goals for your body metrics and diet targets, set once
-  or kept following the plan after every reading.
+- **Calculators:** BMI, body fat by the US Navy tape, by Jackson-Pollock 3- and 7-site calipers and from BMI, lean
+  mass and FFMI, waist-to-height and waist-to-hip, BMR and TDEE, water a day, and the TDEE your diary and weight trend
+  actually show, filled in from your latest readings. A plan (target body fat or BMI, waist, weekly change, protein and
+  fat) turns them into goals for your body metrics and diet targets, set once or kept following the plan after every
+  reading, with the weeks left to the weight goal at your trend's and the plan's pace.
+- **Training calculators:** one-rep maxes (Epley, Brzycki, Lombardi, RPE counted) with the weight and plates at each
+  share of one, Wilks, DOTS and IPF GoodLift points, a plate calculator, Karvonen heart-rate zones, VO2max from runs, the
+  pulse or a Cooper test, race-time predictions, and each workout's energy, which the diary can add to the day's target.
 - **Overview:** today's eating against its targets, the weeks' training and every body metric's trend on one page.
 
 ## Running it

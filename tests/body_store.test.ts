@@ -145,7 +145,7 @@ describe("body metrics rules", () => {
 describe("the 3D body's readings", () => {
   it("gives the starting metrics their roles and keeps a role saved on a metric", () => {
     const { body } = open_body();
-    expect(Object.fromEntries(body.list_body_metrics().map((metric) => [metric.id, metric.role]))).toMatchObject({ weight: "", bodyfat: "body_fat", arm: "upper_arm", restinghr: "" });
+    expect(Object.fromEntries(body.list_body_metrics().map((metric) => [metric.id, metric.role]))).toMatchObject({ weight: "", bodyfat: "body_fat", arm: "upper_arm", restinghr: "resting_heart_rate" });
     const id = body.save_body_metric({ name: "Calf", kind: "length", role: "calf" });
     body.save_body_metric({ id, name: "Calf", kind: "length", role: "elbow" as never });
     expect(body.list_body_metrics().at(-1)).toMatchObject({ id, role: "" });

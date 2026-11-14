@@ -4,7 +4,7 @@
 
 import { useMemo, useState } from "react";
 import { format_local } from "@x-tech-laboratories/x-libs/dates";
-import type { EnergyUnit } from "@x-tech-laboratories/x-libs/units";
+import { format_measure, type EnergyUnit } from "@x-tech-laboratories/x-libs/units";
 import { Meters, type Meter } from "@x-tech-laboratories/x-libs/web/react/charts";
 import { NumberField, PeriodStepper, Segmented } from "@x-tech-laboratories/x-libs/web/react/controls";
 import { Section, Toolbar } from "@x-tech-laboratories/x-libs/web/react/layout";
@@ -14,7 +14,7 @@ import { DataTable, type TableColumn } from "@x-tech-laboratories/x-libs/web/rea
 import { toast } from "@x-tech-laboratories/x-libs/web/react/toasts";
 
 import { shown_nutrients, target_of } from "../../shared/diet/labels.ts";
-import { by_id, nutrient_groups, nutrients, serving_unit, target_progress, type EntryKind, type NutrientInfo, type Nutrients } from "../../shared/diet/model.ts";
+import { by_id, nutrient_groups, nutrients, serving_unit, target_key, target_progress, type EntryKind, type NutrientInfo, type Nutrients } from "../../shared/diet/model.ts";
 import type { DayEntry, DietData } from "../../shared/diet/store.ts";
 import { calls, use_data } from "../api.ts";
 import { HistoryButton } from "../history/HistoryView.tsx";
@@ -135,6 +135,11 @@ function entry_input({ id, date, kind, ref_id, amount, unit, logged_at }: DayEnt
 export function DiaryTab({ data, settings, energy }: { data: DietData; settings: Record<string, unknown>; energy: EnergyUnit }) {
   const [date, set_date] = use_pref("x-fitness-diet-day", today(), is_date, session_storage());
   const day = use_data((api) => api.get_diary_day(date), [date]);
+  const eat_back = settings["calculators.eat_back_workouts"] === true;
+  const workouts = use_data((api) => (eat_back ? api.list_workout_energy(date, date) : Promise.resolve([])), [date, eat_back]);
+  const burned = (workouts.data ?? []).reduce((sum, workout) => sum + (workout.calories ?? 0), 0);
+  // The day's workouts raise its calorie target when Calculators says to eat them back.
+  const day_settings = burned > 0 ? { ...settings, [target_key("calories")]: target_of(settings, "calories") + burned } : settings;
 
   async function remove(entry: DayEntry): Promise<void> {
     if (!(await succeeds(() => calls().remove_diary_entry(entry.id)))) return;
@@ -178,7 +183,8 @@ export function DiaryTab({ data, settings, energy }: { data: DietData; settings:
         {(loaded) => (
           <>
             <Section title="Day totals">
-              <NutrientTotals totals={loaded.totals} settings={settings} energy={energy} />
+              {burned > 0 && <p className="muted">{`The calorie target includes ${format_measure(burned, energy, 0)} burned in workouts.`}</p>}
+              <NutrientTotals totals={loaded.totals} settings={day_settings} energy={energy} />
             </Section>
             <Section title="Eaten">
               <div className="stack tight">

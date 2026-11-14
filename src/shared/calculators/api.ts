@@ -11,8 +11,18 @@ import { day } from "../api_schemas.ts";
 export const calculators_api = {
   get_calculations: {
     description:
-      "Works out BMI, body fat by the US Navy tape and Jackson-Pollock caliper methods, lean and fat mass, FFMI, waist ratios, basal metabolic rate and daily energy burned from the latest body readings on or before a day and the sex, height, birth date and activity in Settings. Also gives the goals the plan in Settings (calculators.goal_body_fat, goal_bmi, goal_waist_to_height, weekly_change in kg, protein_per_kg, fat_percent) leads to, beside the goals and diet targets set now. In kg, cm, percent, kcal and grams.",
+      "Works out BMI, body fat by the US Navy tape, Jackson-Pollock calipers and from BMI, lean and fat mass, FFMI, waist ratios, basal metabolic rate, daily energy burned and water a day from the latest body readings on or before a day and the sex, height, birth date and activity in Settings. Also the energy burned a day as measured from the diary and the weight trend over calculators.measured_days, the weeks left to the weight goal at the trend's and the plan's pace, and the goals the plan in Settings (calculators.goal_body_fat, goal_bmi, goal_waist_to_height, weekly_change in kg, protein_per_kg, fat_percent, energy_source) leads to, beside the goals and diet targets set now. In kg, cm, percent, kcal, litres and grams.",
     params: [{ name: "today", schema: day }],
+  },
+  get_training_calculations: {
+    description:
+      "Works out from the last 90 days of workouts: each weighted exercise's best set and its estimated one-rep max (Epley, reps in reserve from the RPE counted), the squat, bench press and deadlift picked in calculators.squat_exercise and the like or guessed from the names with their total and Wilks, DOTS and IPF GoodLift points, heart-rate zones and VO2max from the age and the resting heart rate reading, the best run's VDOT and predicted race times, the energy each workout of the last 30 days burned, and the bar and plates. In kg, km, seconds, bpm and kcal.",
+    params: [{ name: "today", schema: day }],
+  },
+  list_workout_energy: {
+    description:
+      "The energy each workout between two days burned, from the METs per kind of exercise in Settings (runs by their pace), the time each exercise took and the weight that day. In seconds and kcal.",
+    params: [{ name: "from", schema: day }, { name: "to", schema: day }],
   },
   apply_calculated_goals: {
     description:

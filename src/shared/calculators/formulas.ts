@@ -141,6 +141,12 @@ export function caliper_body_fat(method: CaliperMethod, measures: Pick<Measures,
   return plausible(siri(base - linear * sum + square * sum * sum - per_year * age));
 }
 
+// Deurenberg's estimate from BMI, age and sex, rougher than a tape or calipers.
+export function bmi_body_fat(bmi: number | null, age: number, sex: Sex): number | null {
+  if (bmi === null || !sex || !(age > 0)) return null;
+  return plausible(1.2 * bmi + 0.23 * age - 10.8 * (sex === "male" ? 1 : 0) - 5.4);
+}
+
 // ── Composition ──────────────────────────────────────────────────────────────
 
 export interface Composition {
@@ -207,7 +213,12 @@ export function activity_factor(activity: Activity): number {
 
 // ── Everything ───────────────────────────────────────────────────────────────
 
-export type BodyFatSource = "reading" | "navy" | "jackson_pollock_7" | "jackson_pollock_3";
+export type BodyFatSource = "reading" | "navy" | "jackson_pollock_7" | "jackson_pollock_3" | "bmi";
+
+// About 35 ml of water a day for each kg of body weight, before exercise and heat.
+export function daily_water(weight: number): number | null {
+  return weight > 0 ? (weight * 35) / 1000 : null;
+}
 
 export interface Calculations {
   bmi: number | null;
@@ -217,6 +228,7 @@ export interface Calculations {
   navy_body_fat: number | null;
   jackson_pollock_3: number | null;
   jackson_pollock_7: number | null;
+  bmi_body_fat: number | null;
   // The body fat the rest is worked out from: the reading, else the first method that gives one.
   body_fat: number | null;
   body_fat_source: BodyFatSource | null;
@@ -229,6 +241,8 @@ export interface Calculations {
   bmr_formula: BmrFormula | null;
   // Total daily energy expenditure: the basal rate times the activity.
   tdee: number | null;
+  // Litres a day.
+  water: number | null;
 }
 
 export function calculate(measures: Measures): Calculations {
@@ -243,6 +257,7 @@ export function calculate(measures: Measures): Calculations {
     ["navy", navy],
     ["jackson_pollock_7", jackson_pollock_7],
     ["jackson_pollock_3", jackson_pollock_3],
+    ["bmi", bmi_body_fat(bmi, measures.age, measures.sex)],
   ];
   const [body_fat_source, body_fat] = candidates.find(([, value]) => value !== null) ?? [null, null];
   const rates = basal_rates({ ...measures, body_fat: body_fat ?? 0 });
@@ -255,6 +270,7 @@ export function calculate(measures: Measures): Calculations {
     navy_body_fat: navy,
     jackson_pollock_3,
     jackson_pollock_7,
+    bmi_body_fat: bmi_body_fat(bmi, measures.age, measures.sex),
     body_fat,
     body_fat_source,
     composition: body_fat === null ? null : composition(measures.weight, body_fat, measures.height),
@@ -264,6 +280,7 @@ export function calculate(measures: Measures): Calculations {
     bmr,
     bmr_formula,
     tdee: bmr === null ? null : bmr * activity_factor(measures.activity),
+    water: daily_water(measures.weight),
   };
 }
 
@@ -299,8 +316,8 @@ function round_to(value: number, step: number): number {
   return Math.round(value * per_unit) / per_unit;
 }
 
-// Each goal the plan gives from the measures, rounded as a goal is set by hand.
-export function plan_goals(measures: Measures, calculations: Calculations, plan: GoalPlan): PlannedGoal[] {
+// Each goal the plan gives from the measures, rounded as a goal is set by hand; a measured daily energy replaces the formula's.
+export function plan_goals(measures: Measures, calculations: Calculations, plan: GoalPlan, measured_tdee: number | null = null): PlannedGoal[] {
   const lean = calculations.composition?.lean_mass ?? 0;
   const at_body_fat = plan.body_fat > 0 ? weight_at_body_fat(lean, plan.body_fat) : null;
   const at_bmi = weight_at_bmi(plan.bmi, measures.height);
@@ -316,12 +333,11 @@ export function plan_goals(measures: Measures, calculations: Calculations, plan:
   const waist: PlannedGoal = waist_value !== null
     ? { key: "waist", value: waist_value, basis: `A waist ${plan.waist_to_height} of your height` }
     : { key: "waist", value: null, basis: "Needs a height and a target waist-to-height ratio" };
-  const diet = plan_diet(measures, calculations, plan);
+  const diet = plan_diet(measures, measured_tdee ?? calculations.tdee, measured_tdee !== null, plan);
   return [weight, body_fat, waist, ...diet];
 }
 
-function plan_diet(measures: Measures, calculations: Calculations, plan: GoalPlan): PlannedGoal[] {
-  const { tdee } = calculations;
+function plan_diet(measures: Measures, tdee: number | null, measured: boolean, plan: GoalPlan): PlannedGoal[] {
   if (tdee === null || !(measures.weight > 0)) {
     const basis = "Needs a weight, a height and a birth date for the daily energy";
     return diet_goal_keys.map((key) => ({ key, value: null, basis }));
@@ -333,9 +349,79 @@ function plan_diet(measures: Measures, calculations: Calculations, plan: GoalPla
   const carbs = Math.max(0, round_to((calories - protein * 4 - fat * 9) / 4, 1));
   const change = plan.weekly_change === 0 ? "to keep your weight" : `to ${plan.weekly_change < 0 ? "lose" : "gain"} at the planned rate`;
   return [
-    { key: "calories", value: calories, basis: `The energy you burn a day, ${change}` },
+    { key: "calories", value: calories, basis: `The energy ${measured ? "your log shows you burn" : "you burn"} a day, ${change}` },
     { key: "protein", value: protein, basis: `${plan.protein_per_kg} g per kg of body weight` },
     { key: "fat", value: fat, basis: `${plan.fat_percent}% of the calories` },
     { key: "carbs", value: carbs, basis: "The calories left after protein and fat" },
   ];
+}
+
+// ── Trends ───────────────────────────────────────────────────────────────────
+
+export interface DatedValue {
+  date: string;
+  value: number;
+}
+
+function day_number(date: string): number {
+  return Date.parse(`${date}T00:00:00Z`) / 86_400_000;
+}
+
+// The least-squares change a day through dated readings, or null without two readings a week apart.
+export function change_per_day(points: DatedValue[]): number | null {
+  if (points.length < 2) return null;
+  const days = points.map((point) => day_number(point.date));
+  if (Math.max(...days) - Math.min(...days) < 7) return null;
+  const mean_day = days.reduce((sum, day) => sum + day, 0) / days.length;
+  const mean_value = points.reduce((sum, point) => sum + point.value, 0) / points.length;
+  let covariance = 0;
+  let variance = 0;
+  points.forEach((point, index) => {
+    covariance += (days[index]! - mean_day) * (point.value - mean_value);
+    variance += (days[index]! - mean_day) ** 2;
+  });
+  return covariance / variance;
+}
+
+export const least_logged_days = 7;
+
+export interface MeasuredEnergy {
+  days_logged: number;
+  average_intake: number;
+  // Kilograms a week by the weight trend.
+  weekly_change: number;
+  // What was eaten a day less the energy stored or more the energy drawn from the body.
+  tdee: number;
+}
+
+// The energy burned a day as the diary and the scales show it: what was eaten, less what the weight trend says was stored.
+export function measured_energy(intake: { date: string; calories: number; entries: number }[], weights: DatedValue[]): MeasuredEnergy | null {
+  const logged = intake.filter((day) => day.entries > 0);
+  const per_day = change_per_day(weights);
+  if (logged.length < least_logged_days || per_day === null) return null;
+  const average_intake = logged.reduce((sum, day) => sum + day.calories, 0) / logged.length;
+  return { days_logged: logged.length, average_intake, weekly_change: per_day * 7, tdee: average_intake - per_day * kcal_per_kg_of_fat };
+}
+
+export interface GoalProgress {
+  weight: number;
+  goal: number;
+  // Kilograms a week by the weight trend, null without enough readings.
+  trend_weekly_change: number | null;
+  // Weeks to the goal at the trend's pace, null when it is flat or heads away.
+  trend_weeks: number | null;
+  plan_weeks: number | null;
+}
+
+export function goal_progress(weight: number, goal: number, trend_weekly_change: number | null, plan_weekly_change: number): GoalProgress | null {
+  if (!(weight > 0) || !(goal > 0)) return null;
+  const to_go = goal - weight;
+  const weeks_at = (pace: number | null) => (pace !== null && pace !== 0 && Math.sign(pace) === Math.sign(to_go) ? to_go / pace : null);
+  return {
+    weight,
+    goal,
+    trend_weekly_change,
+    trend_weeks: to_go === 0 ? 0 : weeks_at(trend_weekly_change),
+    plan_weeks: to_go === 0 ? 0 : weeks_at(plan_weekly_change),
+  };
 }

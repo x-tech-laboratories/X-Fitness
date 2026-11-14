@@ -83,9 +83,14 @@ describe("the fitness formulas", () => {
     expect(results.body_fat_source).toBe("navy");
     expect(results.bmr_formula).toBe("katch_mcardle");
     const without_neck = calculate({ ...someone, neck: 0, bmr_formula: "katch_mcardle" });
-    expect(without_neck.body_fat).toBeNull();
-    expect(without_neck.bmr_formula).toBe("mifflin_st_jeor");
-    expect(without_neck.tdee).toBeCloseTo(1780 * 1.375);
+    expect(without_neck.body_fat_source).toBe("bmi");
+    expect(without_neck.body_fat).toBeCloseTo(20.3, 1);
+    const without_age = calculate({ ...someone, neck: 0, age: 0, bmr_formula: "katch_mcardle" });
+    expect(without_age.body_fat).toBeNull();
+    expect(without_age.bmr_formula).toBeNull();
+    const without_sex = calculate({ ...someone, sex: "", neck: 0, bmr_formula: "katch_mcardle" });
+    expect(without_sex.bmr_formula).toBe("mifflin_st_jeor");
+    expect(without_sex.tdee).toBeCloseTo((1780 - 83) * 1.375);
   });
 
   it("plans the goals from the measures, by body fat over BMI when both can", () => {
