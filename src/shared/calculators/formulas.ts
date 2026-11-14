@@ -9,12 +9,12 @@ export type Skinfold = "chest" | "abdomen" | "thigh" | "triceps" | "suprailiac" 
 
 export const skinfolds: { key: Skinfold; label: string }[] = [
   { key: "chest", label: "Chest" },
-  { key: "abdomen", label: "Abdomen" },
+  { key: "abdomen", label: "Belly" },
   { key: "thigh", label: "Thigh" },
-  { key: "triceps", label: "Triceps" },
-  { key: "suprailiac", label: "Suprailiac" },
-  { key: "midaxillary", label: "Midaxillary" },
-  { key: "subscapular", label: "Subscapular" },
+  { key: "triceps", label: "Back of arm" },
+  { key: "suprailiac", label: "Above hip" },
+  { key: "midaxillary", label: "Side of ribs" },
+  { key: "subscapular", label: "Shoulder blade" },
 ];
 
 export type Activity = "sedentary" | "light" | "moderate" | "active" | "very_active";

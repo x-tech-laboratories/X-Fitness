@@ -13,11 +13,14 @@ function open_body() {
 }
 
 describe("body metrics store", () => {
-  it("starts with the add-on's metrics and a Height metric under ids every device shares, and no height setting", () => {
+  it("starts with the add-on's metrics, a Height metric and the caliper skinfolds under ids every device shares, and no height setting", () => {
     const { body } = open_body();
-    expect(body.list_body_metrics().map((metric) => metric.id)).toEqual(["weight", "bodyfat", "waist", "chest", "hips", "arm", "thigh", "neck", "restinghr", "height"]);
-    expect(body.list_body_metrics().at(-2)).toMatchObject({ name: "Resting Heart Rate", kind: "custom", unit: "bpm", goal: 0, readings: 0, last_date: "" });
-    expect(body.list_body_metrics().at(-1)).toMatchObject({ name: "Height", kind: "length", role: "height" });
+    const skinfold_ids = ["chest", "abdomen", "thigh", "triceps", "suprailiac", "midaxillary", "subscapular"].map((site) => `skinfold_${site}`);
+    expect(body.list_body_metrics().map((metric) => metric.id)).toEqual(["weight", "bodyfat", "waist", "chest", "hips", "arm", "thigh", "neck", "restinghr", "height", ...skinfold_ids]);
+    expect(body.list_body_metrics().at(8)).toMatchObject({ name: "Resting Heart Rate", kind: "custom", unit: "bpm", goal: 0, readings: 0, last_date: "" });
+    expect(body.list_body_metrics().at(9)).toMatchObject({ name: "Height", kind: "length", role: "height" });
+    expect(body.list_body_metrics().at(-1)).toMatchObject({ name: "Shoulder Blade Skinfold", kind: "length", role: "skinfold_subscapular" });
+    expect(body.list_body_metrics().slice(10).map((metric) => metric.role)).toEqual(skinfold_ids);
     expect(setting_defaults["body.height"]).toBeUndefined();
   });
 
@@ -60,7 +63,7 @@ describe("body metrics store", () => {
   it("adds, edits, reorders and deletes metrics, a metric's readings going with it", () => {
     const { body } = open_body();
     const id = body.save_body_metric({ name: " Blood Pressure ", kind: "custom", unit: "mmHg", goal: 120, comment: "" });
-    expect(body.list_body_metrics().at(-1)).toMatchObject({ id, name: "Blood Pressure", unit: "mmHg", goal: 120, position: 10 });
+    expect(body.list_body_metrics().at(-1)).toMatchObject({ id, name: "Blood Pressure", unit: "mmHg", goal: 120, position: 17 });
     body.save_body_metric({ id, name: "Systolic", kind: "percent", unit: "mmHg", goal: -3 });
     expect(body.list_body_metrics().at(-1)).toMatchObject({ id, name: "Systolic", kind: "percent", unit: "", goal: 0 });
 
@@ -166,6 +169,23 @@ describe("the 3D body's readings", () => {
     expect(shape.measures).toEqual({ sex: "male", height: 180, mass: 85, body_fat: 0, girths: { neck: 0, chest: 0, waist: 92, hips: 0, upper_arm: 0, thigh: 0 } });
     expect(shape.goal).toMatchObject({ mass: 85, girths: { waist: 84 } });
     expect(shape.days).toEqual(["2026-11-01", "2026-11-05"]);
+  });
+});
+
+describe("the skinfold metrics", () => {
+  const skinfold_step = migrations.find((migration) => migration.name.endsWith("_seed_skinfolds"))!;
+
+  it("leaves out a skinfold a metric already stands for, and adds nothing when run again", () => {
+    const database = new DatabaseSync(":memory:");
+    database.exec("CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT NOT NULL)");
+    for (const step of migrations.slice(0, migrations.indexOf(skinfold_step))) for (const statement of step.statements) database.exec(statement);
+    database.exec("INSERT INTO body_metrics (id, name, kind, unit, position, role) VALUES ('my-thigh-fold', 'Thigh pinch', 'length', '', 10, 'skinfold_thigh')");
+
+    for (const statement of skinfold_step.statements) database.exec(statement);
+    for (const statement of skinfold_step.statements) database.exec(statement);
+
+    const rows = database.prepare("SELECT id FROM body_metrics WHERE role LIKE 'skinfold_%' ORDER BY position").all() as { id: string }[];
+    expect(rows.map((row) => row.id)).toEqual(["my-thigh-fold", "skinfold_chest", "skinfold_abdomen", "skinfold_triceps", "skinfold_suprailiac", "skinfold_midaxillary", "skinfold_subscapular"]);
   });
 });
 

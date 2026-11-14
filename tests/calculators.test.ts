@@ -162,8 +162,7 @@ describe("the calculators store", () => {
   it("reads skinfolds from metrics with a skinfold role", () => {
     const store = open();
     for (const [site, value] of [["chest", 1], ["abdomen", 2], ["thigh", 1.5]] as const) {
-      const id = store.save_body_metric({ name: `${site} skinfold`, kind: "length", role: `skinfold_${site}` });
-      store.set_body_reading(id, "2026-11-12", value);
+      store.set_body_reading(`skinfold_${site}`, "2026-11-12", value);
     }
 
     const report = store.get_calculations("2026-11-13");

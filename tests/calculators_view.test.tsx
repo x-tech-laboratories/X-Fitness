@@ -85,7 +85,7 @@ describe("calculators", () => {
     const table = await screen.findByRole("table", { name: "Body fat by method" });
     expect(within(table).getByRole("row", { name: /^US Navy tape/ }).textContent).toContain("18.4%");
     expect(within(table).getByRole("row", { name: /^US Navy tape/ }).textContent).toContain("Used");
-    expect(within(table).getByRole("row", { name: /^3-site calipers/ }).textContent).toContain("Needs the chest, abdomen, and thigh skinfolds.");
+    expect(within(table).getByRole("row", { name: /^3-site calipers/ }).textContent).toContain("Needs the chest, belly, and thigh skinfolds.");
     expect(within(table).getByRole("row", { name: /^Your reading/ }).textContent).toContain("Needs a body fat reading.");
     expect(screen.getByText("Skinfolds").closest("details")?.open).toBe(false);
 
