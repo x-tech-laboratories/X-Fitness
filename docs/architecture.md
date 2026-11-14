@@ -34,7 +34,9 @@ A feature is two folders:
     as `/api/openapi.json`, and lets `/api/call/<method>` take the arguments by name (X-Libs `api_spec` and
     `server/mcp`).
   - `after_write`, when given, runs after every write the page, API or MCP makes and before history records it; the
-    calculators use it to keep goals following their plan.
+    calculators use it to keep the diet's targets following their plan.
+  - `on_open`, when given, runs each time the database opens, after the migrations, for an upgrade SQL cannot do; it
+    must change nothing the second time. The calculators use it to carry an old stored body plan into the metrics' goals.
   - Settings keys are namespaced, such as `workouts.default_rest`, with their defaults in `setting_defaults`.
 - `src/web/<feature>/index.tsx` exports its view, which gets the route's parts after `#/<feature>`, its pages, which the
   sidebar lists under the feature and the view picks by `#/<feature>/<page>`, and a function giving its sections for the
@@ -43,7 +45,9 @@ A feature is two folders:
 The sidebar (`src/web/Sidebar.tsx`) is an X-Libs `Tree`: Overview, then each feature folding open onto its pages, then
 Settings at the foot; a feature with one page is a single row. The Overview (`src/web/overview/`) draws from the features' own read calls.
 A web section can draw on another's store: Goals (`src/web/goals/`) and Workouts → Training show the calculators' calls
-and settings from `src/shared/calculators/`.
+and settings from `src/shared/calculators/`. Goals reads where you are now, edits the weight, body fat and waist
+metrics' own goals, and holds the diet plan; the training settings (bar, plates, METs, the lifts and run read) sit under
+Settings → Workouts, and each workout's energy under Workouts → Reports.
 
 `src/shared/store.ts` and `src/web/features.tsx` list the features; nothing else knows them.
 
@@ -63,7 +67,8 @@ offline. On first connecting, the user chooses whether the server's copy or the 
 ## Units
 
 Every measure is stored in metric (kg, cm, km, kcal) and shown in the units set under Settings, converted with X-Libs
-`units`.
+`units`. The page reads the four units once with `shown_units` from `src/web/units.ts` and hands views one `units`
+object; `src/web/unit_field.tsx` is the number field that shows a stored value in them.
 
 ## Nutrients, labels and targets
 
@@ -74,9 +79,9 @@ Salt is no column: it is sodium shown × 2.5, which the EU label uses. `labels.t
 setting lays the ones switched on or off by hand over it. A target preset (the same four regions' reference amounts)
 gives each nutrient's target, which has no default of its own: `diet.target_<nutrient>` is stored only when something
 sets it, and `target_of` takes it before the preset. Two things set one: the user by hand, and the plan on
-Goals while "Diet targets follow the plan" is on, which writes calories, protein, fat and carbs after every
+Goals while its daily targets are kept following it, which writes calories, protein, fat and carbs after every
 change. So a missing target follows the preset, and a plan or hand value always beats it; never add a default target to
-`settings.ts`. The Diary also raises the day's calorie target by the workouts' energy when Workouts → Training says to eat
+`settings.ts`. The Diary also raises the day's calorie target by the workouts' energy when Settings → Workouts says to eat
 them back. `get_diet_targets` gives each target in force with where it came from.
 
 Each diary entry belongs to a meal from the `diet.meals` setting (an id, a name, the time from which new entries fall in
@@ -84,6 +89,10 @@ it and its share of the energy target). A new entry takes the meal its logged ti
 an entry whose meal is gone goes by its logged time again.
 
 ## The 3D body
+
+The height is a body metric with the height role, read on or before each day like any reading; sex and birth date are
+the `body.sex` and `body.birth_date` settings, edited on Body → Metrics. That page is also where a day's readings are
+logged and each metric is added or opened to edit, move or delete it; `#/body/log` opens it too.
 
 `src/shared/body/shape.ts` morphs MakeHuman's CC0 body mesh with its sex, muscle, weight and height targets and its girth
 targets. `fit_shape` halves each slider in turn until the model's height, mass (its volume times a density from body

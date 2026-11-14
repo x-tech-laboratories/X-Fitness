@@ -3,6 +3,7 @@ import { DatabaseSync } from "node:sqlite";
 import { describe, expect, it, vi } from "vitest";
 
 import { body_mass_index, moving_average, series_stats, shift_day } from "../src/shared/body/readings.ts";
+import { migrations } from "../src/shared/body/migrations/index.ts";
 import { bind_methods, open_store, setting_defaults } from "../src/shared/store.ts";
 
 function open_body() {
@@ -12,11 +13,12 @@ function open_body() {
 }
 
 describe("body metrics store", () => {
-  it("starts with the add-on's metrics under ids every device shares, and a height setting", () => {
+  it("starts with the add-on's metrics and a Height metric under ids every device shares, and no height setting", () => {
     const { body } = open_body();
-    expect(body.list_body_metrics().map((metric) => metric.id)).toEqual(["weight", "bodyfat", "waist", "chest", "hips", "arm", "thigh", "neck", "restinghr"]);
-    expect(body.list_body_metrics().at(-1)).toMatchObject({ name: "Resting Heart Rate", kind: "custom", unit: "bpm", goal: 0, readings: 0, last_date: "" });
-    expect(setting_defaults["body.height"]).toBe(0);
+    expect(body.list_body_metrics().map((metric) => metric.id)).toEqual(["weight", "bodyfat", "waist", "chest", "hips", "arm", "thigh", "neck", "restinghr", "height"]);
+    expect(body.list_body_metrics().at(-2)).toMatchObject({ name: "Resting Heart Rate", kind: "custom", unit: "bpm", goal: 0, readings: 0, last_date: "" });
+    expect(body.list_body_metrics().at(-1)).toMatchObject({ name: "Height", kind: "length", role: "height" });
+    expect(setting_defaults["body.height"]).toBeUndefined();
   });
 
   it("keeps one reading per metric a day, and removes it when cleared", () => {
@@ -45,7 +47,7 @@ describe("body metrics store", () => {
     body.set_body_reading("waist", "2026-11-03", 90);
     expect(body.get_body_day("2026-11-02").bmi).toBeNull();
 
-    body.set_setting("body.height", 180);
+    body.set_body_reading("height", "2026-01-01", 180);
     const day = body.get_body_day("2026-11-03");
     const weight = day.rows.find((row) => row.metric.id === "weight")!;
     expect(weight).toMatchObject({ value: 81, previous: { date: "2026-11-01", value: 80 } });
@@ -58,7 +60,7 @@ describe("body metrics store", () => {
   it("adds, edits, reorders and deletes metrics, a metric's readings going with it", () => {
     const { body } = open_body();
     const id = body.save_body_metric({ name: " Blood Pressure ", kind: "custom", unit: "mmHg", goal: 120, comment: "" });
-    expect(body.list_body_metrics().at(-1)).toMatchObject({ id, name: "Blood Pressure", unit: "mmHg", goal: 120, position: 9 });
+    expect(body.list_body_metrics().at(-1)).toMatchObject({ id, name: "Blood Pressure", unit: "mmHg", goal: 120, position: 10 });
     body.save_body_metric({ id, name: "Systolic", kind: "percent", unit: "mmHg", goal: -3 });
     expect(body.list_body_metrics().at(-1)).toMatchObject({ id, name: "Systolic", kind: "percent", unit: "", goal: 0 });
 
@@ -76,7 +78,7 @@ describe("body metrics store", () => {
 
   it("reports a range with its change, extremes, 7-day average, distance to goal and BMI", () => {
     const { body } = open_body();
-    body.set_setting("body.height", 200);
+    body.set_body_reading("height", "2026-01-01", 200);
     body.save_body_metric({ id: "weight", name: "Weight", kind: "weight", goal: 75 });
     const readings: [string, number][] = [["2026-06-01", 90], ["2026-10-20", 84], ["2026-10-25", 82], ["2026-11-01", 80], ["2026-11-02", 81]];
     for (const [date, value] of readings) body.set_body_reading("weight", date, value);
@@ -152,7 +154,7 @@ describe("the 3D body's readings", () => {
 
   it("takes the latest readings on or before the day, the goals, and the days that shape it", () => {
     const { body } = open_body();
-    body.set_setting("body.height", 180);
+    body.set_body_reading("height", "2026-01-01", 180);
     body.set_setting("body.sex", "male");
     body.save_body_metric({ id: "waist", name: "Waist", kind: "length", role: "waist", goal: 84 });
     body.set_body_reading("weight", "2026-11-01", 85);
@@ -164,5 +166,52 @@ describe("the 3D body's readings", () => {
     expect(shape.measures).toEqual({ sex: "male", height: 180, mass: 85, body_fat: 0, girths: { neck: 0, chest: 0, waist: 92, hips: 0, upper_arm: 0, thigh: 0 } });
     expect(shape.goal).toMatchObject({ mass: 85, girths: { waist: 84 } });
     expect(shape.days).toEqual(["2026-11-01", "2026-11-05"]);
+  });
+});
+
+describe("the height metric", () => {
+  const height_step = migrations.find((migration) => migration.name.endsWith("_seed_height"))!;
+
+  // A database as it was before the height step, holding a height setting and a weight, then brought up to date.
+  function upgrade(setup: (database: DatabaseSync) => void) {
+    const database = new DatabaseSync(":memory:");
+    database.exec("CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT NOT NULL)");
+    for (const step of migrations.slice(0, migrations.indexOf(height_step))) for (const statement of step.statements) database.exec(statement);
+    setup(database);
+    for (const statement of height_step.statements) database.exec(statement);
+    return database;
+  }
+
+  const readings = (database: DatabaseSync) => database.prepare("SELECT metric_id, date, value FROM body_readings WHERE metric_id IN (SELECT id FROM body_metrics WHERE role = 'height')").all().map((row) => ({ ...row }));
+
+  it("carries the height setting over as a reading dated at the first weight, once however often it runs", () => {
+    const database = upgrade((old) => {
+      old.exec(`INSERT INTO settings (key, value) VALUES ('body.height', '181.5')`);
+      old.exec(`INSERT INTO body_readings (metric_id, date, value) VALUES ('weight', '2026-03-02', 80), ('weight', '2026-05-01', 79)`);
+    });
+    for (const statement of height_step.statements) database.exec(statement);
+
+    expect(database.prepare("SELECT id, name, kind, role FROM body_metrics WHERE role = 'height'").all().map((row) => ({ ...row }))).toEqual([{ id: "height", name: "Height", kind: "length", role: "height" }]);
+    expect(readings(database)).toEqual([{ metric_id: "height", date: "2026-03-02", value: 181.5 }]);
+  });
+
+  it("gives a length metric already named Height the role instead of adding another", () => {
+    const database = upgrade((old) => {
+      old.exec(`INSERT INTO body_metrics (id, name, kind, position) VALUES ('own', 'height', 'length', 9)`);
+      old.exec(`INSERT INTO body_readings (metric_id, date, value) VALUES ('own', '2026-01-05', 175)`);
+      old.exec(`INSERT INTO settings (key, value) VALUES ('body.height', '180')`);
+    });
+
+    expect(database.prepare("SELECT id FROM body_metrics WHERE role = 'height' OR id = 'height'").all().map((row) => ({ ...row }))).toEqual([{ id: "own" }]);
+    expect(readings(database)).toEqual([{ metric_id: "own", date: "2026-01-05", value: 175 }]);
+  });
+
+  it("works BMI out from the height reading on or before the day", () => {
+    const { body } = open_body();
+    body.set_body_reading("weight", "2026-11-03", 81);
+    body.set_body_reading("height", "2026-11-02", 180);
+    expect(body.get_body_day("2026-11-01").bmi).toBeNull();
+    expect(body.get_body_day("2026-11-03").bmi?.value).toBeCloseTo(81 / 1.8 ** 2);
+    expect(body.get_body_shape("2026-11-03").measures.height).toBe(180);
   });
 });

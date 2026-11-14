@@ -6,18 +6,19 @@
 import { useMemo, useState } from "react";
 import type { EnergyUnit } from "@x-tech-laboratories/x-libs/units";
 import { NumberField } from "@x-tech-laboratories/x-libs/web/react/controls";
-import { confirm_dialog } from "@x-tech-laboratories/x-libs/web/react/dialog";
 import { FormRow, PageHeading, Toolbar } from "@x-tech-laboratories/x-libs/web/react/layout";
+import { Empty } from "@x-tech-laboratories/x-libs/web/react/states";
 import { DataTable, type TableColumn } from "@x-tech-laboratories/x-libs/web/react/table";
 import { ComboField } from "@x-tech-laboratories/x-libs/web/react/suggestions";
 
 import { by_id, food_label, normalize_recipe, nutrients, recipe_nutrients_per_serving, type FoodsById, type Ingredient, type Nutrients, type Recipe } from "../../shared/diet/model.ts";
 import type { DietData } from "../../shared/diet/store.ts";
-import { calls } from "../api.ts";
-import { CategoryBrowser, CategoryEditor, CategoryPaths, category_paths_text } from "../categories.tsx";
-import { HistoryButton } from "../history/HistoryView.tsx";
-import { attempt, format_amount, format_nutrient } from "./format.ts";
-import { FoodUnitSelect, GroupToggle, ItemSelect, use_category_view, type ListRow } from "./widgets.tsx";
+import { attempt, calls } from "../api.ts";
+import { CategorizedSelect, CategoryBrowser, CategoryEditor, CategoryPaths, category_paths_text, GroupToggle, use_category_view, type ListRow } from "../categories.tsx";
+import { FormButtons } from "../forms.tsx";
+import { confirm_delete, row_actions_column } from "../rows.tsx";
+import { format_amount, format_nutrient } from "./format.ts";
+import { FoodUnitSelect } from "./widgets.tsx";
 
 // ── Form ─────────────────────────────────────────────────────────────────────
 
@@ -31,14 +32,14 @@ export function macros_text(values: Nutrients, energy: EnergyUnit): string {
 
 function IngredientRows({ ingredients, foods, on_change }: { ingredients: Ingredient[]; foods: FoodsById; on_change: (ingredients: Ingredient[]) => void }) {
   const set_ingredient = (index: number, changes: Partial<Ingredient>) => on_change(ingredients.map((ingredient, position) => (position === index ? { ...ingredient, ...changes } : ingredient)));
-  if (ingredients.length === 0) return <p className="muted">No ingredients yet.</p>;
+  if (ingredients.length === 0) return <Empty title="No ingredients yet." />;
   return (
     <ul className="plain-list" aria-label="Ingredients">
       {ingredients.map((ingredient, index) => {
         const food = foods[ingredient.food_id];
         const name = food ? food_label(food) : "(deleted food)";
         return (
-          <li key={index} className="diet-inline diet-ingredient">
+          <li key={index} className="inline-row diet-ingredient">
             <span className="diet-grow">{name}</span>
             <NumberField label={`Amount of ${name}`} bare min={0.01} value={ingredient.amount} on_change={(amount) => set_ingredient(index, { amount: amount ?? 1 })} />
             <FoodUnitSelect label={`Unit of ${name}`} food={food} value={ingredient.unit || food?.serving_unit || ""} on_change={(unit) => set_ingredient(index, { unit })} />
@@ -87,7 +88,7 @@ export function RecipeForm({ initial, data, energy, on_done }: { initial: Recipe
             <input id="diet-recipe-name" type="text" value={recipe.name} onChange={(event) => change({ name: event.currentTarget.value })} />
           </FormRow>
           <FormRow label="Servings" id="diet-recipe-unit">
-            <div className="diet-inline">
+            <div className="inline-row">
               <NumberField label="Servings" bare min={0.01} value={recipe.servings} on_change={(servings) => change({ servings: servings ?? 1 })} />
               <ComboField id="diet-recipe-unit" label="Serving unit" placeholder="serving, bowl, slice…" value={recipe.serving_unit} options={data.units} on_change={(serving_unit) => change({ serving_unit })} />
             </div>
@@ -101,8 +102,8 @@ export function RecipeForm({ initial, data, energy, on_done }: { initial: Recipe
           <FormRow label="Ingredients" id="diet-recipe-ingredient">
             <div className="stack tight">
               <IngredientRows ingredients={recipe.ingredients} foods={foods} on_change={(ingredients) => change({ ingredients })} />
-              <div className="diet-inline">
-                <ItemSelect id="diet-recipe-ingredient" label="Ingredient to add" items={data.foods} categories={data.categories} value={adding} placeholder="Add ingredient…" on_change={set_adding} />
+              <div className="inline-row">
+                <CategorizedSelect id="diet-recipe-ingredient" label="Ingredient to add" items={data.foods} label_of={food_label} categories={data.categories} value={adding} placeholder="Add ingredient…" on_change={set_adding} />
                 <button type="button" disabled={!adding} onClick={add_ingredient}>Add ingredient</button>
               </div>
             </div>
@@ -111,10 +112,7 @@ export function RecipeForm({ initial, data, energy, on_done }: { initial: Recipe
         <p className="banner" role="status" aria-label="Per serving">
           <strong>Per serving:</strong> {macros_text(per_serving, energy)}
         </p>
-        <div className="form-actions diet-inline">
-          <button type="submit" className="accent solid" disabled={!recipe.name.trim() || saving}>Save</button>
-          <button type="button" onClick={on_done}>Cancel</button>
-        </div>
+        <FormButtons can_save={Boolean(recipe.name.trim()) && !saving} on_cancel={on_done} />
       </form>
     </>
   );
@@ -137,35 +135,13 @@ export function RecipesTab({ data, energy }: { data: DietData; energy: EnergyUni
       { label: "Servings", id: "servings", cell: (row) => `${format_amount(row.item.servings)} ${row.item.serving_unit}`, sort: (row) => row.item.servings },
       { label: "Calories / serving", id: "calories", class: "number", cell: (row) => format_nutrient(energy_info, per_serving(row.item).calories, energy), sort: (row) => per_serving(row.item).calories },
       { label: "Protein / serving", id: "protein", class: "number", cell: (row) => format_nutrient(protein_info, per_serving(row.item).protein, energy), sort: (row) => per_serving(row.item).protein },
-      {
-        label: "Actions",
-        id: "actions",
-        header: <span className="visually-hidden">Actions</span>,
-        class: "actions-cell",
+      row_actions_column<ListRow<Recipe>>({
+        name: (row) => row.item.name,
+        edit: (row) => set_editing(row.item),
+        history: (row) => ({ kind: "recipe", item_id: row.item.id }),
+        remove: (row) => confirm_delete("Delete recipe", `Delete ${row.item.name}? Diary entries that use it will show it as deleted.`, () => attempt(() => calls().delete_recipe(row.item.id))),
         width: 150,
-        cell: (row) => (
-          <div className="row-actions">
-            <button type="button" aria-label={`Edit ${row.item.name}`} onClick={() => set_editing(row.item)}>Edit</button>
-            <HistoryButton kind="recipe" item_id={row.item.id} name={row.item.name} />
-            <button
-              type="button"
-              className="danger"
-              aria-label={`Delete ${row.item.name}`}
-              onClick={() =>
-                confirm_dialog({
-                  title: "Delete recipe",
-                  message: `Delete ${row.item.name}? Diary entries that use it will show it as deleted.`,
-                  confirm_label: "Delete",
-                  danger: true,
-                  run: async () => void (await attempt(() => calls().delete_recipe(row.item.id))),
-                })
-              }
-            >
-              Delete
-            </button>
-          </div>
-        ),
-      },
+      }),
     ];
   }, [foods, energy, data.categories]);
 
@@ -177,9 +153,9 @@ export function RecipesTab({ data, energy }: { data: DietData; energy: EnergyUni
         <button type="button" className="accent solid" onClick={() => set_editing("new")}>Add recipe</button>
         <GroupToggle checked={view.grouped} on_change={view.set_grouped} />
       </Toolbar>
-      <CategoryBrowser categories={data.categories} value={view.filter} on_change={view.set_filter} count_in={view.count_in} uncategorized_count={view.uncategorized_count} />
+      <CategoryBrowser categories={data.categories} view={view} />
       {view.rows.length === 0 ? (
-        <p className="muted">{view.filter ? "No recipes in this category." : "No recipes yet."}</p>
+        <Empty title={view.filter ? "No recipes in this category." : "No recipes yet."} />
       ) : (
         <DataTable caption="Recipes" columns={columns} rows={view.rows} groups={view.groups} row_key={(row) => row.key} sorting={view.sorting} on_sort={view.set_sorting} />
       )}

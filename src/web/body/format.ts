@@ -3,22 +3,21 @@
 
 // ── Imports ──────────────────────────────────────────────────────────────────
 
-import { to_shown, to_stored, type LengthUnit, type MassUnit } from "@x-tech-laboratories/x-libs/units";
+import { format_change as format_signed, format_number, to_shown, to_stored, type LengthUnit, type MassUnit } from "@x-tech-laboratories/x-libs/units";
 
 import { skinfold_of, type BodyMetric, type MetricRole } from "../../shared/body/readings.ts";
+import { to_shown_tenth, type ShownUnits } from "../units.ts";
 
 // ── Units ────────────────────────────────────────────────────────────────────
 
-export interface ShownUnits {
-  mass: MassUnit;
-  length: LengthUnit;
-}
-
-export function shown_units(settings: Record<string, unknown>): ShownUnits {
-  return { mass: settings.mass_unit === "lb" ? "lb" : "kg", length: settings.length_unit === "in" ? "in" : "cm" };
-}
-
 type Measured = Pick<BodyMetric, "kind" | "unit"> & { role?: MetricRole };
+
+// A weight, a length and a skinfold, for numbers that are not a metric's own, such as the calculators' fields.
+export const body_measures = {
+  weight: { kind: "weight", unit: "" },
+  length: { kind: "length", unit: "" },
+  skinfold: { kind: "length", unit: "", role: "skinfold_chest" },
+} as const satisfies Record<string, Measured>;
 
 // Calipers read skinfolds in millimetres, whatever the length unit.
 function is_skinfold(metric: Measured): boolean {
@@ -37,8 +36,8 @@ export function unit_of(metric: Measured, units: ShownUnits): string {
 // Readings are taken to a tenth, so a stored value is shown rounded to one.
 export function to_shown_value(metric: Measured, value: number, units: ShownUnits): number {
   if (is_skinfold(metric)) return Math.round(value * 100) / 10;
-  const shown = metric.kind === "weight" || metric.kind === "length" ? to_shown(value, unit_of(metric, units) as MassUnit | LengthUnit) : value;
-  return Math.round(shown * 10) / 10;
+  if (metric.kind === "weight" || metric.kind === "length") return to_shown_tenth(value, unit_of(metric, units) as MassUnit | LengthUnit);
+  return Math.round(value * 10) / 10;
 }
 
 export function to_stored_value(metric: Measured, value: number, units: ShownUnits): number {
@@ -48,13 +47,6 @@ export function to_stored_value(metric: Measured, value: number, units: ShownUni
 
 // ── Text ─────────────────────────────────────────────────────────────────────
 
-// Whole numbers print whole and the rest keep one decimal.
-export function format_number(value: number): string {
-  if (!Number.isFinite(value)) return "0";
-  const rounded = Math.round(value * 10) / 10;
-  return Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1);
-}
-
 export function format_value(metric: Measured, value: number, units: ShownUnits): string {
   return `${format_number(to_shown_value(metric, value, units))} ${unit_of(metric, units)}`.trim();
 }
@@ -62,6 +54,5 @@ export function format_value(metric: Measured, value: number, units: ShownUnits)
 // A difference with its sign, such as "+1.5 kg"; converting a difference needs no offset, so it goes as a value does.
 export function format_change(metric: Measured, change: number, units: ShownUnits): string {
   const shown = is_skinfold(metric) ? change * 10 : metric.kind === "weight" || metric.kind === "length" ? to_shown(change, unit_of(metric, units) as MassUnit | LengthUnit) : change;
-  const text = format_number(shown);
-  return `${shown > 0 && text !== "0" ? "+" : ""}${text} ${unit_of(metric, units)}`.trim();
+  return format_signed(shown, unit_of(metric, units));
 }

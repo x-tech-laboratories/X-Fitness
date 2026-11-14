@@ -5,22 +5,24 @@
 
 import { useMemo, useState } from "react";
 import type { EnergyUnit } from "@x-tech-laboratories/x-libs/units";
-import { NumberField, SearchBox, Select } from "@x-tech-laboratories/x-libs/web/react/controls";
-import { confirm_dialog } from "@x-tech-laboratories/x-libs/web/react/dialog";
+import { NumberField, Select } from "@x-tech-laboratories/x-libs/web/react/controls";
 import { FormRow, PageHeading, Toolbar } from "@x-tech-laboratories/x-libs/web/react/layout";
 import { use_pref } from "@x-tech-laboratories/x-libs/web/react/prefs";
+import { Empty } from "@x-tech-laboratories/x-libs/web/react/states";
 import { DataTable, type TableColumn } from "@x-tech-laboratories/x-libs/web/react/table";
 import { ComboField } from "@x-tech-laboratories/x-libs/web/react/suggestions";
 
 import type { PlacedCategory } from "../../shared/category_tree.ts";
 import { food_label, food_unit_problems, normalize_food, nutrients, serving_unit, type Food, type NutrientInfo, type Portion } from "../../shared/diet/model.ts";
-import type { LookupReply, LookupResult } from "../../shared/diet/lookup.ts";
+import type { LookupResult } from "../../shared/diet/lookup.ts";
 import type { DietData } from "../../shared/diet/store.ts";
-import { calls } from "../api.ts";
-import { CategoryBrowser, CategoryEditor, CategoryPaths, category_paths_text } from "../categories.tsx";
-import { HistoryButton } from "../history/HistoryView.tsx";
-import { attempt, error_text, format_amount, format_nutrient } from "./format.ts";
-import { GroupToggle, NutrientFields, serving_label, use_category_view, type ListRow } from "./widgets.tsx";
+import { attempt, calls } from "../api.ts";
+import { CategoryBrowser, CategoryEditor, CategoryPaths, category_paths_text, GroupToggle, use_category_view, type ListRow } from "../categories.tsx";
+import { FormButtons } from "../forms.tsx";
+import { LookupPanel } from "../lookup.tsx";
+import { confirm_delete, row_actions_column } from "../rows.tsx";
+import { format_amount, format_nutrient } from "./format.ts";
+import { NutrientFields, serving_label } from "./widgets.tsx";
 
 // ── Form ─────────────────────────────────────────────────────────────────────
 
@@ -35,48 +37,26 @@ interface FoodFormProps {
 }
 
 function Lookup({ has_usda_key, on_use }: { has_usda_key: boolean; on_use: (result: LookupResult) => void }) {
-  const [reply, set_reply] = useState<LookupReply | null>(null);
-  const [searching, set_searching] = useState(false);
-  const [failure, set_failure] = useState("");
-
-  async function search(query: string): Promise<void> {
-    if (!query.trim()) return set_reply(null);
-    set_searching(true);
-    set_failure("");
-    try {
-      set_reply(await calls().search_online_foods(query));
-    } catch (error) {
-      set_failure(error_text(error));
-      set_reply(null);
-    } finally {
-      set_searching(false);
-    }
-  }
-
-  const errors = [failure, ...(reply?.errors ?? [])].filter(Boolean);
   return (
-    <div className="stack tight">
-      <SearchBox label={has_usda_key ? "Search USDA and Open Food Facts" : "Search Open Food Facts"} value="" submit_label="Search" on_submit={(query) => void search(query)} />
-      {!has_usda_key && <p className="muted small">Set a USDA FoodData Central API key in Settings to also search USDA.</p>}
-      {searching && <p className="muted" role="status">Searching…</p>}
-      {errors.map((error) => (
-        <p key={error} className="tone-bad" role="alert">{error}</p>
-      ))}
-      {reply && !searching && (
-        <ul className="plain-list diet-results" aria-label="Lookup results">
-          {reply.results.length === 0 && <li className="muted">No results.</li>}
-          {reply.results.map((result) => (
-            <li key={result.key} className="diet-result">
-              <span>
-                {result.name}
-                <span className="muted small"> · {[result.brand, result.source].filter(Boolean).join(" · ")}</span>
-              </span>
-              <button type="button" aria-label={`Use ${result.name}`} onClick={() => { on_use(result); set_reply(null); }}>Use</button>
-            </li>
-          ))}
-        </ul>
+    <LookupPanel<LookupResult>
+      label={has_usda_key ? "Search USDA and Open Food Facts" : "Search Open Food Facts"}
+      results_label="Lookup results"
+      search={(query) => calls().search_online_foods(query)}
+      empty_text="No results."
+      key_of={(result) => result.key}
+      row={(result, pick) => (
+        <div className="result-row">
+          <span>
+            {result.name}
+            <span className="muted small"> · {[result.brand, result.source].filter(Boolean).join(" · ")}</span>
+          </span>
+          <button type="button" aria-label={`Use ${result.name}`} onClick={pick}>Use</button>
+        </div>
       )}
-    </div>
+      on_pick={on_use}
+    >
+      {!has_usda_key && <p className="muted small">Set a USDA FoodData Central API key in Settings to also search USDA.</p>}
+    </LookupPanel>
   );
 }
 
@@ -98,7 +78,7 @@ function PortionRows({ food, units, on_change }: { food: Food; units: string[]; 
           ...food.portions.filter((other) => other.unit && other.unit !== portion.unit && other.unit !== food.serving_unit).map((other): [string, string] => [other.unit, other.unit]),
         ];
         return (
-          <div key={index} className="diet-inline diet-portion">
+          <div key={index} className="inline-row diet-portion">
             <NumberField label="How many" bare min={0.01} value={portion.amount} on_change={(amount) => set_portion(index, { amount: amount ?? 1 })} />
             <ComboField label="Unit" placeholder="tortilla" value={portion.unit} options={units} on_change={(unit) => set_portion(index, { unit })} />
             <span aria-hidden="true">=</span>
@@ -151,7 +131,7 @@ export function FoodForm({ initial, data, energy, shown, has_usda_key, on_done }
             <ComboField id="diet-food-brand" label="Brand" placeholder="Optional" value={food.brand} options={data.brands} on_change={(brand) => change({ brand })} />
           </FormRow>
           <FormRow label="Serving" id="diet-food-serving">
-            <div className="diet-inline">
+            <div className="inline-row">
               <NumberField label="Serving size" bare min={0.01} value={food.serving_size} on_change={(size) => change({ serving_size: size ?? 100 })} />
               <ComboField id="diet-food-serving" label="Serving unit" placeholder="g, ml, cup…" value={food.serving_unit} options={data.units} on_change={(serving_unit) => change({ serving_unit })} />
             </div>
@@ -167,10 +147,7 @@ export function FoodForm({ initial, data, energy, shown, has_usda_key, on_done }
           </FormRow>
         </div>
         <NutrientFields shown={shown} values={food.nutrients} energy={energy} on_change={(key, value) => set_food((current) => ({ ...current, nutrients: { ...current.nutrients, [key]: value } }))} />
-        <div className="form-actions diet-inline">
-          <button type="submit" className="accent solid" disabled={!food.name.trim() || saving}>Save</button>
-          <button type="button" onClick={on_done}>Cancel</button>
-        </div>
+        <FormButtons can_save={Boolean(food.name.trim()) && !saving} on_cancel={on_done} />
       </form>
     </>
   );
@@ -196,21 +173,14 @@ function food_columns(energy: EnergyUnit, categories: PlacedCategory[], on_edit:
     nutrient(1),
     nutrient(2),
     nutrient(3),
-    {
-      label: "Actions",
-      id: "actions",
-      header: <span className="visually-hidden">Actions</span>,
-      class: "actions-cell",
+    row_actions_column<ListRow<Food>>({
+      name: (row) => food_label(row.item),
+      edit: (row) => on_edit(row.item),
+      history: (row) => ({ kind: "food", item_id: row.item.id }),
+      remove: (row) => on_delete(row.item),
       width: 150,
       hideable: false,
-      cell: (row) => (
-        <div className="row-actions">
-          <button type="button" aria-label={`Edit ${food_label(row.item)}`} onClick={() => on_edit(row.item)}>Edit</button>
-          <HistoryButton kind="food" item_id={row.item.id} name={food_label(row.item)} />
-          <button type="button" className="danger" aria-label={`Delete ${food_label(row.item)}`} onClick={() => on_delete(row.item)}>Delete</button>
-        </div>
-      ),
-    },
+    }),
   ];
 }
 
@@ -222,13 +192,7 @@ export function FoodsTab({ data, energy, shown, has_usda_key }: { data: DietData
   const columns = useMemo(
     () =>
       food_columns(energy, data.categories, set_editing, (food) =>
-        confirm_dialog({
-          title: "Delete food",
-          message: `Delete ${food_label(food)}? Recipes and diary entries that use it will show it as deleted.`,
-          confirm_label: "Delete",
-          danger: true,
-          run: async () => void (await attempt(() => calls().delete_food(food.id))),
-        }),
+        confirm_delete("Delete food", `Delete ${food_label(food)}? Recipes and diary entries that use it will show it as deleted.`, () => attempt(() => calls().delete_food(food.id))),
       ),
     [energy, data.categories],
   );
@@ -241,9 +205,9 @@ export function FoodsTab({ data, energy, shown, has_usda_key }: { data: DietData
         <button type="button" className="accent solid" onClick={() => set_editing("new")}>Add food</button>
         <GroupToggle checked={view.grouped} on_change={view.set_grouped} />
       </Toolbar>
-      <CategoryBrowser categories={data.categories} value={view.filter} on_change={view.set_filter} count_in={view.count_in} uncategorized_count={view.uncategorized_count} />
+      <CategoryBrowser categories={data.categories} view={view} />
       {view.rows.length === 0 ? (
-        <p className="muted">{view.filter ? "No foods in this category." : "No foods yet."}</p>
+        <Empty title={view.filter ? "No foods in this category." : "No foods yet."} />
       ) : (
         <DataTable
           caption="Foods"

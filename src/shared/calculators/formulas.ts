@@ -1,4 +1,4 @@
-// The fitness formulas, from body measures to BMI, body fat, lean mass, energy and the goals a plan gives. Plain
+// The fitness formulas, from body measures to BMI, body fat, lean mass, energy and the daily targets a plan gives. Plain
 // functions on kg, cm, years and kcal, so the store, the page and other programs all work them out the same way.
 
 // ── Measures ─────────────────────────────────────────────────────────────────
@@ -284,13 +284,34 @@ export function calculate(measures: Measures): Calculations {
   };
 }
 
-// ── Goals ────────────────────────────────────────────────────────────────────
+// ── Missing measures ─────────────────────────────────────────────────────────
 
-// What the goals aim for; a 0 leaves that part of the plan out.
+// A measure a result is worked out from: the sex, age, height, a reading or a skinfold.
+export type Need = "sex" | "age" | "height" | "weight" | "body_fat" | "neck" | "waist" | "hips" | Skinfold;
+
+function has_need(need: Need, measures: Measures): boolean {
+  if (need === "sex") return measures.sex !== "";
+  if (need === "age" || need === "height" || need === "weight" || need === "body_fat" || need === "neck" || need === "waist" || need === "hips") return measures[need] > 0;
+  return (measures.skinfolds[need] ?? 0) > 0;
+}
+
+// The needs given that the measures lack, in the order given.
+export function missing_needs(needs: Need[], measures: Measures): Need[] {
+  return needs.filter((need) => !has_need(need, measures));
+}
+
+// What each body fat method is worked out from; without a sex the calipers ask for the men's three sites.
+export function body_fat_needs(method: BodyFatSource, sex: Sex): Need[] {
+  if (method === "reading") return ["body_fat"];
+  if (method === "navy") return sex === "female" ? ["sex", "height", "neck", "waist", "hips"] : ["sex", "height", "neck", "waist"];
+  if (method === "bmi") return ["sex", "age", "weight", "height"];
+  return ["sex", "age", ...caliper_sites(method, sex)];
+}
+
+// ── Diet plan ────────────────────────────────────────────────────────────────
+
+// How the plan reaches the goal weight and what it eats on the way.
 export interface GoalPlan {
-  body_fat: number;
-  bmi: number;
-  waist_to_height: number;
   // Kilograms a week, below 0 to lose.
   weekly_change: number;
   protein_per_kg: number;
@@ -298,58 +319,42 @@ export interface GoalPlan {
   fat_percent: number;
 }
 
-export type GoalKey = "weight" | "body_fat" | "waist" | "calories" | "protein" | "fat" | "carbs";
+export type GoalKey = "calories" | "protein" | "fat" | "carbs";
 
-export const body_goal_keys: GoalKey[] = ["weight", "body_fat", "waist"];
 export const diet_goal_keys: GoalKey[] = ["calories", "protein", "fat", "carbs"];
 
 export interface PlannedGoal {
   key: GoalKey;
-  // In kg, percent, cm, kcal or grams; null when the measures it needs are missing.
+  // In kcal or grams; null when the measures it needs are missing.
   value: number | null;
   // How it was worked out, or what is missing.
   basis: string;
 }
 
-function round_to(value: number, step: number): number {
+export function round_to(value: number, step: number): number {
   const per_unit = 1 / step;
   return Math.round(value * per_unit) / per_unit;
 }
 
-// Each goal the plan gives from the measures, rounded as a goal is set by hand; a measured daily energy replaces the formula's.
-export function plan_goals(measures: Measures, calculations: Calculations, plan: GoalPlan, measured_tdee: number | null = null): PlannedGoal[] {
-  const lean = calculations.composition?.lean_mass ?? 0;
-  const at_body_fat = plan.body_fat > 0 ? weight_at_body_fat(lean, plan.body_fat) : null;
-  const at_bmi = weight_at_bmi(plan.bmi, measures.height);
-  const weight: PlannedGoal = at_body_fat !== null
-    ? { key: "weight", value: round_to(at_body_fat, 0.1), basis: `Keeps today's lean mass at ${plan.body_fat}% body fat` }
-    : at_bmi !== null
-      ? { key: "weight", value: round_to(at_bmi, 0.1), basis: `A BMI of ${plan.bmi} at your height` }
-      : { key: "weight", value: null, basis: "Needs a height, and a target BMI or a target body fat with a body fat reading" };
-  const body_fat: PlannedGoal = plan.body_fat > 0
-    ? { key: "body_fat", value: plan.body_fat, basis: "The target body fat" }
-    : { key: "body_fat", value: null, basis: "Needs a target body fat" };
-  const waist_value = plan.waist_to_height > 0 && measures.height > 0 ? round_to(plan.waist_to_height * measures.height, 0.1) : null;
-  const waist: PlannedGoal = waist_value !== null
-    ? { key: "waist", value: waist_value, basis: `A waist ${plan.waist_to_height} of your height` }
-    : { key: "waist", value: null, basis: "Needs a height and a target waist-to-height ratio" };
-  const diet = plan_diet(measures, measured_tdee ?? calculations.tdee, measured_tdee !== null, plan);
-  return [weight, body_fat, waist, ...diet];
+// The energy a day above or below what is burned that a weekly change of weight takes, in kcal.
+export function daily_energy_change(weekly_change: number): number {
+  return (weekly_change * kcal_per_kg_of_fat) / 7;
 }
 
-function plan_diet(measures: Measures, tdee: number | null, measured: boolean, plan: GoalPlan): PlannedGoal[] {
+// The daily targets the plan gives, rounded as a target is set by hand; a measured daily energy replaces the formula's.
+export function plan_goals(measures: Measures, calculations: Calculations, plan: GoalPlan, measured_tdee: number | null = null): PlannedGoal[] {
+  const tdee = measured_tdee ?? calculations.tdee;
   if (tdee === null || !(measures.weight > 0)) {
     const basis = "Needs a weight, a height and a birth date for the daily energy";
     return diet_goal_keys.map((key) => ({ key, value: null, basis }));
   }
-  const daily_change = (plan.weekly_change * kcal_per_kg_of_fat) / 7;
-  const calories = round_to(tdee + daily_change, 10);
+  const calories = round_to(tdee + daily_energy_change(plan.weekly_change), 10);
   const protein = round_to(plan.protein_per_kg * measures.weight, 1);
   const fat = round_to((calories * plan.fat_percent) / 100 / 9, 1);
   const carbs = Math.max(0, round_to((calories - protein * 4 - fat * 9) / 4, 1));
   const change = plan.weekly_change === 0 ? "to keep your weight" : `to ${plan.weekly_change < 0 ? "lose" : "gain"} at the planned rate`;
   return [
-    { key: "calories", value: calories, basis: `The energy ${measured ? "your log shows you burn" : "you burn"} a day, ${change}` },
+    { key: "calories", value: calories, basis: `The energy ${measured_tdee !== null ? "your log shows you burn" : "you burn"} a day, ${change}` },
     { key: "protein", value: protein, basis: `${plan.protein_per_kg} g per kg of body weight` },
     { key: "fat", value: fat, basis: `${plan.fat_percent}% of the calories` },
     { key: "carbs", value: carbs, basis: "The calories left after protein and fat" },

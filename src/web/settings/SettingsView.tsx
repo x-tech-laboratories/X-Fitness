@@ -12,7 +12,7 @@ import { Loaded } from "@x-tech-laboratories/x-libs/web/react/states";
 import { TrustedCertificates } from "@x-tech-laboratories/x-libs/web/react/certificates";
 import { SyncSettings } from "@x-tech-laboratories/x-libs/web/react/sync_settings";
 
-import { calls, data_watch, page, use_settings } from "../api.ts";
+import { data_watch, page, set_setting, use_settings } from "../api.ts";
 import { page_features } from "../features.tsx";
 
 // ── Units ────────────────────────────────────────────────────────────────────
@@ -101,7 +101,6 @@ function data_category(): SettingsCategory[] {
 
 export function SettingsView() {
   const settings = use_settings();
-  const set_setting = (key: string, value: unknown) => calls().set_setting(key, value);
 
   return (
     <>

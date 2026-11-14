@@ -7,16 +7,18 @@ whenever it can be reached.
 - **Workouts:** exercises with pictures, shown as a table or a grid, filled in from wger or by hand, routines, logged sessions with their sets, rest timer, and progress per exercise.
   Its Training page holds the training calculators: one-rep maxes (Epley, Brzycki, Lombardi, RPE counted) with the
   weight and plates at each share of one, Wilks, DOTS and IPF GoodLift points, a plate calculator, Karvonen heart-rate
-  zones, VO2max from runs, the pulse or a Cooper test, race-time predictions, and each workout's energy, which the
-  diary can add to the day's target.
+  zones, VO2max from runs, the pulse or a Cooper test, and race-time predictions; Reports shows each workout's energy,
+  which the diary can add to the day's target.
 - **Diet:** foods and meals, what was eaten each day, and the day's calories and nutrients against targets. Around 80
   nutrients, from the macros to vitamins, minerals and amino acids; a country's nutrition label (US, EU and UK, Canada,
   Australia and NZ) picks the ones shown and a region's reference intakes the targets, each changeable by hand.
-- **Body:** weight, body fat, girths and any measure of your own, with goals and trends, and a 3D body shaped to
-  your readings and to your goals.
-- **Goals:** a plan (target body fat or BMI, waist, weekly change, protein and fat) turned into goals for your body
-  metrics and diet targets, set once or kept following the plan after every reading, with the weeks left to the weight
-  goal at your trend's and the plan's pace.
+- **Body:** weight, height, body fat, girths and any measure of your own, logged a day at a time on Metrics, where
+  each metric is also added and edited and your sex and birth date sit above them; Reports shows goals and trends, and
+  3D a body shaped to your readings and to your goals.
+- **Goals:** where you are now, where you want to be (the weight, body fat and waist metrics' goals, with helpers that
+  fill them in from a BMI, a body fat or your height), and how you get there: a pace, the daily energy and protein and
+  fat that make the diet targets, set once or kept following the plan, and when the goal weight is reached at the
+  plan's rate and at your trend.
 - **Calculators:** BMI, body fat by the US Navy tape, by Jackson-Pollock 3- and 7-site calipers and from BMI, lean
   mass and FFMI, waist-to-height and waist-to-hip, BMR and TDEE, water a day, and the TDEE your diary and weight trend
   actually show, filled in from your latest readings.

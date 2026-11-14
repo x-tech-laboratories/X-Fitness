@@ -142,6 +142,19 @@ export function riegel_time(distance: number, duration: number, to_distance: num
 
 // ── Plates ───────────────────────────────────────────────────────────────────
 
+const kg_a_pound = 0.45359237;
+
+// The bar and plates in kg from their settings, a 20 kg bar and metric plates or a 45 lb bar and pound plates when not set.
+export function bar_and_plates(mass_unit: unknown, bar_setting: unknown, plates_setting: unknown): { bar: number; plates: number[] } {
+  const pounds = mass_unit === "lb";
+  const bar = Number(bar_setting);
+  const chosen = Array.isArray(plates_setting) ? plates_setting.map(Number).filter((plate) => plate > 0) : [];
+  return {
+    bar: bar > 0 ? bar : pounds ? 45 * kg_a_pound : 20,
+    plates: chosen.length ? chosen : pounds ? [45, 35, 25, 10, 5, 2.5].map((plate) => plate * kg_a_pound) : [25, 20, 15, 10, 5, 2.5, 1.25],
+  };
+}
+
 export interface PlateLoad {
   // Each plate on one side, heaviest first, with how many.
   per_side: { plate: number; count: number }[];

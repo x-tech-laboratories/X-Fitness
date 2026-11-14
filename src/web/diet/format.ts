@@ -1,18 +1,12 @@
-// How the Diet section shows its numbers: energy in the unit chosen in Settings, each nutrient in its own g, mg or µg,
-// and a failed call as a toast.
+// How the Diet section shows its numbers: energy in the unit chosen in Settings and each nutrient in its own g, mg or µg.
 
 // ── Imports ──────────────────────────────────────────────────────────────────
 
 import { format_grams, format_measure, from_grams, to_grams, to_shown, to_stored, type EnergyUnit } from "@x-tech-laboratories/x-libs/units";
-import { toast } from "@x-tech-laboratories/x-libs/web/react/toasts";
 
 import type { NutrientInfo } from "../../shared/diet/model.ts";
 
 // ── Units ────────────────────────────────────────────────────────────────────
-
-export function energy_unit_of(settings: Record<string, unknown>): EnergyUnit {
-  return settings.energy_unit === "kJ" ? "kJ" : "kcal";
-}
 
 export function shown_unit(info: NutrientInfo, energy: EnergyUnit): string {
   return info.shown === "energy" ? energy : info.shown;
@@ -41,34 +35,4 @@ export function field_value(value: number): number {
 
 export function format_amount(value: number): string {
   return String(Number(value.toFixed(2)));
-}
-
-// ── Calls ────────────────────────────────────────────────────────────────────
-
-export function error_text(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
-
-// Runs a call and shows its failure as a toast, giving undefined back then.
-export async function attempt<Result>(work: () => Promise<Result>, done?: string): Promise<Result | undefined> {
-  try {
-    const result = await work();
-    if (done) toast(done, { tone: "good" });
-    return result;
-  } catch (error) {
-    toast(error_text(error), { tone: "bad" });
-    return undefined;
-  }
-}
-
-// Whether a call that answers nothing went through, its failure shown as a toast.
-export async function succeeds(work: () => Promise<unknown>, done?: string): Promise<boolean> {
-  try {
-    await work();
-    if (done) toast(done, { tone: "good" });
-    return true;
-  } catch (error) {
-    toast(error_text(error), { tone: "bad" });
-    return false;
-  }
 }

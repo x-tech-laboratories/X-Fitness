@@ -7,14 +7,14 @@ import { useMemo, useState } from "react";
 import { CommitInput, NumberField } from "@x-tech-laboratories/x-libs/web/react/controls";
 import { Toolbar } from "@x-tech-laboratories/x-libs/web/react/layout";
 import { use_pref } from "@x-tech-laboratories/x-libs/web/react/prefs";
+import { Empty } from "@x-tech-laboratories/x-libs/web/react/states";
 import { DataTable, type TableColumn } from "@x-tech-laboratories/x-libs/web/react/table";
 import { ComboField } from "@x-tech-laboratories/x-libs/web/react/suggestions";
 
-import { by_id, food_units, normalize_names, type Food, type GroceryItem } from "../../shared/diet/model.ts";
+import { by_id, food_label, food_units, normalize_names, type Food, type GroceryItem } from "../../shared/diet/model.ts";
 import type { DietData, GroceryChanges } from "../../shared/diet/store.ts";
-import { calls } from "../api.ts";
-import { attempt } from "./format.ts";
-import { GroupToggle, ItemSelect, category_groups, type ListRow } from "./widgets.tsx";
+import { attempt, calls } from "../api.ts";
+import { CategorizedSelect, category_groups, GroupToggle, type ListRow } from "../categories.tsx";
 
 // ── Lines ────────────────────────────────────────────────────────────────────
 
@@ -74,7 +74,7 @@ function AddLine({ data, foods, prefill_comment }: { data: DietData; foods: Reco
         void add();
       }}
     >
-      <ItemSelect label="Food" items={data.foods} categories={data.categories} value={food_id} placeholder="Select food…" empty_label="Every food is already listed" exclude={on_list} on_change={choose} />
+      <CategorizedSelect label="Food" items={data.foods} label_of={food_label} categories={data.categories} value={food_id} placeholder="Select food…" empty_label="Every food is already listed" exclude={on_list} on_change={choose} />
       <NumberField label="Amount" bare min={0.01} value={amount} on_change={set_amount} />
       <ComboField label="Unit" placeholder="Unit" value={unit} options={units_for(food, data.units)} on_change={set_unit} on_enter={() => void add()} />
       <ComboField label="Brand" placeholder="Brand" value={brand} options={data.brands} on_change={set_brand} on_enter={() => void add()} />
@@ -134,7 +134,7 @@ export function GroceryTab({ data, settings }: { data: DietData; settings: Recor
         <GroupToggle checked={grouped} on_change={set_grouped} />
         <button type="button" disabled={done_count === 0} onClick={() => void attempt(() => calls().clear_bought_groceries())}>Clear checked ({done_count})</button>
       </Toolbar>
-      {data.grocery.length === 0 ? <p className="muted">Nothing on the list.</p> : <DataTable caption="Grocery list" columns={columns} rows={rows} groups={groups} row_key={(row) => row.key} wrap_class="fit" />}
+      {data.grocery.length === 0 ? <Empty title="Nothing on the list." /> : <DataTable caption="Grocery list" columns={columns} rows={rows} groups={groups} row_key={(row) => row.key} wrap_class="fit" />}
     </div>
   );
 }

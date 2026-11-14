@@ -4,6 +4,7 @@
 // ── Imports ──────────────────────────────────────────────────────────────────
 
 import { useRef, type ChangeEvent } from "react";
+import { describe_error } from "@x-tech-laboratories/x-libs/web/errors";
 import { NumberField, Switch } from "@x-tech-laboratories/x-libs/web/react/controls";
 import type { SettingsSection } from "@x-tech-laboratories/x-libs/web/react/layout";
 import { PageHeading, SettingRow, Stack } from "@x-tech-laboratories/x-libs/web/react/layout";
@@ -13,15 +14,15 @@ import { toast } from "@x-tech-laboratories/x-libs/web/react/toasts";
 import { workout_setting_defaults } from "../../shared/workouts/settings.ts";
 import type { WorkoutLibrary } from "../../shared/workouts/store.ts";
 import { calls, use_data, use_settings } from "../api.ts";
-import { energy_unit_of } from "../diet/format.ts";
 import type { FeaturePage, FeatureSettingsProps } from "../features.tsx";
+import { shown_units } from "../units.ts";
 import { CategoriesTab } from "./CategoriesTab.tsx";
 import { ExercisesTab } from "./ExercisesTab.tsx";
 import { LogTab } from "./LogTab.tsx";
 import { ProgramsTab } from "./ProgramsTab.tsx";
 import { ReportsTab } from "./ReportsTab.tsx";
+import { TrainingSettings } from "./TrainingSettings.tsx";
 import { TrainingTab } from "./TrainingTab.tsx";
-import { units_of } from "./units.ts";
 import "./workouts.css";
 
 // ── View ─────────────────────────────────────────────────────────────────────
@@ -65,12 +66,12 @@ export function WorkoutsView({ parts }: { parts: string[] }) {
 
 // One tab's page, given the library, the settings it reads and the route's parts after the tab.
 function tab_view(tab: TabId, data: WorkoutLibrary, values: Record<string, unknown>, rest: string[]) {
-  const units = units_of(values);
+  const units = shown_units(values);
   const default_rest = setting_number(values, "workouts.default_rest");
   if (tab === "programs") return <ProgramsTab library={data} units={units} default_rest={default_rest} />;
   if (tab === "exercises") return <ExercisesTab library={data} open_id={rest[0] && decodeURIComponent(rest[0])} />;
   if (tab === "reports") return <ReportsTab library={data} units={units} weekly_target={setting_number(values, "workouts.weekly_target")} week_start={Number(values.week_start ?? 1)} />;
-  if (tab === "training") return <TrainingTab settings={values} units={units} energy={energy_unit_of(values)} />;
+  if (tab === "training") return <TrainingTab settings={values} units={units} />;
   if (tab === "categories") return <CategoriesTab />;
   return <LogTab library={data} units={units} default_rest={default_rest} rest_sound={values["workouts.rest_sound"] !== false} />;
 }
@@ -87,10 +88,6 @@ async function read_picked(event: ChangeEvent<HTMLInputElement>): Promise<string
   return text;
 }
 
-function failure_text(error: unknown): string {
-  return `Could not import: ${error instanceof Error ? error.message : String(error)}`;
-}
-
 function WorkoutData() {
   const liftosaur_file = useRef<HTMLInputElement>(null);
 
@@ -104,7 +101,7 @@ function WorkoutData() {
         { tone: "good" },
       );
     } catch (error) {
-      toast(failure_text(error), { tone: "bad" });
+      toast(`Could not import: ${describe_error(error)}`, { tone: "bad" });
     }
   }
 
@@ -137,6 +134,12 @@ export function workouts_settings({ settings, set_setting }: FeatureSettingsProp
           </SettingRow>
         </>
       ),
+    },
+    {
+      id: "workouts-calculators",
+      heading: "Training calculators",
+      hint: "The bar and plates, the lifts and run read on Training, and the energy each kind of exercise burns.",
+      content: <TrainingSettings settings={settings} set_setting={set_setting} />,
     },
     {
       id: "workouts-data",

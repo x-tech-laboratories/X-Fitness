@@ -62,6 +62,7 @@ export function open_store(database: SqlDatabase): void {
   for (const feature of features) migrate(database, feature.migrations, { owner: feature.id });
   install_history(database);
   sync_engine.install(database);
+  for (const feature of features) feature.on_open?.(database);
 }
 
 // ── Calls ────────────────────────────────────────────────────────────────────

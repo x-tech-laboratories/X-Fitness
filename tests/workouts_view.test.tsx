@@ -112,6 +112,18 @@ describe("workouts log", () => {
     expect(await screen.findByRole("listitem", { name: "Deleted exercise set 1" })).toBeTruthy();
   });
 
+  it("offers exercises under the categories that hold some, the uncategorised last", async () => {
+    const store = open_page();
+    store.save_exercise({ name: "Squat", categories: ["Legs"] });
+    store.save_exercise({ name: "Curl" });
+    store.add_workout_category("Empty", null);
+    view(["log"]);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Empty Workout" }));
+    const add = await screen.findByRole("combobox", { name: "Add an exercise" });
+    expect([...add.querySelectorAll("optgroup")].map((group) => group.label)).toEqual(["Legs", "(uncategorized)"]);
+  });
+
   it("counts a rest down from the plan's rest, pauses it, and says when it is over without a chime when that is off", async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     const audio = vi.fn();

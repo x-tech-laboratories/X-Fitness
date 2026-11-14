@@ -4,69 +4,32 @@
 // ── Imports ──────────────────────────────────────────────────────────────────
 
 import { useMemo, useState } from "react";
-import { format_local } from "@x-tech-laboratories/x-libs/dates";
 import { format_measure, to_shown, type EnergyUnit } from "@x-tech-laboratories/x-libs/units";
-import { Donut, Meters, type Meter } from "@x-tech-laboratories/x-libs/web/react/charts";
-import { NumberField, PeriodStepper, Segmented, Select } from "@x-tech-laboratories/x-libs/web/react/controls";
+import { Donut, Meters } from "@x-tech-laboratories/x-libs/web/react/charts";
+import { NumberField, Segmented, Select } from "@x-tech-laboratories/x-libs/web/react/controls";
 import { Section, Toolbar } from "@x-tech-laboratories/x-libs/web/react/layout";
-import { use_pref } from "@x-tech-laboratories/x-libs/web/react/prefs";
-import { Loaded } from "@x-tech-laboratories/x-libs/web/react/states";
+import { Empty, Loaded } from "@x-tech-laboratories/x-libs/web/react/states";
 import { DataTable, type TableColumn } from "@x-tech-laboratories/x-libs/web/react/table";
 import { toast } from "@x-tech-laboratories/x-libs/web/react/toasts";
 
 import { shown_nutrients, target_of } from "../../shared/diet/labels.ts";
-import { by_id, meal_at, normalize_meals, nutrient_groups, nutrients, serving_unit, target_key, target_progress, type EntryKind, type Meal, type NutrientInfo, type Nutrients } from "../../shared/diet/model.ts";
+import { by_id, food_label, meal_at, normalize_meals, nutrient_groups, nutrients, serving_unit, target_key, type EntryKind, type Food, type Meal, type Nutrients, type Recipe } from "../../shared/diet/model.ts";
 import type { DayEntry, DietData, MealMacros } from "../../shared/diet/store.ts";
-import { calls, use_data } from "../api.ts";
-import { HistoryButton } from "../history/HistoryView.tsx";
-import { attempt, format_amount, format_nutrient, shown_unit, succeeds, to_shown_value } from "./format.ts";
-import { FoodUnitSelect, ItemSelect } from "./widgets.tsx";
-
-// ── Dates ────────────────────────────────────────────────────────────────────
-
-export function today(): string {
-  return format_local(new Date(), false);
-}
-
-function is_date(value: unknown): value is string {
-  return typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value);
-}
-
-// The day shown is kept for this tab's session, so it survives a visit to another tab and starts at today next time.
-function session_storage(): Storage | undefined {
-  try {
-    return globalThis.sessionStorage;
-  } catch {
-    return undefined;
-  }
-}
+import { attempt, calls, succeeds, use_data } from "../api.ts";
+import { CategorizedSelect } from "../categories.tsx";
+import { DayStepper, use_day } from "../day.tsx";
+import { row_actions_column } from "../rows.tsx";
+import { format_amount, format_nutrient, to_shown_value } from "./format.ts";
+import { target_meters } from "./targets.ts";
+import { FoodUnitSelect } from "./widgets.tsx";
 
 // ── Totals ───────────────────────────────────────────────────────────────────
-
-// One meter per nutrient listed.
-export function target_meters(totals: Nutrients, settings: Record<string, unknown>, energy: EnergyUnit, infos: NutrientInfo[]): Meter[] {
-  return infos.map((info) => {
-    const value = totals[info.key];
-    const progress = target_progress(value, target_of(settings, info.key), info.goal);
-    const shown = format_nutrient(info, value, energy);
-    const target_text = progress.target === null ? "" : ` / ${format_nutrient(info, progress.target, energy)}`;
-    return {
-      label: info.label,
-      href: null,
-      value_text: `${shown}${target_text}${progress.over ? " · over" : ""}`,
-      percent: progress.percent,
-      color: progress.over ? "var(--status-danger)" : "var(--accent)",
-      marks: [],
-      title: progress.target === null ? "No target" : progress.over ? `Over the ${shown_unit(info, energy)} target` : null,
-    };
-  });
-}
 
 // The nutrients Settings shows, a heading over each group after the first.
 export function NutrientTotals({ totals, settings, energy }: { totals: Nutrients; settings: Record<string, unknown>; energy: EnergyUnit }) {
   const shown = shown_nutrients(settings);
   const groups = nutrient_groups.map((group) => ({ ...group, infos: shown.filter((info) => info.group === group.id) })).filter((group) => group.infos.length > 0);
-  if (groups.length === 0) return <p className="muted">No nutrients are shown; switch some on in Settings.</p>;
+  if (groups.length === 0) return <Empty title="No nutrients are shown." hint="Switch some on in Settings." />;
   return (
     <div className="stack">
       {groups.map((group, index) => (
@@ -166,7 +129,7 @@ function LogForm({ date, data, meals }: { date: string; data: DietData; meals: M
           choose("");
         }}
       />
-      <ItemSelect label={kind === "food" ? "Food" : "Recipe"} items={kind === "food" ? data.foods : data.recipes} categories={data.categories} value={ref_id} placeholder={`Select ${kind}…`} on_change={choose} />
+      <CategorizedSelect<Food | Recipe> label={kind === "food" ? "Food" : "Recipe"} items={kind === "food" ? data.foods : data.recipes} label_of={food_label} categories={data.categories} value={ref_id} placeholder={`Select ${kind}…`} on_change={choose} />
       <NumberField label="Amount" bare min={0.01} value={amount} on_change={set_amount} />
       {kind === "food" && ref_id && <FoodUnitSelect label="Unit" food={foods[ref_id]} value={unit} on_change={set_unit} />}
       <button type="submit" className="accent solid" disabled={!ref_id}>Log</button>
@@ -182,7 +145,7 @@ function entry_input({ id, date, kind, ref_id, amount, unit, logged_at, meal }: 
 // ── Tab ──────────────────────────────────────────────────────────────────────
 
 export function DiaryTab({ data, settings, energy }: { data: DietData; settings: Record<string, unknown>; energy: EnergyUnit }) {
-  const [date, set_date] = use_pref("x-fitness-diet-day", today(), is_date, session_storage());
+  const [date, set_date] = use_day({ remember: "x-fitness-diet-day" });
   const day = use_data((api) => api.get_diary_day(date), [date]);
   const eat_back = settings["calculators.eat_back_workouts"] === true;
   const workouts = use_data((api) => (eat_back ? api.list_workout_energy(date, date) : Promise.resolve([])), [date, eat_back]);
@@ -208,27 +171,21 @@ export function DiaryTab({ data, settings, energy }: { data: DietData; settings:
       nutrient(1),
       nutrient(2),
       nutrient(3),
-      {
-        label: "Actions",
-        id: "actions",
-        header: <span className="visually-hidden">Actions</span>,
-        class: "actions-cell",
+      row_actions_column<DayEntry>({
+        name: (entry) => entry.label,
+        buttons: (entry) => <Select label={`Meal of ${entry.label}`} bare options={meal_options(meals)} value={entry.meal} on_change={(meal) => void attempt(() => calls().move_diary_entry(entry.id, meal))} />,
+        history: (entry) => ({ kind: "diary", item_id: entry.id }),
+        remove: (entry) => void remove(entry),
+        remove_text: "Remove",
         width: 330,
-        cell: (entry) => (
-          <div className="row-actions">
-            <Select label={`Meal of ${entry.label}`} bare options={meal_options(meals)} value={entry.meal} on_change={(meal) => void attempt(() => calls().move_diary_entry(entry.id, meal))} />
-            <HistoryButton kind="diary" item_id={entry.id} name={entry.label} />
-            <button type="button" className="danger" aria-label={`Remove ${entry.label}`} onClick={() => void remove(entry)}>Remove</button>
-          </div>
-        ),
-      },
+      }),
     ];
   }, [energy, meals]);
 
   return (
     <div className="stack">
       <Toolbar>
-        <PeriodStepper label="Day" period="day" value={date} on_change={set_date} />
+        <DayStepper day={date} on_change={set_date} />
       </Toolbar>
       <Loaded resource={day}>
         {(loaded) => (
@@ -250,7 +207,7 @@ export function DiaryTab({ data, settings, energy }: { data: DietData; settings:
             <Section title="Eaten">
               <div className="stack tight">
                 {loaded.entries.length === 0 ? (
-                  <p className="muted">Nothing logged for this day.</p>
+                  <Empty title="Nothing logged for this day." />
                 ) : (
                   <DataTable
                     caption="Eaten"

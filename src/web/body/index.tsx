@@ -1,4 +1,4 @@
-// The Body section: its page and its own settings.
+// The Body section: its pages, and no settings of its own.
 
 // ── Imports ──────────────────────────────────────────────────────────────────
 
@@ -7,12 +7,11 @@ import type { SettingsSection } from "@x-tech-laboratories/x-libs/web/react/layo
 import { PageHeading } from "@x-tech-laboratories/x-libs/web/react/layout";
 import { Loaded } from "@x-tech-laboratories/x-libs/web/react/states";
 
-import type { FeaturePage, FeatureSettingsProps } from "../features.tsx";
+import type { FeaturePage } from "../features.tsx";
 import { use_settings } from "../api.ts";
-import { BirthDateSetting, HeightSetting, SexSetting } from "./BodySettings.tsx";
-import { shown_units } from "./format.ts";
-import { LogTab } from "./LogTab.tsx";
+import { shown_units } from "../units.ts";
 import { MetricsTab } from "./MetricsTab.tsx";
+import { YouCard } from "./YouCard.tsx";
 import { ReportsTab } from "./ReportsTab.tsx";
 import "./body.css";
 
@@ -21,16 +20,15 @@ import "./body.css";
 // The 3D tab brings three.js with it, so it loads only when opened.
 const ShapeTab = lazy(() => import("./ShapeTab.tsx").then((module) => ({ default: module.ShapeTab })));
 
-type BodyTab = "log" | "reports" | "shape" | "metrics";
+type BodyTab = "metrics" | "reports" | "shape";
 
 export const body_pages: (FeaturePage & { id: BodyTab })[] = [
-  { id: "log", label: "Log" },
+  { id: "metrics", label: "Metrics" },
   { id: "reports", label: "Reports" },
   { id: "shape", label: "3D" },
-  { id: "metrics", label: "Metrics" },
 ];
 
-// The route's parts after "body": the tab, Log unless named.
+// The route's parts after "body": the tab, Metrics unless another is named, so the old #/body/log opens Metrics too.
 export function BodyView({ parts }: { parts: string[] }) {
   const settings = use_settings();
   const page = body_pages.find((item) => item.id === parts[0]) ?? body_pages[0]!;
@@ -45,8 +43,7 @@ export function BodyView({ parts }: { parts: string[] }) {
             const units = shown_units(values);
             if (tab === "reports") return <ReportsTab units={units} />;
             if (tab === "shape") return <Suspense fallback={<p className="muted">Loading…</p>}><ShapeTab units={units} settings={values} /></Suspense>;
-            if (tab === "metrics") return <MetricsTab units={units} />;
-            return <LogTab units={units} />;
+            return <><YouCard settings={values} /><MetricsTab units={units} /></>;
           }}
         </Loaded>
       </div>
@@ -56,20 +53,7 @@ export function BodyView({ parts }: { parts: string[] }) {
 
 // ── Settings ─────────────────────────────────────────────────────────────────
 
-export function body_settings({ settings, set_setting }: FeatureSettingsProps): SettingsSection[] {
-  const units = shown_units(settings);
-  return [
-    {
-      id: "body",
-      heading: "Body",
-      hint: "Weights and lengths follow the units under General.",
-      content: (
-        <>
-          <HeightSetting height={Number(settings["body.height"]) || 0} units={units} set_setting={set_setting} />
-          <SexSetting sex={String(settings["body.sex"] ?? "")} set_setting={set_setting} />
-          <BirthDateSetting birth_date={String(settings["body.birth_date"] ?? "")} set_setting={set_setting} />
-        </>
-      ),
-    },
-  ];
+// The height is a metric, sex and birth date are edited on Metrics and the 3D looks on the 3D tab, so Body has no section here.
+export function body_settings(): SettingsSection[] {
+  return [];
 }

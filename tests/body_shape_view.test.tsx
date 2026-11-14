@@ -5,12 +5,12 @@ import { DatabaseSync } from "node:sqlite";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { today } from "@x-tech-laboratories/x-libs/dates";
 import type { Client } from "@x-tech-laboratories/x-libs/electron/bridge";
 
 import { bind_methods, open_store, type FitnessMethods } from "../src/shared/store.ts";
 import { set_page_api } from "../src/web/api.ts";
 import { BodyView } from "../src/web/body/index.tsx";
-import { today } from "../src/web/body/LogTab.tsx";
 
 // The canvas needs WebGL, so each viewer stands in as a box naming its label, every body's colour and opacity, and whether it is shaded.
 vi.mock("../src/web/body/BodyViewer.tsx", () => ({

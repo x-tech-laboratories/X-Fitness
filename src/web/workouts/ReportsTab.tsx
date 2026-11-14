@@ -4,8 +4,9 @@
 // ── Imports ──────────────────────────────────────────────────────────────────
 
 import { useState } from "react";
-import { format_local } from "@x-tech-laboratories/x-libs/dates";
-import { BarChart, Donut, LineChart, Sparkline, Strip } from "@x-tech-laboratories/x-libs/web/react/charts";
+import { today as today_here } from "@x-tech-laboratories/x-libs/dates";
+import { format_number } from "@x-tech-laboratories/x-libs/units";
+import { Donut, LineChart, Sparkline } from "@x-tech-laboratories/x-libs/web/react/charts";
 import { Select } from "@x-tech-laboratories/x-libs/web/react/controls";
 import { Card, Cards, Facts, Section, Stack } from "@x-tech-laboratories/x-libs/web/react/layout";
 import { Empty, Loaded } from "@x-tech-laboratories/x-libs/web/react/states";
@@ -15,33 +16,19 @@ import { measurement_of, type Exercise, type LoggedSet, type Measurement } from 
 import type { ExerciseStats, TrendMetric, TrendPoint, WeekTotals } from "../../shared/workouts/reports.ts";
 import type { WorkoutLibrary } from "../../shared/workouts/store.ts";
 import { use_data } from "../api.ts";
+import { epoch_of } from "../dates.ts";
+import type { ShownUnits } from "../units.ts";
 import { ExerciseSelect } from "./controls.tsx";
-import { field_to_shown, format_field, format_number, format_weight, type ShownUnits } from "./units.ts";
+import { field_to_shown, format_field, format_weight } from "./units.ts";
+import { format_metric, meets_target, week_metrics, WeeklyWorkoutsChart, type FigureKind, type WeekMetric } from "./weekly_chart.tsx";
+import { WorkoutEnergy } from "./WorkoutEnergy.tsx";
 
 // ── Wording ──────────────────────────────────────────────────────────────────
 
 const ranges = [8, 12, 26, 52];
 
-type WeekMetric = "volume" | "sets" | "workouts" | "duration" | "distance";
-
-// A week's total or a trend point's value, converted and with its unit.
-function format_metric(kind: "weight" | "distance" | "duration" | "count", value: number, units: ShownUnits, suffix = ""): string {
-  if (kind === "weight") return format_field("weight", value, units);
-  if (kind === "distance") return format_field("distance", value, units);
-  if (kind === "duration") return format_field("duration", value, units);
-  return `${format_number(value)}${suffix ? ` ${suffix}` : ""}`;
-}
-
-const week_metrics: { key: WeekMetric; label: string; kind: "weight" | "distance" | "duration" | "count"; suffix?: string }[] = [
-  { key: "volume", label: "Volume", kind: "weight" },
-  { key: "sets", label: "Sets", kind: "count", suffix: "sets" },
-  { key: "workouts", label: "Workouts", kind: "count", suffix: "workouts" },
-  { key: "duration", label: "Duration", kind: "duration" },
-  { key: "distance", label: "Distance", kind: "distance" },
-];
-
 // Which curves are worth drawing follows how the exercise is measured.
-function trend_metrics(measurement: Measurement): { key: TrendMetric; label: string; kind: "weight" | "distance" | "duration" | "count"; suffix?: string }[] {
+function trend_metrics(measurement: Measurement): { key: TrendMetric; label: string; kind: FigureKind; suffix?: string }[] {
   switch (measurement) {
     case "weight":
       return [
@@ -120,8 +107,6 @@ function set_label(set: LoggedSet, measurement: Measurement, units: ShownUnits):
   return parts.join(" × ") || "—";
 }
 
-const epoch_of = (day: string) => Date.parse(`${day}T00:00:00Z`) / 1000;
-
 // The figure a sparkline follows for the measurement, the same one its Best column leads with.
 const spark_metrics: Record<Measurement, TrendMetric> = { weight: "one_rep_max", bodyweight: "top_reps", duration: "duration", cardio: "distance" };
 
@@ -158,9 +143,9 @@ function ExerciseReportPanel({ exercise_id, units }: { exercise_id: string; unit
               series={[{ label: metric.label, color: "var(--series-1)", points: data.trend.map((point): [number, number] => [epoch_of(point.date), point[metric.key]]) }]}
             />
             {data.history.length === 0 ? (
-              <p className="muted">Not done yet.</p>
+              <Empty title="Not done yet." />
             ) : (
-              <ul className="workouts-plan" aria-label="History">
+              <ul className="close-list" aria-label="History">
                 {data.history.map((record, index) => (
                   <li key={`${record.workout_id}-${index}`}>
                     <strong>{record.date}</strong>
@@ -192,7 +177,7 @@ export function ReportsTab({ library, units, weekly_target, week_start, today }:
   const [weeks, set_weeks] = useState(12);
   const [week_metric, set_week_metric] = useState<WeekMetric>("volume");
   const [exercise_id, set_exercise_id] = useState("");
-  const day = today ?? format_local(new Date(), false);
+  const day = today ?? today_here();
   const report = use_data((api) => api.get_workout_report({ weeks, today: day, week_start }), [weeks, day, week_start]);
   const metric = week_metrics.find((item) => item.key === week_metric)!;
 
@@ -203,7 +188,7 @@ export function ReportsTab({ library, units, weekly_target, week_start, today }:
 
   const week_columns: TableColumn<WeekTotals>[] = [
     { label: "Week of", cell: (week) => week.week_start },
-    { label: "Workouts", cell: (week) => <span className={week.workouts >= weekly_target ? "tone-good" : undefined}>{`${week.workouts} / ${weekly_target}`}</span> },
+    { label: "Workouts", cell: (week) => <span className={meets_target(week.workouts, weekly_target) ? "tone-good" : undefined}>{`${week.workouts} / ${weekly_target}`}</span> },
     { label: "Sets", cell: (week) => week.sets },
     { label: `Volume (${units.mass})`, cell: (week) => format_number(field_to_shown("weight", week.volume, units)) },
     { label: "Duration (min)", cell: (week) => format_number(week.duration / 60) },
@@ -250,12 +235,15 @@ export function ReportsTab({ library, units, weekly_target, week_start, today }:
               </>
             }
           >
-            <BarChart
+            <WeeklyWorkoutsChart
+              weeks={data.weeks}
+              days={data.days}
+              weekly_target={weekly_target}
+              units={units}
+              metric={week_metric}
               title={`${metric.label} per week`}
-              format={(value) => format_metric(metric.kind, value, units, metric.suffix)}
-              bars={data.weeks.map((week) => ({ label: `Week of ${week.week_start}`, value: week[week_metric], color: week_metric === "workouts" && week.workouts >= weekly_target ? "var(--status-success)" : "var(--series-1)" }))}
+              strip_title="Days trained"
             />
-            <Strip title="Days trained" cells={data.days.map((item) => ({ label: `${item.date}: ${item.workouts ? `${item.sets} sets` : "rest"}`, ok: item.workouts > 0 ? true : null }))} />
             <DataTable columns={week_columns} rows={[...data.weeks].reverse()} row_key={(week) => week.week_start} />
           </Section>
 
@@ -276,7 +264,7 @@ export function ReportsTab({ library, units, weekly_target, week_start, today }:
                   {board.rows.length === 0 ? (
                     <p className="muted small">Nothing ranked yet.</p>
                   ) : (
-                    <ol className="workouts-board">
+                    <ol className="close-list workouts-board">
                       {board.rows.map((row) => (
                         <li key={row.exercise_id}>
                           <button type="button" className="workouts-link" onClick={() => open_exercise(row.exercise_id)}>
@@ -294,13 +282,14 @@ export function ReportsTab({ library, units, weekly_target, week_start, today }:
 
           <section id="workouts-per-exercise">
             <Section title="Per Exercise" tools={<ExerciseSelect label="Exercise to report on" exercises={library.exercises} categories={library.categories} value={exercise_id} placeholder="Pick an exercise…" on_change={set_exercise_id} />}>
-              {exercise_id ? <ExerciseReportPanel key={exercise_id} exercise_id={exercise_id} units={units} /> : <p className="muted">Pick an exercise to see its records and progress.</p>}
+              {exercise_id ? <ExerciseReportPanel key={exercise_id} exercise_id={exercise_id} units={units} /> : <Empty title="Pick an exercise to see its records and progress." />}
             </Section>
           </section>
 
           <Section title="Personal Bests">
             {data.bests.length === 0 ? <Empty title="Nothing logged yet." /> : <DataTable columns={best_columns} rows={data.bests} row_key={(row) => row.exercise.id} />}
           </Section>
+          <WorkoutEnergy units={units} />
         </Stack>
       )}
     </Loaded>

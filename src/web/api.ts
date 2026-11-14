@@ -1,11 +1,13 @@
-// The page's one way to the data, whichever host it runs on, and a watch every view reloads on when anything changed,
-// here or on another page or device.
+// The page's one way to the data, whichever host it runs on, a watch every view reloads on when anything changed, here
+// or on another page or device, and calls run with their failure shown as a toast.
 
 // ── Imports ──────────────────────────────────────────────────────────────────
 
 import type { Client } from "@x-tech-laboratories/x-libs/electron/bridge";
+import { describe_error } from "@x-tech-laboratories/x-libs/web/errors";
 import { create_watch } from "@x-tech-laboratories/x-libs/web/watch";
 import { use_resource, type Resource } from "@x-tech-laboratories/x-libs/web/react/states";
+import { toast } from "@x-tech-laboratories/x-libs/web/react/toasts";
 
 import { is_read_only, type PageApi } from "../shared/page_api.ts";
 import type { FitnessMethods } from "../shared/store.ts";
@@ -43,6 +45,42 @@ export function page(): PageApi {
 // Every data call, such as calls().get_settings().
 export function calls(): Client<FitnessMethods> {
   return page().calls;
+}
+
+// Saves one setting, such as set_setting("mass_unit", "lb").
+export async function set_setting(key: string, value: unknown): Promise<void> {
+  await calls().set_setting(key, value);
+}
+
+// ── Failures ─────────────────────────────────────────────────────────────────
+
+// Shows anything thrown as a toast.
+export function show_error(error: unknown): void {
+  toast(describe_error(error), { tone: "bad" });
+}
+
+// Runs a call and shows its failure as a toast, giving undefined back then.
+export async function attempt<Result>(work: () => Promise<Result>, done?: string): Promise<Result | undefined> {
+  try {
+    const result = await work();
+    if (done) toast(done, { tone: "good" });
+    return result;
+  } catch (error) {
+    show_error(error);
+    return undefined;
+  }
+}
+
+// Whether a call that answers nothing went through, its failure shown as a toast.
+export async function succeeds(work: () => Promise<unknown>, done?: string): Promise<boolean> {
+  try {
+    await work();
+    if (done) toast(done, { tone: "good" });
+    return true;
+  } catch (error) {
+    show_error(error);
+    return false;
+  }
 }
 
 // ── Hooks ────────────────────────────────────────────────────────────────────

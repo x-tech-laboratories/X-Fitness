@@ -51,7 +51,7 @@ export function RestTimerBar({ timer }: { timer: CountdownControls }) {
     <div className="workouts-rest" role="timer" aria-label="Rest timer">
       <strong className="workouts-rest-clock">{format_rest(countdown.remaining)}</strong>
       <ProgressBar value={elapsed} max={countdown.total} label="Rest" detail={countdown.ends_at ? "resting" : "paused"} class_name="workouts-rest-bar" />
-      <span className="workouts-inline">
+      <span className="inline-row">
         <button type="button" onClick={() => timer.extend(30)} aria-label="Add 30 seconds">
           +30s
         </button>

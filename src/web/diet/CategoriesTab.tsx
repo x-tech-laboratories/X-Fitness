@@ -3,52 +3,24 @@
 
 // ── Imports ──────────────────────────────────────────────────────────────────
 
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
+import { Empty } from "@x-tech-laboratories/x-libs/web/react/states";
 import { DataTable, type TableColumn } from "@x-tech-laboratories/x-libs/web/react/table";
 
 import type { PlacedCategory } from "../../shared/category_tree.ts";
 import { category_usage, unit_usage } from "../../shared/diet/model.ts";
 import type { DietData } from "../../shared/diet/store.ts";
-import { calls } from "../api.ts";
-import { CategoryManager, RenameField } from "../categories.tsx";
-import { attempt, succeeds } from "./format.ts";
-
-// ── Naming ───────────────────────────────────────────────────────────────────
-
-function NewName({ label, on_add }: { label: string; on_add: (name: string) => Promise<boolean> }) {
-  const [draft, set_draft] = useState("");
-  return (
-    <form
-      className="toolbar diet-log"
-      onSubmit={(event) => {
-        event.preventDefault();
-        if (draft.trim()) void on_add(draft).then((added) => added && set_draft(""));
-      }}
-    >
-      <input type="text" aria-label={`New ${label.toLowerCase()}`} placeholder={`New ${label.toLowerCase()}…`} value={draft} onChange={(event) => set_draft(event.currentTarget.value)} />
-      <button type="submit" className="accent solid" disabled={!draft.trim()}>Add {label.toLowerCase()}</button>
-    </form>
-  );
-}
+import { attempt, calls, succeeds } from "../api.ts";
+import { CategoryManager, count_column } from "../categories.tsx";
+import { AddNameForm, use_rename } from "../forms.tsx";
+import { row_actions_column } from "../rows.tsx";
 
 // ── Categories ───────────────────────────────────────────────────────────────
 
 export function CategoriesTab({ data }: { data: DietData }) {
   const usage = (category: PlacedCategory, with_nested: boolean) => category_usage(data.foods, data.recipes, category.id, data.categories, with_nested);
-  const count = (category: PlacedCategory, kind: "foods" | "recipes") => {
-    const direct = usage(category, false)[kind];
-    const nested = usage(category, true)[kind];
-    return (
-      <>
-        {direct}
-        {nested > direct && <span className="muted small"> ({nested} with nested)</span>}
-      </>
-    );
-  };
-  const count_columns: TableColumn<PlacedCategory>[] = [
-    { label: "Foods", id: "foods", class: "number", cell: (category) => count(category, "foods") },
-    { label: "Recipes", id: "recipes", class: "number", cell: (category) => count(category, "recipes") },
-  ];
+  const counts = (kind: "foods" | "recipes") => (category: PlacedCategory): [number, number] => [usage(category, false)[kind], usage(category, true)[kind]];
+  const count_columns = [count_column("Foods", "foods", counts("foods")), count_column("Recipes", "recipes", counts("recipes"))];
 
   function describe_delete(category: PlacedCategory): string {
     const nested = usage(category, true);
@@ -80,41 +52,32 @@ export function CategoriesTab({ data }: { data: DietData }) {
 // ── Units ────────────────────────────────────────────────────────────────────
 
 export function UnitsTab({ data }: { data: DietData }) {
-  const [editing, set_editing] = useState<string | null>(null);
-
-  function finish_rename(from: string, to: string | null): void {
-    set_editing(null);
-    const target = to?.trim() ?? "";
-    if (target && target !== from) void attempt(() => calls().rename_unit(from, target));
-  }
+  const rename = use_rename<string>((from, to) => void attempt(() => calls().rename_unit(from, to)));
 
   const columns = useMemo((): TableColumn<string>[] => {
     const usage = (unit: string) => unit_usage(data.foods, data.recipes, data.grocery, unit);
     return [
-      { label: "Unit", id: "name", cell: (unit) => (editing === unit ? <RenameField label={`Rename ${unit}`} value={unit} on_done={(to) => finish_rename(unit, to)} /> : unit) },
+      { label: "Unit", id: "name", cell: (unit) => (rename.renaming === unit ? rename.field(unit, unit) : unit) },
       { label: "Foods", id: "foods", class: "number", cell: (unit) => usage(unit).foods },
       { label: "Recipes", id: "recipes", class: "number", cell: (unit) => usage(unit).recipes },
       { label: "Grocery", id: "grocery", class: "number", cell: (unit) => usage(unit).grocery },
-      {
-        label: "Actions",
-        id: "actions",
-        header: <span className="visually-hidden">Actions</span>,
-        class: "actions-cell",
-        width: 170,
-        cell: (unit) => (
-          <div className="row-actions">
-            <button type="button" aria-label={`Rename ${unit}`} onClick={() => set_editing(unit)}>Rename</button>
-            <button type="button" className="danger" aria-label={`Delete ${unit}`} onClick={() => void succeeds(() => calls().delete_unit(unit))}>Delete</button>
-          </div>
+      row_actions_column<string>({
+        name: (unit) => unit,
+        buttons: (unit) => (
+          <button type="button" aria-label={`Rename ${unit}`} onClick={() => rename.start(unit)}>
+            Rename
+          </button>
         ),
-      },
+        remove: (unit) => void succeeds(() => calls().delete_unit(unit)),
+        width: 170,
+      }),
     ];
-  }, [data, editing]);
+  }, [data, rename.renaming]);
 
   return (
     <div className="stack tight">
-      <NewName label="Unit" on_add={(name) => succeeds(() => calls().add_unit(name))} />
-      {data.units.length === 0 ? <p className="muted">No units yet.</p> : <DataTable caption="Units" columns={columns} rows={data.units} row_key={(unit) => unit} />}
+      <AddNameForm label="New unit" button="Add unit" class_name="toolbar diet-log" on_add={(name) => succeeds(() => calls().add_unit(name))} />
+      {data.units.length === 0 ? <Empty title="No units yet." /> : <DataTable caption="Units" columns={columns} rows={data.units} row_key={(unit) => unit} />}
       <p className="muted small">
         Renaming updates every food, recipe and grocery line using the unit. Renaming onto an existing unit merges the two. A unit still in use cannot be deleted:
         rename it onto another unit first, which moves everything over.
