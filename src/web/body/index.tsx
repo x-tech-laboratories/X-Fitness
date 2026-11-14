@@ -10,7 +10,6 @@ import { Loaded } from "@x-tech-laboratories/x-libs/web/react/states";
 import type { FeaturePage } from "../features.tsx";
 import { use_settings } from "../api.ts";
 import { shown_units } from "../units.ts";
-import { LogTab } from "./LogTab.tsx";
 import { MetricsTab } from "./MetricsTab.tsx";
 import { YouCard } from "./YouCard.tsx";
 import { ReportsTab } from "./ReportsTab.tsx";
@@ -21,16 +20,15 @@ import "./body.css";
 // The 3D tab brings three.js with it, so it loads only when opened.
 const ShapeTab = lazy(() => import("./ShapeTab.tsx").then((module) => ({ default: module.ShapeTab })));
 
-type BodyTab = "log" | "reports" | "shape" | "metrics";
+type BodyTab = "metrics" | "reports" | "shape";
 
 export const body_pages: (FeaturePage & { id: BodyTab })[] = [
-  { id: "log", label: "Log" },
+  { id: "metrics", label: "Metrics" },
   { id: "reports", label: "Reports" },
   { id: "shape", label: "3D" },
-  { id: "metrics", label: "Metrics" },
 ];
 
-// The route's parts after "body": the tab, Log unless named.
+// The route's parts after "body": the tab, Metrics unless another is named, so the old #/body/log opens Metrics too.
 export function BodyView({ parts }: { parts: string[] }) {
   const settings = use_settings();
   const page = body_pages.find((item) => item.id === parts[0]) ?? body_pages[0]!;
@@ -45,8 +43,7 @@ export function BodyView({ parts }: { parts: string[] }) {
             const units = shown_units(values);
             if (tab === "reports") return <ReportsTab units={units} />;
             if (tab === "shape") return <Suspense fallback={<p className="muted">Loading…</p>}><ShapeTab units={units} settings={values} /></Suspense>;
-            if (tab === "metrics") return <><YouCard settings={values} /><MetricsTab units={units} /></>;
-            return <LogTab units={units} />;
+            return <><YouCard settings={values} /><MetricsTab units={units} /></>;
           }}
         </Loaded>
       </div>

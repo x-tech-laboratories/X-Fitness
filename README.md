@@ -12,8 +12,9 @@ whenever it can be reached.
 - **Diet:** foods and meals, what was eaten each day, and the day's calories and nutrients against targets. Around 80
   nutrients, from the macros to vitamins, minerals and amino acids; a country's nutrition label (US, EU and UK, Canada,
   Australia and NZ) picks the ones shown and a region's reference intakes the targets, each changeable by hand.
-- **Body:** weight, height, body fat, girths and any measure of your own, with goals and trends, and a 3D body shaped
-  to your readings and to your goals; your sex and birth date sit beside the metrics.
+- **Body:** weight, height, body fat, girths and any measure of your own, logged a day at a time on Metrics, where
+  each metric is also added and edited and your sex and birth date sit above them; Reports shows goals and trends, and
+  3D a body shaped to your readings and to your goals.
 - **Goals:** where you are now, where you want to be (the weight, body fat and waist metrics' goals, with helpers that
   fill them in from a BMI, a body fat or your height), and how you get there: a pace, the daily energy and protein and
   fat that make the diet targets, set once or kept following the plan, and when the goal weight is reached at the

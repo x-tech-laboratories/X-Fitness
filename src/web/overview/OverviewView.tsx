@@ -56,7 +56,7 @@ function Training({ report, weekly_target, units }: { report: WorkoutReport; wee
 function Body({ metrics, history, units }: { metrics: MetricSummary[]; history: HistoryDay[]; units: ShownUnits }) {
   const shown = metrics.filter((metric) => history.some((day) => day.values[metric.id] !== undefined));
   return (
-    <Section title="Body" tools={<a href="#/body/log">Log</a>}>
+    <Section title="Body" tools={<a href="#/body/metrics">Metrics</a>}>
       {shown.length === 0 ? (
         <Empty title={`No readings in the last ${body_days} days.`} />
       ) : (

@@ -1,5 +1,12 @@
 /* Layout only; the Body section's look comes from Halon's tokens and stylesheet. */
 
+/* On a phone each metric's card keeps its name, reading and Edit, and leaves the previous reading and goal to wider screens. */
+@media (max-width: 640px) {
+  table.responsive td.body-wide-only {
+    display: none;
+  }
+}
+
 .body-note {
   display: flex;
   max-width: var(--measure);

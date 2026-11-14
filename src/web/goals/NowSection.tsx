@@ -80,7 +80,7 @@ function YouTiles({ report }: { report: CalculationsReport }) {
 
 export function NowSection({ report, units }: { report: CalculationsReport; units: ShownUnits }) {
   return (
-    <Section title="Where I am now" tools={<a href="#/body/log">Add a reading in Body → Log</a>}>
+    <Section title="Where I am now" tools={<a href="#/body/metrics">Add a reading in Body → Metrics</a>}>
       <Readings report={report} units={units} />
       <p className="muted small">
         Sex and birth date are changed under <a href="#/body/metrics">Body → Metrics</a>, with the metrics the readings come from.

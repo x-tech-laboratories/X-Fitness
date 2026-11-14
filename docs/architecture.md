@@ -91,7 +91,8 @@ an entry whose meal is gone goes by its logged time again.
 ## The 3D body
 
 The height is a body metric with the height role, read on or before each day like any reading; sex and birth date are
-the `body.sex` and `body.birth_date` settings, edited on Body → Metrics.
+the `body.sex` and `body.birth_date` settings, edited on Body → Metrics. That page is also where a day's readings are
+logged and each metric is added or opened to edit, move or delete it; `#/body/log` opens it too.
 
 `src/shared/body/shape.ts` morphs MakeHuman's CC0 body mesh with its sex, muscle, weight and height targets and its girth
 targets. `fit_shape` halves each slider in turn until the model's height, mass (its volume times a density from body
