@@ -236,7 +236,7 @@ export function target_of(settings: Record<string, unknown>, key: NutrientKey): 
   return target_override(settings, key) ?? preset_target(settings, key);
 }
 
-// The targets the plan on Calculators → Goals sets again after every change, none when it is not followed.
+// The targets the plan on Goals sets again after every change, none when it is not followed.
 export function plan_keys(settings: Record<string, unknown>): readonly string[] {
   return settings["calculators.follow_diet_targets"] === true ? diet_goal_keys : [];
 }

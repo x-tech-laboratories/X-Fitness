@@ -41,7 +41,9 @@ A feature is two folders:
   Settings page.
 
 The sidebar (`src/web/Sidebar.tsx`) is an X-Libs `Tree`: Overview, then each feature folding open onto its pages, then
-Settings at the foot. The Overview (`src/web/overview/`) draws from the features' own read calls.
+Settings at the foot; a feature with one page is a single row. The Overview (`src/web/overview/`) draws from the features' own read calls.
+A web section can draw on another's store: Goals (`src/web/goals/`) and Workouts → Training show the calculators' calls
+and settings from `src/shared/calculators/`.
 
 `src/shared/store.ts` and `src/web/features.tsx` list the features; nothing else knows them.
 
@@ -72,10 +74,10 @@ Salt is no column: it is sodium shown × 2.5, which the EU label uses. `labels.t
 setting lays the ones switched on or off by hand over it. A target preset (the same four regions' reference amounts)
 gives each nutrient's target, which has no default of its own: `diet.target_<nutrient>` is stored only when something
 sets it, and `target_of` takes it before the preset. Two things set one: the user by hand, and the plan on
-Calculators → Goals while "Diet targets follow the plan" is on, which writes calories, protein, fat and carbs after every
+Goals while "Diet targets follow the plan" is on, which writes calories, protein, fat and carbs after every
 change. So a missing target follows the preset, and a plan or hand value always beats it; never add a default target to
-`settings.ts`. The Diary also raises the day's calorie target by the workouts' energy when Calculators says to eat them
-back. `get_diet_targets` gives each target in force with where it came from.
+`settings.ts`. The Diary also raises the day's calorie target by the workouts' energy when Workouts → Training says to eat
+them back. `get_diet_targets` gives each target in force with where it came from.
 
 Each diary entry belongs to a meal from the `diet.meals` setting (an id, a name, the time from which new entries fall in
 it and its share of the energy target). A new entry takes the meal its logged time falls in, or the one the user picks;

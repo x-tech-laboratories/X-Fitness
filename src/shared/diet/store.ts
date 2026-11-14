@@ -227,7 +227,7 @@ export interface NutrientTarget {
   target: number;
   // What the target preset gives, 0 meaning none.
   preset_target: number;
-  // Whether the target comes from the plan on Calculators → Goals, was set by hand, or follows the preset.
+  // Whether the target comes from the plan on Goals, was set by hand, or follows the preset.
   source: TargetSource;
 }
 

@@ -5,19 +5,21 @@ as an Android app; the desktop and Android apps keep their own copy of the data,
 whenever it can be reached.
 
 - **Workouts:** exercises with pictures, shown as a table or a grid, filled in from wger or by hand, routines, logged sessions with their sets, rest timer, and progress per exercise.
+  Its Training page holds the training calculators: one-rep maxes (Epley, Brzycki, Lombardi, RPE counted) with the
+  weight and plates at each share of one, Wilks, DOTS and IPF GoodLift points, a plate calculator, Karvonen heart-rate
+  zones, VO2max from runs, the pulse or a Cooper test, race-time predictions, and each workout's energy, which the
+  diary can add to the day's target.
 - **Diet:** foods and meals, what was eaten each day, and the day's calories and nutrients against targets. Around 80
   nutrients, from the macros to vitamins, minerals and amino acids; a country's nutrition label (US, EU and UK, Canada,
   Australia and NZ) picks the ones shown and a region's reference intakes the targets, each changeable by hand.
 - **Body:** weight, body fat, girths and any measure of your own, with goals and trends, and a 3D body shaped to
   your readings and to your goals.
+- **Goals:** a plan (target body fat or BMI, waist, weekly change, protein and fat) turned into goals for your body
+  metrics and diet targets, set once or kept following the plan after every reading, with the weeks left to the weight
+  goal at your trend's and the plan's pace.
 - **Calculators:** BMI, body fat by the US Navy tape, by Jackson-Pollock 3- and 7-site calipers and from BMI, lean
   mass and FFMI, waist-to-height and waist-to-hip, BMR and TDEE, water a day, and the TDEE your diary and weight trend
-  actually show, filled in from your latest readings. A plan (target body fat or BMI, waist, weekly change, protein and
-  fat) turns them into goals for your body metrics and diet targets, set once or kept following the plan after every
-  reading, with the weeks left to the weight goal at your trend's and the plan's pace.
-- **Training calculators:** one-rep maxes (Epley, Brzycki, Lombardi, RPE counted) with the weight and plates at each
-  share of one, Wilks, DOTS and IPF GoodLift points, a plate calculator, Karvonen heart-rate zones, VO2max from runs, the
-  pulse or a Cooper test, race-time predictions, and each workout's energy, which the diary can add to the day's target.
+  actually show, filled in from your latest readings.
 - **Overview:** today's eating against its targets, the weeks' training and every body metric's trend on one page.
 
 ## Running it

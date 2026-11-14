@@ -64,7 +64,7 @@ function Pages({ me, on_sign_out }: { me: Me | null; on_sign_out?: () => void })
   const section = feature || is_own ? named_section : "overview";
   const page = feature?.pages.find((candidate) => candidate.id === rest[0]) ?? feature?.pages[0];
   const own_labels: Record<string, string> = { settings: "Settings", history: "History", account: "Your account", users: "Users" };
-  const label = feature ? `${page!.label} · ${feature.label}` : own_labels[section] ?? "Overview";
+  const label = feature ? (feature.pages.length < 2 ? feature.label : `${page!.label} · ${feature.label}`) : own_labels[section] ?? "Overview";
   const view_key = route.parts.join("/");
   const is_admin = me !== null && me.role === me.roles.at(-1);
 

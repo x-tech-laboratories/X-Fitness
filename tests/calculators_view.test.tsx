@@ -12,6 +12,8 @@ import { bind_methods, open_store, type FitnessMethods } from "../src/shared/sto
 import { set_page_api } from "../src/web/api.ts";
 import { CalculatorsView } from "../src/web/calculators/index.tsx";
 import { DietView } from "../src/web/diet/index.tsx";
+import { GoalsView } from "../src/web/goals/index.tsx";
+import { WorkoutsView } from "../src/web/workouts/index.tsx";
 
 // The page's calls answered by a real store on a throwaway database, with a man of 30 at 180 cm and 80 kg.
 function fake_page(): FitnessMethods {
@@ -29,8 +31,9 @@ function fake_page(): FitnessMethods {
   return methods;
 }
 
-function show(parts: string[]) {
-  return render(<><CalculatorsView parts={parts} /><Dialogs /></>);
+function show(section: "calculators" | "goals" | "training") {
+  const view = section === "calculators" ? <CalculatorsView /> : section === "goals" ? <GoalsView /> : <WorkoutsView parts={["training"]} />;
+  return render(<>{view}<Dialogs /></>);
 }
 
 beforeEach(() => {
@@ -46,7 +49,7 @@ afterEach(() => {
 describe("calculators", () => {
   it("fills in from the readings and works out again from numbers typed over them, saving nothing", async () => {
     const store = fake_page();
-    show([]);
+    show("calculators");
 
     expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("Calculators");
     expect(await screen.findByText("24.7")).toBeTruthy();
@@ -62,7 +65,7 @@ describe("calculators", () => {
 
   it("logs a body fat worked out by the Navy method as today's reading", async () => {
     const store = fake_page();
-    show(["calculate"]);
+    show("calculators");
 
     fireEvent.click(await screen.findByRole("button", { name: "Log the US Navy body fat as today's Body Fat" }));
     await waitFor(() => expect(store.get_body_day("2026-11-13").rows.find((row) => row.metric.id === "bodyfat")?.value).toBe(18.4));
@@ -70,7 +73,7 @@ describe("calculators", () => {
 
   it("sets the goals from the plan and keeps the diet's targets following it", async () => {
     const store = fake_page();
-    show(["goals"]);
+    show("goals");
 
     expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("Goals");
     fireEvent.click(await screen.findByRole("button", { name: "Use the plan's weight" }));
@@ -83,7 +86,7 @@ describe("calculators", () => {
   it("projects the weight goal once one is set", async () => {
     const store = fake_page();
     store.save_body_metric({ id: "weight", name: "Weight", kind: "weight", goal: 75 });
-    show(["goals"]);
+    show("goals");
 
     expect(await screen.findByText("Time to goal")).toBeTruthy();
     expect(screen.getByText("-5 kg")).toBeTruthy();
@@ -98,7 +101,7 @@ describe("training calculators", () => {
     const workout = store.start_workout("2026-11-12", null, "");
     const entry = store.add_workout_exercise(workout, squat);
     store.update_workout_set(store.add_workout_set(entry), { reps: 5, weight: 100 });
-    show(["training"]);
+    show("training");
 
     expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("Training");
     expect(await screen.findAllByText("116.7 kg")).toHaveLength(2);
@@ -111,7 +114,7 @@ describe("training calculators", () => {
 
   it("loads a bar with the plates set and keeps a new list of plates", async () => {
     const store = fake_page();
-    show(["training"]);
+    show("training");
 
     const target = await screen.findByRole("textbox", { name: "Weight to load" });
     fireEvent.change(target, { target: { value: "60" } });

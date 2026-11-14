@@ -1,4 +1,4 @@
-// The Calculators section: its pages for working numbers out and for goals from a plan, and its own settings.
+// The Calculators section: its page for working numbers out, and its own settings.
 
 // ── Imports ──────────────────────────────────────────────────────────────────
 
@@ -10,36 +10,22 @@ import { use_settings } from "../api.ts";
 import { shown_units } from "../body/format.ts";
 import { energy_unit_of } from "../diet/format.ts";
 import type { FeaturePage, FeatureSettingsProps } from "../features.tsx";
+import { EnergySettings } from "../goals/GoalsTab.tsx";
 import { CalculateTab } from "./CalculateTab.tsx";
-import { EnergySettings, GoalsTab } from "./GoalsTab.tsx";
-import { TrainingTab } from "./TrainingTab.tsx";
-import { units_of } from "../workouts/units.ts";
 
 // ── View ─────────────────────────────────────────────────────────────────────
 
-export const calculators_pages: FeaturePage[] = [
-  { id: "calculate", label: "Calculators" },
-  { id: "training", label: "Training" },
-  { id: "goals", label: "Goals" },
-];
+export const calculators_pages: FeaturePage[] = [{ id: "calculate", label: "Calculators" }];
 
-// The route's parts after "calculators": the page, the calculators unless named.
-export function CalculatorsView({ parts }: { parts: string[] }) {
+export function CalculatorsView() {
   const settings = use_settings();
-  const page = calculators_pages.find((item) => item.id === parts[0]) ?? calculators_pages[0]!;
 
   return (
     <>
-      <PageHeading title={page.label} subtitle="Calculators" />
+      <PageHeading title="Calculators" />
       <div className="stack">
         <Loaded resource={settings}>
-          {(values) => {
-            const units = shown_units(values);
-            const energy = energy_unit_of(values);
-            if (page.id === "goals") return <GoalsTab settings={values} units={units} energy={energy} />;
-            if (page.id === "training") return <TrainingTab settings={values} units={units_of(values)} energy={energy} />;
-            return <CalculateTab units={units} energy={energy} />;
-          }}
+          {(values) => <CalculateTab units={shown_units(values)} energy={energy_unit_of(values)} />}
         </Loaded>
       </div>
     </>
@@ -53,7 +39,7 @@ export function calculators_settings({ settings, set_setting }: FeatureSettingsP
     {
       id: "calculators",
       heading: "Calculators",
-      hint: "The daily energy and the diet targets from the plan on Calculators → Goals are worked out with these.",
+      hint: "The daily energy and the diet targets from the plan on Goals are worked out with these.",
       content: <EnergySettings settings={settings} set_setting={set_setting} />,
     },
   ];

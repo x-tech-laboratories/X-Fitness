@@ -23,7 +23,7 @@ import {
 import { calls, use_data } from "../api.ts";
 import { today } from "../body/LogTab.tsx";
 import type { FeatureSettingsProps } from "../features.tsx";
-import { field_to_shown, field_to_stored, format_field, format_number, format_rest, format_weight, type ShownUnits } from "../workouts/units.ts";
+import { field_to_shown, field_to_stored, format_field, format_number, format_rest, format_weight, type ShownUnits } from "./units.ts";
 
 // ── Shared ───────────────────────────────────────────────────────────────────
 
