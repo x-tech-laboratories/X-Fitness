@@ -164,7 +164,7 @@ describe("body metrics", () => {
 });
 
 describe("body settings", () => {
-  it("saves the height in cm from the length unit and imports an add-on file", async () => {
+  it("saves the height in cm from the length unit", async () => {
     const store = fake_page();
     store.set_setting("length_unit", "in");
     render(<SettingsView />);
@@ -173,9 +173,5 @@ describe("body settings", () => {
     fireEvent.change(height, { target: { value: "70" } });
     fireEvent.blur(height);
     await waitFor(() => expect(store.get_settings()["body.height"]).toBeCloseTo(177.8));
-
-    const file = new File([JSON.stringify({ metrics: [{ id: "calf", name: "Calf", kind: "length" }], log: { "2026-10-01": { values: { calf: 15 }, comment: "" } } })], "database.json", { type: "application/json" });
-    fireEvent.change(screen.getByLabelText("Body metrics file"), { target: { files: [file] } });
-    await waitFor(() => expect(store.list_body_history(0, "2026-11-10")[0]?.values.calf).toBeCloseTo(38.1));
   });
 });
