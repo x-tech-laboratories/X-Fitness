@@ -115,7 +115,7 @@ export function MealSplit({ rows, target, energy, title }: { rows: MealRow[]; ta
     <div className="stack">
       <Donut
         title={title}
-        parts={rows.map((row, index) => ({ label: row.name, value: Math.round(row.calories), color: `var(--series-${(index % 6) + 1})` }))}
+        parts={rows.map((row, index) => ({ label: row.name, value: Math.round(to_shown(row.calories, energy)), color: `var(--series-${(index % 6) + 1})` }))}
         center={Math.round(to_shown(total, energy)).toLocaleString()}
         center_label={energy}
         message="Nothing eaten yet."
