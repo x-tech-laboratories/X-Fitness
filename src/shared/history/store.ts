@@ -200,6 +200,15 @@ export const item_kinds: ItemKind[] = [
     name_of: (snapshot) => `${goal_label(String(first(snapshot, "body_goals")?.key ?? ""))} goal`,
     summary: (snapshot) => goal_summary(first(snapshot, "body_goals")),
   },
+  {
+    kind: "body_photo",
+    label: "Progress photo",
+    item_table: "body_photos",
+    levels: [{ table: "body_photos", column: "id" }],
+    watches: [{ table: "body_photos", item_columns: ["id"] }],
+    name_of: (snapshot) => `Photo on ${String(first(snapshot, "body_photos")?.date ?? "")}`.trim(),
+    summary: (snapshot) => String(first(snapshot, "body_photos")?.pose || "other"),
+  },
 ];
 
 const histories = new Map<string, History<Snapshot>>(

@@ -31,7 +31,8 @@ import {
   type Point,
   type SeriesStats,
 } from "./readings.ts";
-import { body_days, body_goals, body_metrics, body_readings, body_tables } from "./schema.ts";
+import { check_picture, photo_limit, photo_pose_of, photo_poses, thumbnail_limit, type BodyPhoto, type PhotoInput, type PhotoSummary } from "./photos.ts";
+import { body_days, body_goals, body_metrics, body_photos, body_readings, body_tables } from "./schema.ts";
 import { body_setting_defaults } from "./settings.ts";
 import { girths, type BodyMeasures, type Girth } from "./shape.ts";
 
@@ -256,6 +257,52 @@ function set_goal(database: SqlDatabase, key: string, value: number | null): voi
   else db.insert(body_goals).values({ key: goal_key, value: target }).onConflictDoUpdate({ target: body_goals.key, set: { value: target } }).run();
 }
 
+// ── Photos ───────────────────────────────────────────────────────────────────
+
+const photo_fields = { id: body_photos.id, date: body_photos.date, pose: body_photos.pose, comment: body_photos.comment, thumbnail: body_photos.thumbnail, picture: body_photos.picture };
+
+// Every photo newest day first, each day's in the order photo_poses lists them, the picture standing in for a missing thumbnail.
+function list_photos(database: SqlDatabase): PhotoSummary[] {
+  const rows = drizzle_of(database)
+    .select({ ...photo_fields, picture: sql<string>`CASE WHEN ${body_photos.thumbnail} = '' THEN ${body_photos.picture} ELSE '' END` })
+    .from(body_photos)
+    .orderBy(desc(body_photos.date), asc(body_photos.id))
+    .all();
+  const photos = rows.map(({ picture, ...row }) => ({ ...row, pose: photo_pose_of(row.pose), thumbnail: row.thumbnail || picture }));
+  const place = (pose: string) => photo_poses.findIndex((each) => each.key === pose);
+  return photos.sort((first, second) => second.date.localeCompare(first.date) || place(first.pose) - place(second.pose));
+}
+
+function get_photo(database: SqlDatabase, id: string): BodyPhoto {
+  const row = drizzle_of(database).select(photo_fields).from(body_photos).where(eq(body_photos.id, id)).get();
+  if (!row) throw new Error(`No photo ${id}`);
+  return { ...row, pose: photo_pose_of(row.pose), thumbnail: row.thumbnail || row.picture };
+}
+
+function save_photo(database: SqlDatabase, input: PhotoInput): string {
+  const db = drizzle_of(database);
+  const picture = check_picture(input.picture, photo_limit, "picture");
+  const thumbnail = check_picture(input.thumbnail, thumbnail_limit, "thumbnail");
+  const fields = {
+    date: check_day(input.date),
+    pose: photo_pose_of(input.pose),
+    comment: (input.comment ?? "").trim(),
+    ...(picture === undefined ? {} : { picture }),
+    ...(thumbnail === undefined ? {} : { thumbnail }),
+  };
+  const existing = input.id ? db.select({ id: body_photos.id }).from(body_photos).where(eq(body_photos.id, input.id)).get() : undefined;
+  if (existing && input.id) {
+    // A new picture without a thumbnail drops the old one, which would show the old picture.
+    const thumbnail_kept = picture !== undefined && thumbnail === undefined ? { thumbnail: "" } : {};
+    db.update(body_photos).set({ ...thumbnail_kept, ...fields }).where(eq(body_photos.id, input.id)).run();
+    return input.id;
+  }
+  if (!picture) throw new Error("A new photo needs a picture.");
+  const id = input.id || new_id();
+  db.insert(body_photos).values({ id, ...fields, picture }).run();
+  return id;
+}
+
 // ── Store ────────────────────────────────────────────────────────────────────
 
 export const body_feature = define_feature({
@@ -348,6 +395,16 @@ export const body_feature = define_feature({
 
     // Every day with anything logged in the range, newest first.
     list_body_history: (database: SqlDatabase, days: number, today: string): HistoryDay[] => list_history(database, range_start(check_day(today), days)),
+
+    list_body_photos: (database: SqlDatabase): PhotoSummary[] => list_photos(database),
+
+    get_body_photo: (database: SqlDatabase, id: string): BodyPhoto => get_photo(database, id),
+
+    save_body_photo: (database: SqlDatabase, photo: PhotoInput): string => save_photo(database, photo),
+
+    delete_body_photo: (database: SqlDatabase, id: string): void => {
+      drizzle_of(database).delete(body_photos).where(eq(body_photos.id, id)).run();
+    },
   },
   api: body_api,
   setting_defaults: body_setting_defaults,

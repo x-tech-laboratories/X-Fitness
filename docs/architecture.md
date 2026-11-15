@@ -60,6 +60,14 @@ finds it by key: the first weight metric shows the `weight` goal, a body fat or 
 the 3D body at the goals takes each goal in place of its reading. Goals sync and keep versions like the other body
 rows.
 
+## Progress photos
+
+A progress photo is a row in `body_photos` with its day, pose (front, side, back or other), note and two data URLs: the
+picture shrunk to 2000 pixels on its longest side and a 400-pixel thumbnail, both made in the page with X-Libs
+`shrink_picture`, since `src/shared` has no canvas. `list_body_photos` gives only the thumbnails, so the gallery stays
+light, and `get_body_photo` the whole picture; a photo saved without a thumbnail, such as through MCP, shows its picture
+in its place. Photos sync and keep versions like the other body rows.
+
 ## Next actions
 
 The Overview's Next up table is `list_next_actions` from `src/shared/schedule/`, a feature with no tables that reads

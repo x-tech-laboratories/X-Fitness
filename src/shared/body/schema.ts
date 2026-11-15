@@ -40,5 +40,20 @@ export const body_goals = sqliteTable("body_goals", {
   value: real().notNull(),
 });
 
+// A progress photo: the day it was taken, the pose, and the picture whole and small, each a data URL.
+export const body_photos = sqliteTable(
+  "body_photos",
+  {
+    id: text().primaryKey(),
+    date: text().notNull(),
+    // "front", "side", "back" or "" for any other.
+    pose: text().notNull().default(""),
+    comment: text().notNull().default(""),
+    picture: text().notNull(),
+    thumbnail: text().notNull().default(""),
+  },
+  (table) => [index("body_photos_by_date").on(table.date)],
+);
+
 // Parents first, as sync applies them.
-export const body_tables = [body_metrics, body_readings, body_days, body_goals];
+export const body_tables = [body_metrics, body_readings, body_days, body_goals, body_photos];

@@ -5,6 +5,7 @@
 import type { MethodSpec } from "@x-tech-laboratories/x-libs/api_spec";
 
 import { day, id_of, step, text } from "../api_schemas.ts";
+import { photo_poses } from "./photos.ts";
 import { body_goal_keys, metric_roles } from "./readings.ts";
 
 // ── Calls ────────────────────────────────────────────────────────────────────
@@ -85,4 +86,30 @@ export const body_api = {
     description: "Every day with a reading or note in a range, newest first, its values by metric id.",
     params: [{ name: "days", schema: days_back }, { name: "today", schema: day }],
   },
+  list_body_photos: {
+    description: "Lists the progress photos newest first, each with its day, pose, note and a small picture as a data URL; get_body_photo gives the whole picture.",
+    params: [],
+  },
+  get_body_photo: { description: "One progress photo with its whole picture as a data URL.", params: [{ name: "id", schema: id_of("photo") }] },
+  save_body_photo: {
+    description: "Adds a progress photo, or changes the one with the id given. Gives back its id.",
+    params: [
+      {
+        name: "photo",
+        schema: {
+          type: "object",
+          properties: {
+            id: text("The photo's id when changing it; leave out to add one."),
+            date: day,
+            pose: { type: "string", enum: photo_poses.map((pose) => pose.key), description: "front, side or back; empty for any other." },
+            comment: text("A note on the photo."),
+            picture: text("The picture as a data URL, such as data:image/webp;base64,…, under 4 MB; needed for a new photo, and leaving it out keeps the one it has."),
+            thumbnail: text("A small copy of the picture for the gallery, about 400 pixels on its longest side, under 200 KB; left out, a new picture is shown whole in the gallery."),
+          },
+          required: ["date"],
+        },
+      },
+    ],
+  },
+  delete_body_photo: { description: "Deletes a progress photo.", params: [{ name: "id", schema: id_of("photo") }] },
 } satisfies Record<string, MethodSpec>;
