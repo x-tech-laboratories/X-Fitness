@@ -7,7 +7,6 @@
 import { Fragment, useMemo, useState, type ReactNode } from "react";
 import { TreeChipField } from "@x-tech-laboratories/x-libs/web/react/chip_field";
 import { Select, TreeSelect } from "@x-tech-laboratories/x-libs/web/react/controls";
-import { Dialog } from "@x-tech-laboratories/x-libs/web/react/dialog";
 import { PathText } from "@x-tech-laboratories/x-libs/web/react/layout";
 import { use_pref } from "@x-tech-laboratories/x-libs/web/react/prefs";
 import { Empty } from "@x-tech-laboratories/x-libs/web/react/states";
@@ -214,25 +213,6 @@ export function count_column<Row>(label: string, id: string, counts: (row: Row) 
   };
 }
 
-function MoveDialog({ category, categories, on_move, on_close }: { category: Category; categories: Category[]; on_move: (parent_id: string | null) => void; on_close: () => void }) {
-  const [parent_id, set_parent_id] = useState(category.parent_id ?? "");
-  return (
-    <Dialog
-      title={`Move ${category.name}`}
-      on_close={on_close}
-      form={{ on_submit: () => on_move(parent_id || null), submit_label: "Move" }}
-      buttons={
-        <button type="button" onClick={on_close}>
-          Cancel
-        </button>
-      }
-    >
-      <p className="muted small">Everything inside it moves too; a category of the same name already there merges with it.</p>
-      <TreeSelect label="Move into" items={categories} name_of={(item) => item.name} value={parent_id} blank_label="(top level)" disabled_ids={[...category_subtree(category.id, categories)]} on_change={set_parent_id} />
-    </Dialog>
-  );
-}
-
 // Each call's own failure is the caller's to show; add gives false when it failed, so the name stays typed.
 export interface CategoryCalls {
   add: (name: string, parent_id: string | null) => Promise<unknown>;
@@ -251,7 +231,7 @@ interface CategoryManagerProps<Row extends PlacedCategory> {
   calls: CategoryCalls;
   // Where this browser remembers which categories are folded.
   collapsed_key: string;
-  // A word on renaming, moving and deleting, under the table.
+  // A word on renaming, dragging and deleting, under the table.
   children?: ReactNode;
 }
 
@@ -263,7 +243,6 @@ function is_id_list(value: unknown): value is string[] {
 // or onto one another to nest, and Add inside puts a new one under a row.
 export function CategoryManager<Row extends PlacedCategory>({ categories, count_columns, describe_delete, calls, collapsed_key, children }: CategoryManagerProps<Row>) {
   const rename = use_rename<string>((id, name) => void calls.rename(id, name));
-  const [moving, set_moving] = useState<Row | null>(null);
   const [dragged, set_dragged] = useState<Row | null>(null);
   const [adding_to, set_adding_to] = useState<Row | null>(null);
   const [collapsed_ids, set_collapsed_ids] = use_pref(collapsed_key, [] as string[], is_id_list);
@@ -291,13 +270,10 @@ export function CategoryManager<Row extends PlacedCategory>({ categories, count_
           <button type="button" aria-label={`Rename ${row.name}`} onClick={() => rename.start(row.id)}>
             Rename
           </button>
-          <button type="button" aria-label={`Move ${row.name}`} onClick={() => set_moving(row)}>
-            Move
-          </button>
         </>
       ),
       remove: (row) => confirm_delete(`Delete ${row.name}?`, describe_delete(row), () => calls.remove(row.id)),
-      width: 330,
+      width: 270,
     }),
   ];
 
@@ -338,7 +314,6 @@ export function CategoryManager<Row extends PlacedCategory>({ categories, count_
           }}
         />
       )}
-      {moving && <MoveDialog category={moving} categories={categories} on_move={(parent_id) => void calls.move(moving.id, parent_id, null).then(() => set_moving(null))} on_close={() => set_moving(null)} />}
       {children}
     </div>
   );
