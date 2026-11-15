@@ -1,4 +1,4 @@
-// How a day's energy splits between protein, carbs and fat, as the ring the Overview and the Trends tab draw.
+// How a day's energy splits between protein, carbs and fat, as the ring the Overview and the Reports tab draw.
 
 // ── Imports ──────────────────────────────────────────────────────────────────
 

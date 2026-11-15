@@ -131,7 +131,7 @@ describe("diet diary", () => {
     const { methods } = start();
     const id = methods.save_food(oats);
     methods.add_diary_entry({ date: today(), kind: "food", ref_id: id, amount: 1 });
-    show([]);
+    show(["diary"]);
 
     fireEvent.click(await screen.findByRole("button", { name: "Remove Oats (Quaker)" }));
     expect(await screen.findByText("Nothing logged for this day.")).toBeTruthy();

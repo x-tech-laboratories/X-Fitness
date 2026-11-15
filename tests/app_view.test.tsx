@@ -10,6 +10,7 @@ import type { Client } from "@x-tech-laboratories/x-libs/electron/bridge";
 import { bind_methods, open_store, type FitnessMethods } from "../src/shared/store.ts";
 import { set_page_api } from "../src/web/api.ts";
 import { App } from "../src/web/App.tsx";
+import { workout_energy_by_day } from "../src/web/overview/OverviewView.tsx";
 
 // The page's calls answered by a real store on a throwaway database, as the desktop app would, which needs no sign-in.
 function fake_page(): FitnessMethods {
@@ -56,6 +57,16 @@ describe("sidebar", () => {
     expect(tree.querySelector("[data-id='body/reports']")?.getAttribute("aria-selected")).toBe("true");
   });
 
+  it("lists Reports first in every section and opens it when the section is picked", async () => {
+    fake_page();
+    render(<App />);
+
+    const tree = screen.getByRole("tree", { name: "Sections" });
+    for (const section of ["workouts", "diet", "body"]) expect(tree.querySelector(`[data-id^='${section}/']`)?.getAttribute("data-id")).toBe(`${section}/reports`);
+    go("#/diet");
+    expect(await screen.findByRole("heading", { level: 1, name: /Reports/ })).toBeTruthy();
+  });
+
   it("folds a feature shut, lighting it up in place of its hidden page", () => {
     fake_page();
     render(<App />);
@@ -80,6 +91,20 @@ describe("overview", () => {
     expect(screen.getByText("Nothing logged today.")).toBeTruthy();
     expect(await screen.findByText("80.5 kg")).toBeTruthy();
     expect(screen.getByText(/-1\.5 kg in 90 days/)).toBeTruthy();
+    expect(await screen.findByRole("heading", { name: "Energy and weight, last 30 days" })).toBeTruthy();
+    expect(screen.getByText("Weight (kg)")).toBeTruthy();
+  });
+
+  it("adds up each day's workout energy, leaving out workouts with no weight", () => {
+    const workout = { workout_id: "a", name: "Run", seconds: 1800 };
+    expect(
+      workout_energy_by_day([
+        { ...workout, date: "2026-11-09", calories: 300 },
+        { ...workout, date: "2026-11-08", calories: 200 },
+        { ...workout, date: "2026-11-09", calories: 100 },
+        { ...workout, date: "2026-11-07", calories: null },
+      ]),
+    ).toEqual([["2026-11-08", 200], ["2026-11-09", 400]]);
   });
 });
 
