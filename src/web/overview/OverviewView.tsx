@@ -4,7 +4,7 @@
 
 import { today } from "@x-tech-laboratories/x-libs/dates";
 import type { EnergyUnit } from "@x-tech-laboratories/x-libs/units";
-import { Gauge, Meters } from "@x-tech-laboratories/x-libs/web/react/charts";
+import { DonutTile, Meters } from "@x-tech-laboratories/x-libs/web/react/charts";
 import { Cards, PageHeading, Section, Stack, Tile, Tiles } from "@x-tech-laboratories/x-libs/web/react/layout";
 import { Empty, Loaded, type Resource } from "@x-tech-laboratories/x-libs/web/react/states";
 
@@ -15,7 +15,8 @@ import type { DiaryDay } from "../../shared/diet/store.ts";
 import type { WorkoutReport } from "../../shared/workouts/store.ts";
 import { use_data, use_settings } from "../api.ts";
 import { MetricSparkCard, readings_of } from "../body/cards.tsx";
-import { against_target, target_meters } from "../diet/targets.ts";
+import { format_nutrient, to_shown_value } from "../diet/format.ts";
+import { target_meters } from "../diet/targets.ts";
 import { shown_units, type ShownUnits } from "../units.ts";
 import { meets_target, WeeklyWorkoutsChart } from "../workouts/weekly_chart.tsx";
 
@@ -73,9 +74,17 @@ function Body({ metrics, history, units }: { metrics: MetricSummary[]; history: 
 
 // ── View ─────────────────────────────────────────────────────────────────────
 
-// A tile ringed by its share of a target, or a plain tile when there is no target to be a share of.
-function ShareTile({ label, value, percent, color, href }: { label: string; value: string; percent: number | null; color: string; href: string }) {
-  return percent === null ? <Tile label={label} value={value} href={href} /> : <Gauge label={label} value_text={value} percent={percent} color={color} href={href} />;
+interface Share {
+  amount: string;
+  whole: string;
+  percent: number;
+  color: string;
+}
+
+// A donut filled by its share of a target with the amount in its middle, or a plain tile when there is no target.
+function ShareTile({ label, plain, share, href }: { label: string; plain: string; share: Share | null; href: string }) {
+  if (share === null) return <Tile label={label} value={plain} href={href} />;
+  return <DonutTile label={label} value_text={share.amount} caption={`of ${share.whole}`} percent={share.percent} color={share.color} href={href} />;
 }
 
 function Headline({ day, report, settings, energy, weekly_target }: { day: DiaryDay; report: WorkoutReport; settings: Record<string, unknown>; energy: EnergyUnit; weekly_target: number }) {
@@ -83,9 +92,17 @@ function Headline({ day, report, settings, energy, weekly_target }: { day: Diary
   const last_workout = report.days.findLast((item) => item.workouts > 0);
   const eaten = (key: NutrientKey, label: string) => {
     const info = nutrients.find((item) => item.key === key)!;
-    const progress = target_progress(day.totals[key], target_of(settings, key), info.goal);
-    const color = progress.over ? "var(--status-danger)" : "var(--accent)";
-    return <ShareTile label={label} value={against_target(info, day.totals[key], settings, energy)} percent={progress.target === null ? null : progress.percent} color={color} href="#/diet/diary" />;
+    const value = day.totals[key];
+    const progress = target_progress(value, target_of(settings, key), info.goal);
+    const share = progress.target === null
+      ? null
+      : {
+          amount: Math.round(to_shown_value(info, value, energy)).toLocaleString(),
+          whole: format_nutrient(info, progress.target, energy),
+          percent: progress.percent,
+          color: progress.over ? "var(--status-danger)" : "var(--accent)",
+        };
+    return <ShareTile label={label} plain={format_nutrient(info, value, energy)} share={share} href="#/diet/diary" />;
   };
   return (
     <Tiles>
@@ -93,9 +110,17 @@ function Headline({ day, report, settings, energy, weekly_target }: { day: Diary
       {eaten("protein", "Protein today")}
       <ShareTile
         label="Workouts this week"
-        value={weekly_target > 0 ? `${this_week} / ${weekly_target}` : String(this_week)}
-        percent={weekly_target > 0 ? Math.min(100, (this_week / weekly_target) * 100) : null}
-        color={meets_target(this_week, weekly_target) ? "var(--status-success)" : "var(--accent)"}
+        plain={String(this_week)}
+        share={
+          weekly_target > 0
+            ? {
+                amount: String(this_week),
+                whole: String(weekly_target),
+                percent: Math.min(100, (this_week / weekly_target) * 100),
+                color: meets_target(this_week, weekly_target) ? "var(--status-success)" : "var(--accent)",
+              }
+            : null
+        }
         href="#/workouts/log"
       />
       <Tile label="Last workout" value={last_workout?.date ?? "—"} href="#/workouts/log" />
