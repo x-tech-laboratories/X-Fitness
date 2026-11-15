@@ -21,3 +21,7 @@ jobs:
       - run: npm run build
       - run: npm test
       - run: npm run lint
+  npm-deps-hash:
+    uses: x-tech-laboratories/X-Libs/.github/workflows/npm-deps-hash.yml@worktree-npm-hash-workflow
+    permissions:
+      contents: write
