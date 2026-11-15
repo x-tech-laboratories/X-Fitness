@@ -18,7 +18,7 @@ export function against_target(info: NutrientInfo, value: number, settings: Reco
   return `${format_nutrient(info, value, energy)}${progress.target === null ? "" : ` / ${format_nutrient(info, progress.target, energy)}`}`;
 }
 
-// One meter per nutrient listed.
+// One meter per nutrient listed, with how much of its target was eaten.
 export function target_meters(totals: Nutrients, settings: Record<string, unknown>, energy: EnergyUnit, infos: NutrientInfo[]): Meter[] {
   return infos.map((info) => {
     const value = totals[info.key];
@@ -26,7 +26,7 @@ export function target_meters(totals: Nutrients, settings: Record<string, unknow
     return {
       label: info.label,
       href: null,
-      value_text: `${against_target(info, value, settings, energy)}${progress.over ? " · over" : ""}`,
+      value_text: `${against_target(info, value, settings, energy)}${progress.target === null ? "" : ` · ${Math.round((value / progress.target) * 100)}%`}${progress.over ? " · over" : ""}`,
       percent: progress.percent,
       color: progress.over ? "var(--status-danger)" : "var(--accent)",
       marks: [],
