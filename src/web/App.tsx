@@ -20,6 +20,7 @@ import { Sidebar, SidebarFoot } from "./Sidebar.tsx";
 // ── Sections ─────────────────────────────────────────────────────────────────
 
 const theme = theme_choice("x-fitness-theme");
+const brand_icon = "icon.svg";
 
 // Relative, so a server behind a proxy under a folder keeps it.
 const accounts = create_accounts_client({ base: "api" });
@@ -48,8 +49,8 @@ function SignedInApp() {
   if (account.state === "checking") return null;
   if (account.state === "signed_out") {
     return (
-      <Shell brand="X-Fitness" theme={theme} user={null}>
-        <SignInForm client={accounts} title="X-Fitness" on_signed_in={refresh} />
+      <Shell brand="X-Fitness" brand_icon={brand_icon} theme={theme} user={null}>
+        <SignInForm client={accounts} title="X-Fitness" icon={brand_icon} on_signed_in={refresh} />
       </Shell>
     );
   }
@@ -83,6 +84,7 @@ function Pages({ me, on_sign_out }: { me: Me | null; on_sign_out?: () => void })
   return (
     <Shell
       brand="X-Fitness"
+      brand_icon={brand_icon}
       sidebar={<Sidebar features={page_features} section={section} page={page?.id ?? ""} />}
       sidebar_foot={<SidebarFoot section={section} show_users={is_admin} />}
       theme={theme}

@@ -3,8 +3,10 @@
 // ── Imports ──────────────────────────────────────────────────────────────────
 
 import { use_pref } from "@x-tech-laboratories/x-libs/web/react/prefs";
+import { SyncButton } from "@x-tech-laboratories/x-libs/web/react/sync_settings";
 import { Tree } from "@x-tech-laboratories/x-libs/web/react/tree";
 
+import { data_watch, page } from "./api.ts";
 import type { PageFeature } from "./features.tsx";
 
 // ── Rows ─────────────────────────────────────────────────────────────────────
@@ -73,12 +75,18 @@ export function Sidebar({ features, section, page }: SidebarProps) {
   );
 }
 
-// Users, for an admin signed in on the server, above the Shell's own theme, account and Settings rows.
+// Sync on a device that syncs, and Users for an admin signed in on the server, above the Shell's own theme, account and Settings rows.
 export function SidebarFoot({ section, show_users = false }: { section: string; show_users?: boolean }) {
+  const { device } = page();
   const row = (id: string, label: string) => (
     <a href={`#/${id}`} className={section === id ? "tree-row active" : "tree-row"} aria-current={section === id ? "page" : undefined}>
       <span className="tree-label">{label}</span>
     </a>
   );
-  return show_users ? row("users", "Users") : null;
+  return (
+    <>
+      {device && <SyncButton device={device} subscribe={data_watch.subscribe} on_open_settings={() => (window.location.hash = "/settings")} />}
+      {show_users && row("users", "Users")}
+    </>
+  );
 }
