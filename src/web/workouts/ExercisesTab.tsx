@@ -22,7 +22,7 @@ import { measurement_of, measurements, type Exercise, type Measurement } from ".
 import type { LibraryExercise, WorkoutLibrary } from "../../shared/workouts/store.ts";
 import type { WgerResult } from "../../shared/workouts/wger.ts";
 import { calls, succeeds, use_data } from "../api.ts";
-import { CategoryBrowser, CategoryEditor, CategoryPaths, category_paths_text, use_category_filter } from "../categories.tsx";
+import { CategoryEditor, CategoryFilterSelect, CategoryPaths, category_paths_text, use_category_filter } from "../categories.tsx";
 import { DialogButtons } from "../forms.tsx";
 import { open_item_history } from "../history/HistoryView.tsx";
 import { LookupPanel } from "../lookup.tsx";
@@ -276,8 +276,8 @@ export function ExercisesTab({ library, open_id }: { library: WorkoutLibrary; op
         </button>
         <SearchBox label="Search exercises" value={search} on_input={set_search} />
         <Segmented label="Show exercises as" choices={layouts} value={layout} on_change={set_layout} />
+        <CategoryFilterSelect categories={library.categories} view={filter} />
       </Toolbar>
-      <CategoryBrowser categories={library.categories} view={filter} />
       {visible.length === 0 ? (
         <Empty title="No exercises." hint={library.exercises.length === 0 ? "Add one by hand or look it up in wger." : "Nothing matches the search."} />
       ) : layout === "grid" ? (

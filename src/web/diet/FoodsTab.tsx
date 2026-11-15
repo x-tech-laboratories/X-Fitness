@@ -17,7 +17,7 @@ import { food_label, food_unit_problems, normalize_food, nutrients, serving_unit
 import type { LookupResult } from "../../shared/diet/lookup.ts";
 import type { DietData } from "../../shared/diet/store.ts";
 import { attempt, calls } from "../api.ts";
-import { CategoryBrowser, CategoryEditor, CategoryPaths, category_paths_text, GroupToggle, use_category_view, type ListRow } from "../categories.tsx";
+import { CategoryEditor, CategoryFilterSelect, CategoryPaths, category_paths_text, GroupToggle, use_category_view, type ListRow } from "../categories.tsx";
 import { FormButtons } from "../forms.tsx";
 import { LookupPanel } from "../lookup.tsx";
 import { confirm_delete, row_actions_column } from "../rows.tsx";
@@ -204,8 +204,8 @@ export function FoodsTab({ data, energy, shown, has_usda_key }: { data: DietData
       <Toolbar>
         <button type="button" className="accent solid" onClick={() => set_editing("new")}>Add food</button>
         <GroupToggle checked={view.grouped} on_change={view.set_grouped} />
+        <CategoryFilterSelect categories={data.categories} view={view} />
       </Toolbar>
-      <CategoryBrowser categories={data.categories} view={view} />
       {view.rows.length === 0 ? (
         <Empty title={view.filter ? "No foods in this category." : "No foods yet."} />
       ) : (

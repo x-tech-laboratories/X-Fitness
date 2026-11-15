@@ -1,11 +1,10 @@
 // The category pieces the Diet and Workouts pages share: the category tree managed in one folding table, a filter
-// drawn as the same tree with the grouping and sorting of a list, the pickers on a form, and paths shown
+// picked from the same tree in a dropdown with the grouping and sorting of a list, the pickers on a form, and paths shown
 // with chevrons.
 
 // ── Imports ──────────────────────────────────────────────────────────────────
 
 import { Fragment, useMemo, useState, type ReactNode } from "react";
-import { Chip, Chips } from "@x-tech-laboratories/x-libs/web/react/badges";
 import { TreeChipField } from "@x-tech-laboratories/x-libs/web/react/chip_field";
 import { Select, TreeSelect } from "@x-tech-laboratories/x-libs/web/react/controls";
 import { Dialog } from "@x-tech-laboratories/x-libs/web/react/dialog";
@@ -13,7 +12,6 @@ import { PathText } from "@x-tech-laboratories/x-libs/web/react/layout";
 import { use_pref } from "@x-tech-laboratories/x-libs/web/react/prefs";
 import { Empty } from "@x-tech-laboratories/x-libs/web/react/states";
 import { DataTable, type RowGroup, type Sorting, type TableColumn } from "@x-tech-laboratories/x-libs/web/react/table";
-import { Tree } from "@x-tech-laboratories/x-libs/web/react/tree";
 import { move_for_drop } from "@x-tech-laboratories/x-libs/web/tree";
 
 import { category_path, category_path_text, category_subtree, is_in_category, shown_separator, uncategorized, type Category, type PlacedCategory } from "../shared/category_tree.ts";
@@ -122,40 +120,14 @@ export function use_category_filter<Item extends { categories: string[] }>(items
   return { filter, set_filter, filtered, count_in, uncategorized_count };
 }
 
-// A filter drawn as the category tree: "All categories" and the uncategorised beside it, and each category folding open with its count.
-export function CategoryBrowser({ categories, view }: { categories: PlacedCategory[]; view: CategoryFilter<unknown> }) {
-  const { filter: value, set_filter: on_change, count_in, uncategorized_count } = view;
-  const [collapsed, set_collapsed] = useState<Set<string>>(new Set());
-  return (
-    <div className="stack tight" role="group" aria-label="Filter by category">
-      <Chips>
-        <Chip on_click={() => on_change("")} title="Show every category">
-          All categories
-        </Chip>
-        {uncategorized_count > 0 && (
-          <Chip dashed on_click={() => on_change(uncategorized)}>
-            {uncategorized} <span className="muted">({uncategorized_count})</span>
-          </Chip>
-        )}
-      </Chips>
-      {categories.length > 0 && (
-        <Tree
-          items={categories}
-          label="Categories"
-          name_of={(category) => category.name}
-          render_item={(category) => (
-            <>
-              {category.name} <span className="muted">({count_in(category.id)})</span>
-            </>
-          )}
-          collapsed={collapsed}
-          on_collapsed_change={set_collapsed}
-          selected_id={value === uncategorized ? null : value || null}
-          on_select={(category) => on_change(category.id)}
-        />
-      )}
-    </div>
+// A filter picked from the category tree in a dropdown, "All categories" its blank choice and the uncategorised last.
+export function CategoryFilterSelect({ categories, view }: { categories: PlacedCategory[]; view: CategoryFilter<unknown> }) {
+  const { filter, set_filter, uncategorized_count } = view;
+  const items = useMemo(
+    () => (uncategorized_count > 0 ? [...categories, { id: uncategorized, parent_id: null, name: uncategorized, position: Number.POSITIVE_INFINITY }] : categories),
+    [categories, uncategorized_count],
   );
+  return <TreeSelect label="Filter by category" items={items} name_of={(category) => category.name} value={filter} blank_label="All categories" on_change={set_filter} />;
 }
 
 // ── Grouping ─────────────────────────────────────────────────────────────────

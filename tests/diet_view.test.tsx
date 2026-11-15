@@ -204,26 +204,25 @@ describe("diet foods and recipes", () => {
     expect(methods.get_diet().recipes[0]).toMatchObject({ name: "Porridge", servings: 2, ingredients: [{ food_id: id, amount: 100, unit: "g" }] });
   });
 
-  it("filters foods by a category in the folding tree, clears it, and groups them under their paths", async () => {
+  it("filters foods by a category picked from the tree dropdown, clears it, and groups them under their paths", async () => {
     const { methods } = start();
     methods.save_food({ ...oats, name: "Chicken", brand: "", categories: ["Protein/Meat"] });
     methods.save_food({ ...oats, name: "Apple", brand: "", categories: [] });
     show(["foods"]);
 
     await screen.findByRole("cell", { name: "Apple" });
-    const filter = screen.getByRole("group", { name: "Filter by category" });
+    const filter = screen.getByRole<HTMLSelectElement>("combobox", { name: "Filter by category" });
+    const pick = (name: string) => fireEvent.change(filter, { target: { value: [...filter.options].find((option) => (option.querySelector(".tree-option-name") ?? option).textContent?.trim() === name)!.value } });
     expect([...screen.getByRole("table").querySelectorAll("td .tree-path")].map((path) => path.textContent)).toEqual(["Protein › Meat"]);
-    expect(within(filter).getByText("Meat")).toBeTruthy();
-    fireEvent.click(within(filter).getByText("Meat"));
+    pick("Meat");
     expect(screen.queryByRole("cell", { name: "Apple" })).toBeNull();
     expect(screen.getByRole("cell", { name: "Chicken" })).toBeTruthy();
 
-    fireEvent.click(within(filter).getByRole("button", { name: "All categories" }));
-    fireEvent.click(within(filter).getByRole("button", { name: "(uncategorized) (1)" }));
+    pick("(uncategorized)");
     expect(screen.getByRole("cell", { name: "Apple" })).toBeTruthy();
     expect(screen.queryByRole("cell", { name: "Chicken" })).toBeNull();
 
-    fireEvent.click(within(filter).getByRole("button", { name: "All categories" }));
+    pick("All categories");
     fireEvent.click(screen.getByRole("checkbox", { name: "Group by category" }));
     const headings = [...screen.getByRole("table").querySelectorAll(".tree-path")].map((path) => path.textContent);
     expect(headings).toEqual(expect.arrayContaining(["Protein", "Protein › Meat", "(uncategorized)"]));
