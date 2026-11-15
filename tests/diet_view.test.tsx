@@ -59,8 +59,8 @@ describe("diet diary", () => {
     methods.add_diary_entry({ date: today(), kind: "food", ref_id: id, amount: 50, unit: "g" });
     show(["diary"]);
 
-    expect(await screen.findByText("190 kcal / 300 kcal")).toBeTruthy();
-    expect(screen.getByText("6.5 g / 50 g")).toBeTruthy();
+    expect(await screen.findByText("190 kcal / 300 kcal · 63%")).toBeTruthy();
+    expect(screen.getByText("6.5 g / 50 g · 13%")).toBeTruthy();
     expect(screen.getByRole("cell", { name: "Oats (Quaker)" })).toBeTruthy();
 
     fireEvent.change(screen.getByRole("combobox", { name: "Food" }), { target: { value: id } });
@@ -68,13 +68,13 @@ describe("diet diary", () => {
     fireEvent.change(screen.getByRole("combobox", { name: "Unit" }), { target: { value: "g" } });
     fireEvent.click(screen.getByRole("button", { name: "Log" }));
 
-    expect(await screen.findByText("285 kcal / 300 kcal")).toBeTruthy();
+    expect(await screen.findByText("285 kcal / 300 kcal · 95%")).toBeTruthy();
     expect(calls.add_diary_entry).toHaveBeenCalledWith({ date: today(), kind: "food", ref_id: id, amount: 25, unit: "g", meal: expect.any(String) });
 
     methods.add_diary_entry({ date: today(), kind: "food", ref_id: id, amount: 1 });
     fireEvent.click(screen.getByRole("button", { name: "Next day" }));
     fireEvent.click(await screen.findByRole("button", { name: "Today" }));
-    expect(await screen.findByText("665 kcal / 300 kcal · over")).toBeTruthy();
+    expect(await screen.findByText("665 kcal / 300 kcal · 222% · over")).toBeTruthy();
   });
 
   it("shows the label's nutrients and those switched on, vitamins and minerals never as over", async () => {
@@ -84,8 +84,8 @@ describe("diet diary", () => {
     show(["diary"]);
 
     expect(await screen.findByRole("heading", { name: "Vitamins" })).toBeTruthy();
-    expect(screen.getByText("120 mg / 90 mg")).toBeTruthy();
-    expect(screen.getByText("4.7 mg / 18 mg")).toBeTruthy();
+    expect(screen.getByText("120 mg / 90 mg · 133%")).toBeTruthy();
+    expect(screen.getByText("4.7 mg / 18 mg · 26%")).toBeTruthy();
     // Magnesium is not on the US label.
     expect(screen.queryByText("Magnesium")).toBeNull();
   });
@@ -96,7 +96,7 @@ describe("diet diary", () => {
     methods.add_diary_entry({ date: today(), kind: "food", ref_id: id, amount: 1 });
     show(["diary"]);
 
-    expect(await screen.findByText("1 g / 6 g")).toBeTruthy();
+    expect(await screen.findByText("1 g / 6 g · 17%")).toBeTruthy();
     expect(screen.queryByText("Sodium")).toBeNull();
   });
 

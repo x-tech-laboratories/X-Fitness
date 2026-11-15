@@ -5,7 +5,7 @@
 
 import { parse_local, shift_day, today } from "@x-tech-laboratories/x-libs/dates";
 import { to_shown, type EnergyUnit } from "@x-tech-laboratories/x-libs/units";
-import { Donut, LineChart, StackedBarChart, Strip } from "@x-tech-laboratories/x-libs/web/react/charts";
+import { LineChart, StackedBarChart, Strip } from "@x-tech-laboratories/x-libs/web/react/charts";
 import { Segmented } from "@x-tech-laboratories/x-libs/web/react/controls";
 import { Section, Toolbar } from "@x-tech-laboratories/x-libs/web/react/layout";
 import { use_pref } from "@x-tech-laboratories/x-libs/web/react/prefs";
@@ -16,21 +16,13 @@ import { add_nutrients, empty_nutrients, normalize_meals, scale_nutrients, targe
 import type { DayTotals } from "../../shared/diet/store.ts";
 import { use_data } from "../api.ts";
 import { MealSplit, NutrientTotals, type MealRow } from "./DiaryTab.tsx";
+import { macro_colors, MacroDonut } from "./macros.tsx";
 
 // ── Figures ──────────────────────────────────────────────────────────────────
 
 const ranges = ["7", "30", "90"] as const;
 
 type Range = (typeof ranges)[number];
-
-const macro_colors: [key: "protein" | "carbs" | "fat", label: string, color: string][] = [
-  ["protein", "Protein", "var(--series-1)"],
-  ["carbs", "Carbs", "var(--series-2)"],
-  ["fat", "Fat", "var(--series-3)"],
-];
-
-// The kcal a gram of each macro gives, for its share of the day's energy.
-const kcal_per_gram: Record<"protein" | "carbs" | "fat", number> = { protein: 4, carbs: 4, fat: 9 };
 
 // The average over the days with anything logged, so a day not tracked does not count as a day of fasting.
 export function average_logged_day(days: DayTotals[]): { count: number; average: Nutrients } {
@@ -69,10 +61,10 @@ function Charts({ days, settings, energy }: { days: DayTotals[]; settings: Recor
         </Section>
       )}
       <Section title="Where the energy came from">
-        <Donut
+        <MacroDonut
+          totals={average}
+          energy={energy}
           title={`Energy from each macro, ${count} logged day${count === 1 ? "" : "s"}`}
-          parts={macro_colors.map(([key, label, color]) => ({ label, value: Math.round(average[key] * kcal_per_gram[key]), color }))}
-          center={`${Math.round(to_shown(average.calories, energy)).toLocaleString()}`}
           center_label={`${energy} a day`}
           message="No macros logged in these days."
         />

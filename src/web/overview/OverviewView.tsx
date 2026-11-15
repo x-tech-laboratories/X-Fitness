@@ -9,13 +9,12 @@ import { Cards, PageHeading, Section, Stack, Tile, Tiles } from "@x-tech-laborat
 import { Empty, Loaded, type Resource } from "@x-tech-laboratories/x-libs/web/react/states";
 
 import type { HistoryDay, MetricSummary } from "../../shared/body/store.ts";
-import { target_of } from "../../shared/diet/labels.ts";
-import { nutrients, target_progress, type NutrientKey } from "../../shared/diet/model.ts";
+import { nutrients } from "../../shared/diet/model.ts";
 import type { DiaryDay } from "../../shared/diet/store.ts";
 import type { WorkoutReport } from "../../shared/workouts/store.ts";
 import { use_data, use_settings } from "../api.ts";
 import { MetricSparkCard, readings_of } from "../body/cards.tsx";
-import { format_nutrient, to_shown_value } from "../diet/format.ts";
+import { MacroDonut } from "../diet/macros.tsx";
 import { target_meters } from "../diet/targets.ts";
 import { shown_units, type ShownUnits } from "../units.ts";
 import { meets_target, WeeklyWorkoutsChart } from "../workouts/weekly_chart.tsx";
@@ -31,7 +30,14 @@ const body_days = 90;
 function DietToday({ day, settings, energy }: { day: DiaryDay; settings: Record<string, unknown>; energy: EnergyUnit }) {
   return (
     <Section title="Eaten today" tools={<a href="#/diet/diary">Diary</a>}>
-      {day.entries.length === 0 ? <Empty title="Nothing logged today." /> : <Meters rows={target_meters(day.totals, settings, energy, nutrients.filter((info) => info.group === "macros"))} message="Nothing tracked." />}
+      {day.entries.length === 0 ? (
+        <Empty title="Nothing logged today." />
+      ) : (
+        <Stack>
+          <MacroDonut totals={day.totals} energy={energy} title="Energy from each macro" center_label={energy} message="No macros logged today." />
+          <Meters rows={target_meters(day.totals, settings, energy, nutrients.filter((info) => info.group === "macros"))} message="Nothing tracked." />
+        </Stack>
+      )}
     </Section>
   );
 }
@@ -72,61 +78,32 @@ function Body({ metrics, history, units }: { metrics: MetricSummary[]; history: 
   );
 }
 
-// ── View ─────────────────────────────────────────────────────────────────────
-
-interface Share {
-  amount: string;
-  whole: string;
-  percent: number;
-  color: string;
-}
-
-// A donut filled by its share of a target with the amount in its middle, or a plain tile when there is no target.
-function ShareTile({ label, plain, share, href }: { label: string; plain: string; share: Share | null; href: string }) {
-  if (share === null) return <Tile label={label} value={plain} href={href} />;
-  return <DonutTile label={label} value_text={share.amount} caption={`of ${share.whole}`} percent={share.percent} color={share.color} href={href} />;
-}
-
-function Headline({ day, report, settings, energy, weekly_target }: { day: DiaryDay; report: WorkoutReport; settings: Record<string, unknown>; energy: EnergyUnit; weekly_target: number }) {
+// This week's workouts against the weekly target, and the day of the last one.
+function Workouts({ report, weekly_target }: { report: WorkoutReport; weekly_target: number }) {
   const this_week = report.weeks.at(-1)?.workouts ?? 0;
   const last_workout = report.days.findLast((item) => item.workouts > 0);
-  const eaten = (key: NutrientKey, label: string) => {
-    const info = nutrients.find((item) => item.key === key)!;
-    const value = day.totals[key];
-    const progress = target_progress(value, target_of(settings, key), info.goal);
-    const share = progress.target === null
-      ? null
-      : {
-          amount: Math.round(to_shown_value(info, value, energy)).toLocaleString(),
-          whole: format_nutrient(info, progress.target, energy),
-          percent: progress.percent,
-          color: progress.over ? "var(--status-danger)" : "var(--accent)",
-        };
-    return <ShareTile label={label} plain={format_nutrient(info, value, energy)} share={share} href="#/diet/diary" />;
-  };
   return (
-    <Tiles>
-      {eaten("calories", "Energy today")}
-      {eaten("protein", "Protein today")}
-      <ShareTile
-        label="Workouts this week"
-        plain={String(this_week)}
-        share={
-          weekly_target > 0
-            ? {
-                amount: String(this_week),
-                whole: String(weekly_target),
-                percent: Math.min(100, (this_week / weekly_target) * 100),
-                color: meets_target(this_week, weekly_target) ? "var(--status-success)" : "var(--accent)",
-              }
-            : null
-        }
-        href="#/workouts/log"
-      />
-      <Tile label="Last workout" value={last_workout?.date ?? "—"} href="#/workouts/log" />
-    </Tiles>
+    <Section title="Workouts" tools={<a href="#/workouts/log">Log</a>}>
+      <Tiles>
+        {weekly_target > 0 ? (
+          <DonutTile
+            label="Workouts this week"
+            value_text={String(this_week)}
+            caption={`of ${weekly_target}`}
+            percent={Math.min(100, (this_week / weekly_target) * 100)}
+            color={meets_target(this_week, weekly_target) ? "var(--status-success)" : "var(--accent)"}
+            href="#/workouts/log"
+          />
+        ) : (
+          <Tile label="Workouts this week" value={String(this_week)} href="#/workouts/log" />
+        )}
+        <Tile label="Last workout" value={last_workout?.date ?? "—"} href="#/workouts/log" />
+      </Tiles>
+    </Section>
   );
 }
+
+// ── View ─────────────────────────────────────────────────────────────────────
 
 export function OverviewView() {
   const date = today();
@@ -166,8 +143,8 @@ function OverviewBody({ date, settings, day, metrics, history }: OverviewBodyPro
         <Loaded resource={day}>
           {(eaten) => (
             <Stack>
-              <Headline day={eaten} report={workouts} settings={settings} energy={energy} weekly_target={weekly_target} />
               <DietToday day={eaten} settings={settings} energy={energy} />
+              <Workouts report={workouts} weekly_target={weekly_target} />
               {workouts.days.some((item) => item.workouts > 0) ? <Training report={workouts} weekly_target={weekly_target} units={units} /> : <Empty title="No workouts yet." hint="Log one under Workouts to see your training here." />}
               <Loaded resource={metrics}>{(list) => <Loaded resource={history}>{(days) => <Body metrics={list} history={days} units={units} />}</Loaded>}</Loaded>
             </Stack>
