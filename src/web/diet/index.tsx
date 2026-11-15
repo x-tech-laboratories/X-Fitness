@@ -1,4 +1,4 @@
-// The Diet section: its pages for the diary, trends, recipes, foods, grocery list, categories and units, and its own
+// The Diet section: its pages for the reports, diary, recipes, foods, grocery list, categories and units, and its own
 // settings.
 
 // ── Imports ──────────────────────────────────────────────────────────────────
@@ -19,13 +19,13 @@ import { DiaryTab } from "./DiaryTab.tsx";
 import { FoodsTab } from "./FoodsTab.tsx";
 import { GroceryTab } from "./GroceryTab.tsx";
 import { RecipesTab } from "./RecipesTab.tsx";
-import { TrendsTab } from "./TrendsTab.tsx";
+import { ReportsTab } from "./ReportsTab.tsx";
 
 // ── View ─────────────────────────────────────────────────────────────────────
 
 export const diet_pages = [
+  { id: "reports", label: "Reports" },
   { id: "diary", label: "Diary" },
-  { id: "trends", label: "Trends" },
   { id: "recipes", label: "Recipes" },
   { id: "foods", label: "Foods" },
   { id: "grocery", label: "Grocery" },
@@ -35,7 +35,7 @@ export const diet_pages = [
 
 type TabId = (typeof diet_pages)[number]["id"];
 
-// The route's parts after "diet": the tab, the diary when none.
+// The route's parts after "diet": the tab, Reports when none, so the old #/diet/trends opens Reports too.
 export function DietView({ parts }: { parts: string[] }) {
   const page = diet_pages.find((item) => item.id === parts[0]) ?? diet_pages[0];
   const tab: TabId = page.id;
@@ -48,7 +48,7 @@ export function DietView({ parts }: { parts: string[] }) {
       <Loaded resource={settings}>
         {(values) => {
           const energy = shown_units(values).energy;
-          if (tab === "trends") return <TrendsTab settings={values} energy={energy} />;
+          if (tab === "reports") return <ReportsTab settings={values} energy={energy} />;
           return (
             <Loaded resource={data}>
               {(diet) => (
