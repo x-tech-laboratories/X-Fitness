@@ -255,10 +255,10 @@ describe("diet grocery, categories and units", () => {
     expect(methods.get_diet().grocery).toEqual([]);
   });
 
-  it("shows categories as a folding tree, adds one inside, renames and moves them, and refuses to delete a unit in use", async () => {
+  it("shows categories as a folding tree, adds one inside, renames them, drags one into another, and refuses to delete a unit in use", async () => {
     const { methods } = start();
     methods.save_food({ ...oats, categories: ["Grains"] });
-    const carbs = methods.add_category("Carbs");
+    methods.add_category("Carbs");
     const paths = () => methods.get_diet().categories.map((category) => category.path.join("/"));
     show(["categories"]);
 
@@ -266,10 +266,11 @@ describe("diet grocery, categories and units", () => {
     const field = screen.getByRole("textbox", { name: "Rename Grains" });
     fireEvent.change(field, { target: { value: "Cereals" } });
     fireEvent.keyDown(field, { key: "Enter" });
-    fireEvent.click(await screen.findByRole("button", { name: "Move Cereals" }));
-    const dialog = await screen.findByRole("dialog");
-    fireEvent.change(within(dialog).getByRole("combobox", { name: "Move into" }), { target: { value: carbs } });
-    fireEvent.click(within(dialog).getByRole("button", { name: "Move" }));
+    const row_of = (name: string) => screen.getByRole("cell", { name }).closest("tr")!;
+    await screen.findByRole("cell", { name: "Cereals" });
+    fireEvent.dragStart(row_of("Cereals"));
+    fireEvent.dragOver(row_of("Carbs"));
+    fireEvent.drop(row_of("Carbs"));
     await waitFor(() => expect(paths()).toEqual(["Carbs", "Carbs/Cereals"]));
     expect(methods.get_diet().foods[0]!.categories).toEqual([methods.get_diet().categories[1]!.id]);
 

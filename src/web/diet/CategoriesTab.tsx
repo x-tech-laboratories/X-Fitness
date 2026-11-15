@@ -43,7 +43,7 @@ export function CategoriesTab({ data }: { data: DietData }) {
     >
       <p className="muted small">
         Fold a category open or shut by its arrow, and use Add inside to put a new one under it. Drag a row above or below another to reorder them, or onto
-        the middle of one to put it inside; Move does the same from a list. A category renamed or moved next to one with the same name merges into it. Deleting
+        the middle of one to put it inside. A category renamed or moved next to one with the same name merges into it. Deleting
         removes the category and everything inside it from every food and recipe; the foods and recipes themselves are kept.
       </p>
     </CategoryManager>
