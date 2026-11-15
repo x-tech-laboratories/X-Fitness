@@ -60,6 +60,16 @@ finds it by key: the first weight metric shows the `weight` goal, a body fat or 
 the 3D body at the goals takes each goal in place of its reading. Goals sync and keep versions like the other body
 rows.
 
+## Next actions
+
+The Overview's Next up table is `list_next_actions` from `src/shared/schedule/`, a feature with no tables that reads
+the others. Each meal with a start in `diet.meals` is due at that start every day; it is done once anything is logged in
+it that day and missed until the next meal starts. `workouts.schedule` holds the program followed, an iCalendar rule in
+local time for its training days (X-Libs `recurrence`, edited with `RecurrenceField` under Settings → Workouts) and the
+day the rule counts from, which resets on every change so an interval keeps its step. The sessions come in turn after the
+last one logged; one is done once a workout of the program is logged that day, and missed until the next training day
+comes due. A rule without an hour gives whole days.
+
 ## History
 
 `src/shared/history/store.ts` keeps a version of every item a write touches through X-Libs `create_history`, one
