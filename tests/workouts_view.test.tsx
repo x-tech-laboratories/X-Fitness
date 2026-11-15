@@ -93,6 +93,17 @@ describe("workouts log", () => {
     expect(store.get_workout_library().programs[0]!.sessions[0]!.entries[0]!.weight).toBe(62.5);
   });
 
+  it("shows sets in the workout unit when it differs from the body's", async () => {
+    const store = open_page({ mass_unit: "kg", "workouts.mass_unit": "lb" });
+    const { session } = plan(store);
+    view(["log"]);
+
+    fireEvent.change(await screen.findByRole("combobox", { name: "Session" }), { target: { value: session } });
+    fireEvent.click(screen.getByRole("button", { name: "Start" }));
+    const first_set = await screen.findByRole("listitem", { name: "Bench Press set 1" });
+    expect((within(first_set).getByRole("textbox", { name: "Weight" }) as HTMLInputElement).value).toBe("132.28");
+  });
+
   it("adds an exercise mid-workout, steps through days, and keeps a deleted exercise's sets", async () => {
     const store = open_page();
     const curl = store.save_exercise({ name: "Curl" });

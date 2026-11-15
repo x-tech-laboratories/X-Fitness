@@ -190,7 +190,7 @@ export function ReportsTab({ library, units, weekly_target, week_start, today }:
     { label: "Week of", cell: (week) => week.week_start },
     { label: "Workouts", cell: (week) => <span className={meets_target(week.workouts, weekly_target) ? "tone-good" : undefined}>{`${week.workouts} / ${weekly_target}`}</span> },
     { label: "Sets", cell: (week) => week.sets },
-    { label: `Volume (${units.mass})`, cell: (week) => format_number(field_to_shown("weight", week.volume, units)) },
+    { label: `Volume (${units.lifted})`, cell: (week) => format_number(field_to_shown("weight", week.volume, units)) },
     { label: "Duration (min)", cell: (week) => format_number(week.duration / 60) },
     { label: `Distance (${units.distance})`, cell: (week) => format_number(field_to_shown("distance", week.distance, units)) },
   ];
@@ -208,7 +208,7 @@ export function ReportsTab({ library, units, weekly_target, week_start, today }:
       },
     },
     { label: "Sets", cell: (row) => row.stats.sets },
-    { label: `Volume (${units.mass})`, cell: (row) => (row.stats.total_volume > 0 ? format_number(field_to_shown("weight", row.stats.total_volume, units)) : "—") },
+    { label: `Volume (${units.lifted})`, cell: (row) => (row.stats.total_volume > 0 ? format_number(field_to_shown("weight", row.stats.total_volume, units)) : "—") },
     { label: "Last done", cell: (row) => row.stats.last_done },
     {
       label: "",

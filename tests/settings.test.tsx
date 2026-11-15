@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import "@x-tech-laboratories/x-libs/web/react/test_stubs";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { Client } from "@x-tech-laboratories/x-libs/electron/bridge";
@@ -30,11 +30,11 @@ describe("settings", () => {
     set_page_api({ host: "web", calls, device: null, on_change: () => () => undefined });
     render(<SettingsView />);
 
-    const weight = await screen.findByRole("radiogroup", { name: "Weight" });
+    const weight = await screen.findByRole("radiogroup", { name: "Body weight" });
     expect(weight.querySelector("[aria-checked=true]")?.textContent).toBe("kg");
     expect(screen.getByRole("radiogroup", { name: "Length" }).querySelector("[aria-checked=true]")?.textContent).toBe("in");
 
-    fireEvent.click(screen.getByRole("radio", { name: "lb" }));
+    fireEvent.click(within(weight).getByRole("radio", { name: "lb" }));
     await waitFor(() => expect(calls.set_setting).toHaveBeenCalledWith("mass_unit", "lb"));
     expect(screen.queryByText("Sync")).toBeNull();
   });
@@ -49,6 +49,19 @@ describe("settings", () => {
     fireEvent.change(await screen.findByRole("combobox", { name: "Program you follow" }), { target: { value: "ppl" } });
     await waitFor(() => expect(calls.set_setting).toHaveBeenCalledWith("workouts.schedule", { program: "ppl", rule: "", start: "" }));
     expect(screen.getAllByText("Training days").length).toBeGreaterThan(0);
+  });
+
+  it("shows workout weights in the body's unit until they get their own", async () => {
+    const calls = fake_calls({ mass_unit: "lb" });
+    set_page_api({ host: "web", calls, device: null, on_change: () => () => undefined });
+    render(<SettingsView />);
+
+    const lifted = await screen.findByRole("radiogroup", { name: "Workout weight" });
+    expect(lifted.querySelector("[aria-checked=true]")?.textContent).toBe("lb");
+
+    fireEvent.click(within(lifted).getByRole("radio", { name: "kg" }));
+    await waitFor(() => expect(calls.set_setting).toHaveBeenCalledWith("workouts.mass_unit", "kg"));
+    expect(calls.set_setting).not.toHaveBeenCalledWith("mass_unit", expect.anything());
   });
 
   it("offers sync on a device and signs it in with the choice of copy", async () => {

@@ -81,7 +81,7 @@ function ProgressionEditor({ progression, exercise, units, on_change }: { progre
                 label={`${field.label} in`}
                 bare
                 options={[
-                  ["absolute", units.mass],
+                  ["absolute", units.lifted],
                   ["percent", "%"],
                 ]}
                 value={is_percent ? "percent" : "absolute"}

@@ -14,13 +14,14 @@ import { SyncSettings } from "@x-tech-laboratories/x-libs/web/react/sync_setting
 
 import { data_watch, page, set_setting, use_settings } from "../api.ts";
 import { page_features } from "../features.tsx";
+import { shown_units } from "../units.ts";
 
 // ── Units ────────────────────────────────────────────────────────────────────
 
 function units_section(settings: Record<string, unknown>, set_setting: (key: string, value: unknown) => Promise<void>): SettingsSection {
-  const unit_row = (key: string, label: string, choices: [string, string]) => (
+  const unit_row = (key: string, label: string, choices: [string, string], value = settings[key]) => (
     <SettingRow label={label}>
-      <Segmented label={label} choices={choices.map((unit) => ({ value: unit, label: unit }))} value={String(settings[key])} on_change={(unit) => void set_setting(key, unit)} />
+      <Segmented label={label} choices={choices.map((unit) => ({ value: unit, label: unit }))} value={String(value)} on_change={(unit) => void set_setting(key, unit)} />
     </SettingRow>
   );
   return {
@@ -29,7 +30,8 @@ function units_section(settings: Record<string, unknown>, set_setting: (key: str
     hint: "Everything is kept in metric and shown in the units chosen here.",
     content: (
       <>
-        {unit_row("mass_unit", "Weight", ["kg", "lb"])}
+        {unit_row("mass_unit", "Body weight", ["kg", "lb"])}
+        {unit_row("workouts.mass_unit", "Workout weight", ["kg", "lb"], shown_units(settings).lifted)}
         {unit_row("length_unit", "Length", ["cm", "in"])}
         {unit_row("distance_unit", "Distance", ["km", "mi"])}
         {unit_row("energy_unit", "Energy", ["kcal", "kJ"])}

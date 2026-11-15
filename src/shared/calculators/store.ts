@@ -309,7 +309,7 @@ function list_workout_energy(database: SqlDatabase, from: string, to: string): W
 }
 
 function plates_of(database: SqlDatabase): { bar: number; plates: number[] } {
-  return bar_and_plates(setting_of(database, "mass_unit"), setting_of(database, "calculators.bar_weight"), setting_of(database, "calculators.plates"));
+  return bar_and_plates(setting_of(database, "workouts.mass_unit") ?? setting_of(database, "mass_unit"), setting_of(database, "calculators.bar_weight"), setting_of(database, "calculators.plates"));
 }
 
 function training_report(database: SqlDatabase, date: string): TrainingReport {
