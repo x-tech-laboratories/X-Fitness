@@ -249,15 +249,12 @@ describe("workouts plans and library", () => {
     await waitFor(() => expect(store.get_exercise_picture(squat)).toBe(""));
   });
 
-  it("files exercises under nested categories, opened like folders, and renames one keeping what is inside", async () => {
+  it("files exercises under nested categories, shown as a tree, and renames one keeping what is inside", async () => {
     const store = open_page();
     store.save_exercise({ name: "Fly", categories: ["Push/Chest"] });
     view(["categories"]);
 
-    fireEvent.click(await screen.findByRole("button", { name: "Push" }));
-    expect(await screen.findByRole("button", { name: "Chest" })).toBeTruthy();
-    expect(screen.getByRole("navigation", { name: "Breadcrumb" }).textContent).toBe("All categories › Push");
-    fireEvent.click(screen.getByRole("button", { name: "All categories" }));
+    expect(await screen.findByRole("cell", { name: "Chest" })).toBeTruthy();
     fireEvent.click(await screen.findByRole("button", { name: "Rename Push" }));
     const field = screen.getByRole("textbox", { name: "Rename Push" });
     fireEvent.change(field, { target: { value: "Upper" } });

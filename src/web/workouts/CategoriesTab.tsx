@@ -1,4 +1,4 @@
-// Categories, shared by exercises and sessions: opened like folders, added inside the one open, renamed, moved or nested
+// Categories, shared by exercises and sessions: one folding tree, added at the top or inside a row, renamed, moved or nested
 // by dragging, merged by landing beside one of the same name, and deleted with everything inside while the items stay.
 
 // ── Imports ──────────────────────────────────────────────────────────────────
@@ -32,6 +32,7 @@ export function CategoriesTab() {
           categories={list}
           count_columns={count_columns}
           describe_delete={describe_delete}
+          collapsed_key="x-fitness-workout-categories-collapsed"
           calls={{
             add: (name, parent_id) => succeeds(() => calls().add_workout_category(name, parent_id)),
             rename: (id, name) => attempt(() => calls().rename_workout_category(id, name)),
@@ -39,7 +40,7 @@ export function CategoriesTab() {
             remove: (id) => attempt(() => calls().delete_workout_category(id)),
           }}
         >
-          <p className="muted small">Exercises and sessions share these. Open one to see what is inside it; drag rows to reorder them or onto one another to nest them.</p>
+          <p className="muted small">Exercises and sessions share these. Fold a category open or shut by its arrow; drag rows to reorder them or onto one another to nest them.</p>
         </CategoryManager>
       )}
     </Loaded>

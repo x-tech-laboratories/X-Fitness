@@ -260,7 +260,7 @@ describe("diet grocery, categories and units", () => {
     expect(methods.get_diet().grocery).toEqual([]);
   });
 
-  it("opens categories like folders, adds one inside, renames and moves them, and refuses to delete a unit in use", async () => {
+  it("shows categories as a folding tree, adds one inside, renames and moves them, and refuses to delete a unit in use", async () => {
     const { methods } = start();
     methods.save_food({ ...oats, categories: ["Grains"] });
     const carbs = methods.add_category("Carbs");
@@ -278,14 +278,14 @@ describe("diet grocery, categories and units", () => {
     await waitFor(() => expect(paths()).toEqual(["Carbs", "Carbs/Cereals"]));
     expect(methods.get_diet().foods[0]!.categories).toEqual([methods.get_diet().categories[1]!.id]);
 
-    fireEvent.click(await screen.findByRole("button", { name: "Carbs" }));
-    expect(screen.getByRole("navigation", { name: "Breadcrumb" }).textContent).toBe("All categories › Carbs");
     expect(screen.getByRole("cell", { name: "Cereals" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Add inside Carbs" }));
     fireEvent.change(screen.getByRole("textbox", { name: "New category in Carbs" }), { target: { value: "Bread" } });
-    fireEvent.click(screen.getByRole("button", { name: "Add category" }));
+    fireEvent.click(within(screen.getByRole("textbox", { name: "New category in Carbs" }).closest("form")!).getByRole("button", { name: "Add category" }));
     await waitFor(() => expect(paths()).toEqual(["Carbs", "Carbs/Cereals", "Carbs/Bread"]));
-    fireEvent.click(screen.getByRole("button", { name: "All categories" }));
-    expect(await screen.findByText("(2 inside)")).toBeTruthy();
+    expect(await screen.findByRole("cell", { name: "Bread" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Collapse" }));
+    expect(screen.queryByRole("cell", { name: "Cereals" })).toBeNull();
 
     cleanup();
     show(["units"]);
