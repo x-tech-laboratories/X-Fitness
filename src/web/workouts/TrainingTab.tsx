@@ -23,7 +23,7 @@ import {
 } from "../../shared/calculators/training.ts";
 import { use_data } from "../api.ts";
 import { UnitNumber } from "../unit_field.tsx";
-import type { ShownUnits } from "../units.ts";
+import { format_mass, type ShownUnits } from "../units.ts";
 import { plate_text } from "./TrainingSettings.tsx";
 import { field_to_shown, field_to_stored, format_field, format_rest, format_weight } from "./units.ts";
 
@@ -62,8 +62,8 @@ function WeightField({ id, label, value, units, hint, on_change }: { id: string;
       to_shown={(kg) => field_to_shown("weight", kg, units)}
       to_stored={(shown) => field_to_stored("weight", shown, units)}
       min={0}
-      step={units.mass === "lb" ? 5 : 2.5}
-      unit={units.mass}
+      step={units.lifted === "lb" ? 5 : 2.5}
+      unit={units.lifted}
       on_change={on_change}
     />
   );
@@ -150,7 +150,7 @@ function StrengthScores({ report, settings, units }: { report: TrainingReport; s
         <Facts
           rows={[
             ["Total", format_weight(report.total, units)],
-            ["Body weight", report.body_weight > 0 ? format_weight(report.body_weight, units) : "No weight reading"],
+            ["Body weight", report.body_weight > 0 ? format_mass(report.body_weight, units) : "No weight reading"],
             report.scores !== null && ["Wilks", format_number(report.scores.wilks)],
             report.scores !== null && ["DOTS", format_number(report.scores.dots)],
             report.scores !== null && ["IPF GoodLift", format_number(report.scores.ipf_gl)],

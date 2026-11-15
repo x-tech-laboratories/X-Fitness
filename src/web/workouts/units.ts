@@ -13,21 +13,21 @@ import type { ShownUnits } from "../units.ts";
 
 // A set field's stored value as typed and shown: weight and distance converted, duration in minutes.
 export function field_to_shown(field: SetField, value: number, units: ShownUnits): number {
-  if (field === "weight") return Math.round(to_shown(value, units.mass) * 100) / 100;
+  if (field === "weight") return Math.round(to_shown(value, units.lifted) * 100) / 100;
   if (field === "distance") return Math.round(to_shown(value, units.distance) * 100) / 100;
   if (field === "duration") return Math.round((value / 60) * 100) / 100;
   return value;
 }
 
 export function field_to_stored(field: SetField, value: number, units: ShownUnits): number {
-  if (field === "weight") return to_stored(value, units.mass);
+  if (field === "weight") return to_stored(value, units.lifted);
   if (field === "distance") return to_stored(value, units.distance);
   if (field === "duration") return value * 60;
   return value;
 }
 
 export function field_unit(field: SetField, units: ShownUnits): string {
-  if (field === "weight") return units.mass;
+  if (field === "weight") return units.lifted;
   if (field === "distance") return units.distance;
   if (field === "duration") return "min";
   return "reps";

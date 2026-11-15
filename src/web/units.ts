@@ -8,7 +8,9 @@ import { format_change, format_number, to_shown, type DistanceUnit, type EnergyU
 // ── Units ────────────────────────────────────────────────────────────────────
 
 export interface ShownUnits {
+  // Body weight, and the weights lifted in workouts.
   mass: MassUnit;
+  lifted: MassUnit;
   length: LengthUnit;
   distance: DistanceUnit;
   energy: EnergyUnit;
@@ -17,10 +19,16 @@ export interface ShownUnits {
 export function shown_units(settings: Record<string, unknown>): ShownUnits {
   return {
     mass: settings.mass_unit === "lb" ? "lb" : "kg",
+    lifted: lifted_mass_unit(settings) === "lb" ? "lb" : "kg",
     length: settings.length_unit === "in" ? "in" : "cm",
     distance: settings.distance_unit === "mi" ? "mi" : "km",
     energy: settings.energy_unit === "kJ" ? "kJ" : "kcal",
   };
+}
+
+// The unit workouts weigh in, which follows the body's until chosen on its own.
+export function lifted_mass_unit(settings: Record<string, unknown>): unknown {
+  return settings["workouts.mass_unit"] ?? settings.mass_unit;
 }
 
 // ── Conversions ──────────────────────────────────────────────────────────────

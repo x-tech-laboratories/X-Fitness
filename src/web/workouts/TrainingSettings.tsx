@@ -12,7 +12,7 @@ import type { Measurement } from "../../shared/workouts/model.ts";
 import { use_data } from "../api.ts";
 import type { FeatureSettingsProps } from "../features.tsx";
 import { UnitNumber } from "../unit_field.tsx";
-import { shown_units, type ShownUnits } from "../units.ts";
+import { lifted_mass_unit, shown_units, type ShownUnits } from "../units.ts";
 import { field_to_shown, field_to_stored } from "./units.ts";
 
 // ── Plates ───────────────────────────────────────────────────────────────────
@@ -24,7 +24,7 @@ export function plate_text(plate: number, units: ShownUnits): string {
 
 function Plates({ settings, set_setting }: FeatureSettingsProps) {
   const units = shown_units(settings);
-  const { bar, plates } = bar_and_plates(settings.mass_unit, settings["calculators.bar_weight"], settings["calculators.plates"]);
+  const { bar, plates } = bar_and_plates(lifted_mass_unit(settings), settings["calculators.bar_weight"], settings["calculators.plates"]);
   const shown_plates = plates.map((plate) => plate_text(plate, units)).join(", ");
   return (
     <>
@@ -36,11 +36,11 @@ function Plates({ settings, set_setting }: FeatureSettingsProps) {
         to_shown={(kg) => field_to_shown("weight", kg, units)}
         to_stored={(shown) => field_to_stored("weight", shown, units)}
         min={0}
-        step={units.mass === "lb" ? 5 : 2.5}
-        unit={units.mass}
+        step={units.lifted === "lb" ? 5 : 2.5}
+        unit={units.lifted}
         on_change={(kg) => void set_setting("calculators.bar_weight", kg)}
       />
-      <SettingRow label="Plates you have" hint={`The weights of the plates you can load, in ${units.mass}, separated by commas.`}>
+      <SettingRow label="Plates you have" hint={`The weights of the plates you can load, in ${units.lifted}, separated by commas.`}>
         <CommitInput
           aria-label="Plates you have"
           type="text"
