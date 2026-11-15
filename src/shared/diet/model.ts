@@ -476,7 +476,7 @@ export interface Meal {
 }
 
 export const default_meals: Meal[] = [
-  { id: "breakfast", name: "Breakfast", start: "04:00", share: 25 },
+  { id: "breakfast", name: "Breakfast", start: "07:00", share: 25 },
   { id: "lunch", name: "Lunch", start: "11:00", share: 35 },
   { id: "dinner", name: "Dinner", start: "17:00", share: 30 },
   { id: "snacks", name: "Snacks", start: "", share: 10 },

@@ -95,7 +95,7 @@ describe("list_next_actions", () => {
     expect(actions.map((action) => [action.title, action.due, action.overdue])).toEqual([
       ["Eat Lunch", "2026-11-10T11:00", true],
       ["Eat Dinner", "2026-11-10T17:00", false],
-      ["Eat Breakfast", "2026-11-11T04:00", false],
+      ["Eat Breakfast", "2026-11-11T07:00", false],
       ["Do Pull", "2026-11-11T18:00", false],
     ]);
     expect(() => store.list_next_actions("today")).toThrow(/local time/);
