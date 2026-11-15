@@ -14,7 +14,7 @@ import { ComboField } from "@x-tech-laboratories/x-libs/web/react/suggestions";
 import { by_id, food_label, normalize_recipe, nutrients, recipe_nutrients_per_serving, type FoodsById, type Ingredient, type Nutrients, type Recipe } from "../../shared/diet/model.ts";
 import type { DietData } from "../../shared/diet/store.ts";
 import { attempt, calls } from "../api.ts";
-import { CategorizedSelect, CategoryBrowser, CategoryEditor, CategoryPaths, category_paths_text, GroupToggle, use_category_view, type ListRow } from "../categories.tsx";
+import { CategorizedSelect, CategoryEditor, CategoryFilterSelect, CategoryPaths, category_paths_text, GroupToggle, use_category_view, type ListRow } from "../categories.tsx";
 import { FormButtons } from "../forms.tsx";
 import { confirm_delete, row_actions_column } from "../rows.tsx";
 import { format_amount, format_nutrient } from "./format.ts";
@@ -152,8 +152,8 @@ export function RecipesTab({ data, energy }: { data: DietData; energy: EnergyUni
       <Toolbar>
         <button type="button" className="accent solid" onClick={() => set_editing("new")}>Add recipe</button>
         <GroupToggle checked={view.grouped} on_change={view.set_grouped} />
+        <CategoryFilterSelect categories={data.categories} view={view} />
       </Toolbar>
-      <CategoryBrowser categories={data.categories} view={view} />
       {view.rows.length === 0 ? (
         <Empty title={view.filter ? "No recipes in this category." : "No recipes yet."} />
       ) : (
