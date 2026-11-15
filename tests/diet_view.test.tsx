@@ -204,7 +204,7 @@ describe("diet foods and recipes", () => {
     expect(methods.get_diet().recipes[0]).toMatchObject({ name: "Porridge", servings: 2, ingredients: [{ food_id: id, amount: 100, unit: "g" }] });
   });
 
-  it("steps into nested categories to filter foods, climbs back by the trail, and groups them under their paths", async () => {
+  it("filters foods by a category in the folding tree, clears it, and groups them under their paths", async () => {
     const { methods } = start();
     methods.save_food({ ...oats, name: "Chicken", brand: "", categories: ["Protein/Meat"] });
     methods.save_food({ ...oats, name: "Apple", brand: "", categories: [] });
@@ -212,16 +212,12 @@ describe("diet foods and recipes", () => {
 
     await screen.findByRole("cell", { name: "Apple" });
     const filter = screen.getByRole("group", { name: "Filter by category" });
-    const trail = () => within(filter).getByRole("navigation", { name: "Breadcrumb" }).textContent;
     expect([...screen.getByRole("table").querySelectorAll("td .tree-path")].map((path) => path.textContent)).toEqual(["Protein › Meat"]);
-    fireEvent.click(within(filter).getByRole("button", { name: "Protein (1)" }));
-    fireEvent.click(within(filter).getByRole("button", { name: "Meat (1)" }));
-    expect(trail()).toBe("All categories › Protein › Meat");
+    expect(within(filter).getByText("Meat")).toBeTruthy();
+    fireEvent.click(within(filter).getByText("Meat"));
     expect(screen.queryByRole("cell", { name: "Apple" })).toBeNull();
     expect(screen.getByRole("cell", { name: "Chicken" })).toBeTruthy();
 
-    fireEvent.click(within(filter).getByRole("button", { name: "Protein" }));
-    expect(trail()).toBe("All categories › Protein");
     fireEvent.click(within(filter).getByRole("button", { name: "All categories" }));
     fireEvent.click(within(filter).getByRole("button", { name: "(uncategorized) (1)" }));
     expect(screen.getByRole("cell", { name: "Apple" })).toBeTruthy();

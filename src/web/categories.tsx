@@ -1,5 +1,5 @@
-// The category pieces the Diet and Workouts pages share: the category tree managed in one folding table, a filter that
-// steps into categories the same way with the grouping and sorting of a list, the pickers on a form, and paths shown
+// The category pieces the Diet and Workouts pages share: the category tree managed in one folding table, a filter
+// drawn as the same tree with the grouping and sorting of a list, the pickers on a form, and paths shown
 // with chevrons.
 
 // ── Imports ──────────────────────────────────────────────────────────────────
@@ -9,13 +9,14 @@ import { Chip, Chips } from "@x-tech-laboratories/x-libs/web/react/badges";
 import { TreeChipField } from "@x-tech-laboratories/x-libs/web/react/chip_field";
 import { Select, TreeSelect } from "@x-tech-laboratories/x-libs/web/react/controls";
 import { Dialog } from "@x-tech-laboratories/x-libs/web/react/dialog";
-import { Crumbs, PathText, type CrumbTarget } from "@x-tech-laboratories/x-libs/web/react/layout";
+import { PathText } from "@x-tech-laboratories/x-libs/web/react/layout";
 import { use_pref } from "@x-tech-laboratories/x-libs/web/react/prefs";
 import { Empty } from "@x-tech-laboratories/x-libs/web/react/states";
 import { DataTable, type RowGroup, type Sorting, type TableColumn } from "@x-tech-laboratories/x-libs/web/react/table";
+import { Tree } from "@x-tech-laboratories/x-libs/web/react/tree";
 import { move_for_drop } from "@x-tech-laboratories/x-libs/web/tree";
 
-import { category_path, category_path_text, category_subtree, children_of_category, is_in_category, shown_separator, uncategorized, type Category, type PlacedCategory } from "../shared/category_tree.ts";
+import { category_path, category_path_text, category_subtree, is_in_category, shown_separator, uncategorized, type Category, type PlacedCategory } from "../shared/category_tree.ts";
 import { AddNameForm, use_rename } from "./forms.tsx";
 import { confirm_delete, row_actions_column } from "./rows.tsx";
 
@@ -38,23 +39,6 @@ export function CategoryPaths({ ids, categories }: { ids: string[]; categories: 
 // The same as text, such as for sorting or a select's option.
 export function category_paths_text(ids: string[], categories: Category[]): string {
   return ids.map((id) => category_path_text(id, categories)).join(", ");
-}
-
-// The categories from the top of the tree down to the one given, not counting it.
-function ancestors_of(category: Category | null, categories: Category[]): Category[] {
-  const ancestors: Category[] = [];
-  let parent = categories.find((item) => item.id === category?.parent_id);
-  while (parent && !ancestors.includes(parent)) {
-    ancestors.unshift(parent);
-    parent = categories.find((item) => item.id === parent!.parent_id);
-  }
-  return ancestors;
-}
-
-// "All categories", then each step down to the category given, every step but the last opening its own.
-function trail_to(category: Category | null, categories: Category[], open: (id: string | null) => void): [string, CrumbTarget][] {
-  const steps = ancestors_of(category, categories).map((step): [string, CrumbTarget] => [step.name, () => open(step.id)]);
-  return [["All categories", category ? () => open(null) : null], ...steps, ...(category ? [[category.name, null] as [string, CrumbTarget]] : [])];
 }
 
 // ── Picking ──────────────────────────────────────────────────────────────────
@@ -138,30 +122,37 @@ export function use_category_filter<Item extends { categories: string[] }>(items
   return { filter, set_filter, filtered, count_in, uncategorized_count };
 }
 
-// A filter opened like folders: the trail back up, and a chip for each category inside the one open.
+// A filter drawn as the category tree: "All categories" and the uncategorised beside it, and each category folding open with its count.
 export function CategoryBrowser({ categories, view }: { categories: PlacedCategory[]; view: CategoryFilter<unknown> }) {
   const { filter: value, set_filter: on_change, count_in, uncategorized_count } = view;
-  const open = categories.find((category) => category.id === value) ?? null;
-  const is_loose = value === uncategorized;
-  const trail: [string, CrumbTarget][] = is_loose ? [["All categories", () => on_change("")], [uncategorized, null]] : trail_to(open, categories, (id) => on_change(id ?? ""));
-  const inside = is_loose ? [] : children_of_category(open?.id ?? null, categories);
-  const offers_loose = !open && !is_loose && uncategorized_count > 0;
+  const [collapsed, set_collapsed] = useState<Set<string>>(new Set());
   return (
     <div className="stack tight" role="group" aria-label="Filter by category">
-      <Crumbs items={trail} />
-      {(inside.length > 0 || offers_loose) && (
-        <Chips>
-          {inside.map((category) => (
-            <Chip key={category.id} on_click={() => on_change(category.id)} title={`Show ${category_path_text(category.id, categories)}`}>
+      <Chips>
+        <Chip on_click={() => on_change("")} title="Show every category">
+          All categories
+        </Chip>
+        {uncategorized_count > 0 && (
+          <Chip dashed on_click={() => on_change(uncategorized)}>
+            {uncategorized} <span className="muted">({uncategorized_count})</span>
+          </Chip>
+        )}
+      </Chips>
+      {categories.length > 0 && (
+        <Tree
+          items={categories}
+          label="Categories"
+          name_of={(category) => category.name}
+          render_item={(category) => (
+            <>
               {category.name} <span className="muted">({count_in(category.id)})</span>
-            </Chip>
-          ))}
-          {offers_loose && (
-            <Chip dashed on_click={() => on_change(uncategorized)}>
-              {uncategorized} <span className="muted">({uncategorized_count})</span>
-            </Chip>
+            </>
           )}
-        </Chips>
+          collapsed={collapsed}
+          on_collapsed_change={set_collapsed}
+          selected_id={value === uncategorized ? null : value || null}
+          on_select={(category) => on_change(category.id)}
+        />
       )}
     </div>
   );
