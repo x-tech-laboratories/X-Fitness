@@ -41,7 +41,7 @@ describe("body metrics page", () => {
   it("saves a reading when its field is left, with the change since the one before", async () => {
     const store = fake_page();
     store.set_body_reading("weight", "2026-11-08", 80);
-    show([]);
+    show(["metrics"]);
 
     expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("Metrics");
     const weight = await screen.findByRole("textbox", { name: "Weight" });

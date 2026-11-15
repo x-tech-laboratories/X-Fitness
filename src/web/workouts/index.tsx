@@ -1,4 +1,4 @@
-// The Workouts section: the log, programs, the exercise library, reports, the training calculators and categories as
+// The Workouts section: reports, the log, programs, the exercise library, the training calculators and categories as
 // pages, and its own settings with the import from Liftosaur.
 
 // ── Imports ──────────────────────────────────────────────────────────────────
@@ -28,13 +28,13 @@ import "./workouts.css";
 
 // ── View ─────────────────────────────────────────────────────────────────────
 
-type TabId = "log" | "programs" | "exercises" | "reports" | "training" | "categories";
+type TabId = "reports" | "log" | "programs" | "exercises" | "training" | "categories";
 
 export const workouts_pages: (FeaturePage & { id: TabId })[] = [
+  { id: "reports", label: "Reports" },
   { id: "log", label: "Log" },
   { id: "programs", label: "Programs" },
   { id: "exercises", label: "Exercises" },
-  { id: "reports", label: "Reports" },
   { id: "training", label: "Training" },
   { id: "categories", label: "Categories" },
 ];

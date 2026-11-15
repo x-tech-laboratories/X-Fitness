@@ -35,8 +35,8 @@ export interface PageFeature {
 }
 
 export const page_features: PageFeature[] = [
-  { id: "workouts", label: "Workouts", pages: workouts_pages, view: (parts) => <WorkoutsView parts={parts} />, settings: workouts_settings },
   { id: "diet", label: "Diet", pages: [...diet_pages], view: (parts) => <DietView parts={parts} />, settings: diet_settings },
+  { id: "workouts", label: "Workouts", pages: workouts_pages, view: (parts) => <WorkoutsView parts={parts} />, settings: workouts_settings },
   { id: "body", label: "Body", pages: body_pages, view: (parts) => <BodyView parts={parts} />, settings: body_settings },
   { id: "goals", label: "Goals", pages: goals_pages, view: () => <GoalsView />, settings: () => [] },
   { id: "calculators", label: "Calculators", pages: calculators_pages, view: () => <CalculatorsView />, settings: calculators_settings },

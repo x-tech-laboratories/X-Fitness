@@ -1,4 +1,4 @@
-// The Trends tab: energy and macros per day over the last weeks, the days kept within the energy target, where the
+// The Reports tab: energy and macros per day over the last weeks, the days kept within the energy target, where the
 // energy came from by macro and by meal, and the average logged day against the targets.
 
 // ── Imports ──────────────────────────────────────────────────────────────────
@@ -90,7 +90,7 @@ export function average_meals(days: DayTotals[], settings: Record<string, unknow
 
 // ── Tab ──────────────────────────────────────────────────────────────────────
 
-export function TrendsTab({ settings, energy }: { settings: Record<string, unknown>; energy: EnergyUnit }) {
+export function ReportsTab({ settings, energy }: { settings: Record<string, unknown>; energy: EnergyUnit }) {
   const [range, set_range] = use_pref<Range>("x-fitness-diet-trend-days", "30", (value): value is Range => ranges.includes(value as Range));
   const to = today();
   const from = shift_day(to, 1 - Number(range));

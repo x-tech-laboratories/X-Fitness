@@ -1,19 +1,23 @@
-// The Overview: what to do next, today's eating against its targets, how training has gone these weeks, and each body metric's trend.
+// The Overview: what to do next, today's eating against its targets, how training has gone these weeks, energy eaten
+// against energy burned beside the weight, and each body metric's trend.
 
 // ── Imports ──────────────────────────────────────────────────────────────────
 
-import { today } from "@x-tech-laboratories/x-libs/dates";
-import type { EnergyUnit } from "@x-tech-laboratories/x-libs/units";
-import { DonutTile, Meters } from "@x-tech-laboratories/x-libs/web/react/charts";
+import { shift_day, today } from "@x-tech-laboratories/x-libs/dates";
+import { format_number, to_shown, type EnergyUnit } from "@x-tech-laboratories/x-libs/units";
+import { DonutTile, LineChart, Meters } from "@x-tech-laboratories/x-libs/web/react/charts";
 import { Cards, PageHeading, Section, Stack, Tile, Tiles } from "@x-tech-laboratories/x-libs/web/react/layout";
 import { Empty, Loaded, type Resource } from "@x-tech-laboratories/x-libs/web/react/states";
 
 import type { HistoryDay, MetricSummary } from "../../shared/body/store.ts";
+import type { CalculationsReport, WorkoutEnergy } from "../../shared/calculators/store.ts";
 import { nutrients } from "../../shared/diet/model.ts";
-import type { DiaryDay } from "../../shared/diet/store.ts";
+import type { DayTotals, DiaryDay } from "../../shared/diet/store.ts";
 import type { WorkoutReport } from "../../shared/workouts/store.ts";
 import { use_data, use_settings } from "../api.ts";
 import { MetricSparkCard, readings_of } from "../body/cards.tsx";
+import { to_shown_value } from "../body/format.ts";
+import { day_of, epoch_of } from "../dates.ts";
 import { MacroDonut } from "../diet/macros.tsx";
 import { target_meters } from "../diet/targets.ts";
 import { shown_units, type ShownUnits } from "../units.ts";
@@ -25,12 +29,13 @@ import { NextActions } from "./NextActions.tsx";
 const weeks_shown = 8;
 const days_shown = 28;
 const body_days = 90;
+const balance_days = 30;
 
 // ── Diet ─────────────────────────────────────────────────────────────────────
 
 function DietToday({ day, settings, energy }: { day: DiaryDay; settings: Record<string, unknown>; energy: EnergyUnit }) {
   return (
-    <Section title="Eaten today" tools={<a href="#/diet/diary">Diary</a>}>
+    <Section title="Eaten today" tools={<><a href="#/diet/diary">Diary</a> <a href="#/diet/reports">Reports</a></>}>
       {day.entries.length === 0 ? (
         <Empty title="Nothing logged today." />
       ) : (
@@ -56,6 +61,92 @@ function Training({ report, weekly_target, units }: { report: WorkoutReport; wee
         title={`Workouts per week, last ${weeks_shown} weeks`}
         strip_title={`Days trained, last ${days_shown} days`}
       />
+    </Section>
+  );
+}
+
+// ── Energy and weight ────────────────────────────────────────────────────────
+
+// The energy burned a day the diet targets start from: measured from the diary when Goals says so and there is enough of it.
+export function burned_a_day(report: CalculationsReport): number | null {
+  return report.energy_source === "measured" && report.measured ? report.measured.tdee : report.calculations.tdee;
+}
+
+// Each day's workout energy added up, leaving out workouts with no weight to work it out from.
+export function workout_energy_by_day(workouts: WorkoutEnergy[]): [date: string, kcal: number][] {
+  const by_day = new Map<string, number>();
+  for (const workout of workouts) if (workout.calories !== null) by_day.set(workout.date, (by_day.get(workout.date) ?? 0) + workout.calories);
+  return [...by_day].sort(([first], [second]) => first.localeCompare(second));
+}
+
+interface EnergyAndWeightProps {
+  date: string;
+  metrics: MetricSummary[];
+  history: HistoryDay[];
+  units: ShownUnits;
+}
+
+// The last days' eating, workouts and energy burned a day, loaded for the charts below.
+function EnergyAndWeight({ date, metrics, history, units }: EnergyAndWeightProps) {
+  const from = shift_day(date, 1 - balance_days);
+  const eaten = use_data((api) => api.list_daily_totals(from, date), [from, date]);
+  const workouts = use_data((api) => api.list_workout_energy(from, date), [from, date]);
+  const calculations = use_data((api) => api.get_calculations(date), [date]);
+  return (
+    <Loaded resource={eaten}>
+      {(days) => (
+        <Loaded resource={workouts}>
+          {(sessions) => (
+            <Loaded resource={calculations}>
+              {(report) => <EnergyAndWeightCharts eaten={days} workouts={sessions} burned={burned_a_day(report)} metrics={metrics} history={history} from={from} units={units} />}
+            </Loaded>
+          )}
+        </Loaded>
+      )}
+    </Loaded>
+  );
+}
+
+interface EnergyAndWeightChartsProps {
+  eaten: DayTotals[];
+  workouts: WorkoutEnergy[];
+  burned: number | null;
+  metrics: MetricSummary[];
+  history: HistoryDay[];
+  from: string;
+  units: ShownUnits;
+}
+
+// Energy eaten each day against the energy burned a day and in workouts, above the weight over the same days.
+function EnergyAndWeightCharts({ eaten, workouts, burned, metrics, history, from, units }: EnergyAndWeightChartsProps) {
+  const energy = units.energy;
+  const weight = metrics.find((metric) => metric.kind === "weight");
+  const weighed = weight ? readings_of(weight, history).filter(([date]) => date >= from) : [];
+  return (
+    <Section title={`Energy and weight, last ${balance_days} days`} tools={<><a href="#/diet/reports">Diet</a> <a href="#/body/reports">Body</a></>}>
+      <Stack>
+        <LineChart
+          title={`Energy per day (${energy})`}
+          format_time={day_of}
+          series={[
+            { label: "Eaten", color: "var(--series-1)", points: eaten.map((day) => [epoch_of(day.date), day.entries ? to_shown(day.totals.calories, energy) : null]) },
+            { label: "Burned in workouts", color: "var(--series-2)", draw: "dots", points: workout_energy_by_day(workouts).map(([date, kcal]) => [epoch_of(date), to_shown(kcal, energy)]) },
+          ]}
+          limits={burned !== null ? [{ label: "Burned a day", value: to_shown(burned, energy), color: "var(--status-danger)" }] : []}
+          format={(value) => `${Math.round(value).toLocaleString()} ${energy}`}
+          empty_message="Log meals in the Diary to compare them with what you burn."
+        />
+        {weight && (
+          <LineChart
+            title={`${weight.name} (${units.mass})`}
+            scale="fit"
+            format_time={day_of}
+            series={[{ label: weight.name, color: "var(--series-3)", points: weighed.map(([date, value]) => [epoch_of(date), to_shown_value(weight, value, units)]) }]}
+            format={(value) => `${format_number(value)} ${units.mass}`}
+            empty_message={`Weigh in on Metrics twice in ${balance_days} days to see the trend beside what you eat.`}
+          />
+        )}
+      </Stack>
     </Section>
   );
 }
@@ -148,7 +239,18 @@ function OverviewBody({ date, settings, day, metrics, history }: OverviewBodyPro
               <DietToday day={eaten} settings={settings} energy={energy} />
               <Workouts report={workouts} weekly_target={weekly_target} />
               {workouts.days.some((item) => item.workouts > 0) ? <Training report={workouts} weekly_target={weekly_target} units={units} /> : <Empty title="No workouts yet." hint="Log one under Workouts to see your training here." />}
-              <Loaded resource={metrics}>{(list) => <Loaded resource={history}>{(days) => <Body metrics={list} history={days} units={units} />}</Loaded>}</Loaded>
+              <Loaded resource={metrics}>
+                {(list) => (
+                  <Loaded resource={history}>
+                    {(days) => (
+                      <>
+                        <EnergyAndWeight date={date} metrics={list} history={days} units={units} />
+                        <Body metrics={list} history={days} units={units} />
+                      </>
+                    )}
+                  </Loaded>
+                )}
+              </Loaded>
             </Stack>
           )}
         </Loaded>
