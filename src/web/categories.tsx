@@ -1,4 +1,4 @@
-// The category pieces the Diet and Workouts pages share: the category tree managed one folder at a time, a filter that
+// The category pieces the Diet and Workouts pages share: the category tree managed in one folding table, a filter that
 // steps into categories the same way with the grouping and sorting of a list, the pickers on a form, and paths shown
 // with chevrons.
 
@@ -286,43 +286,45 @@ interface CategoryManagerProps<Row extends PlacedCategory> {
   // What deleting it takes away, said before it goes.
   describe_delete: (category: Row) => string;
   calls: CategoryCalls;
+  // Where this browser remembers which categories are folded.
+  collapsed_key: string;
   // A word on renaming, moving and deleting, under the table.
   children?: ReactNode;
 }
 
-// The categories inside one at a time, opened like folders with the trail back up; rows drag beside each other to
-// reorder or onto one another to nest.
-export function CategoryManager<Row extends PlacedCategory>({ categories, count_columns, describe_delete, calls, children }: CategoryManagerProps<Row>) {
-  const [open_id, set_open_id] = useState<string | null>(null);
+function is_id_list(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every((item) => typeof item === "string");
+}
+
+// The whole category tree in one table, each category folding open on its row; rows drag beside each other to reorder
+// or onto one another to nest, and Add inside puts a new one under a row.
+export function CategoryManager<Row extends PlacedCategory>({ categories, count_columns, describe_delete, calls, collapsed_key, children }: CategoryManagerProps<Row>) {
   const rename = use_rename<string>((id, name) => void calls.rename(id, name));
   const [moving, set_moving] = useState<Row | null>(null);
   const [dragged, set_dragged] = useState<Row | null>(null);
+  const [adding_to, set_adding_to] = useState<Row | null>(null);
+  const [collapsed_ids, set_collapsed_ids] = use_pref(collapsed_key, [] as string[], is_id_list);
 
-  const open = categories.find((category) => category.id === open_id) ?? null;
-  const rows = categories.filter((category) => category.parent_id === (open?.id ?? null));
-  const inside_count = (row: Row) => categories.filter((category) => category.parent_id === row.id).length;
+  const top = categories.filter((category) => category.parent_id === null);
+  const children_of = (row: Row) => {
+    const inside = categories.filter((category) => category.parent_id === row.id);
+    return inside.length ? inside : undefined;
+  };
+  const parent_ids = [...new Set(categories.map((category) => category.parent_id).filter((id): id is string => id !== null))];
+  const expanded = parent_ids.filter((id) => !collapsed_ids.includes(id));
+  // Folds kept for categories that have nothing inside right now stay as they were.
+  const change_expanded = (next: string[]) => set_collapsed_ids([...collapsed_ids.filter((id) => !parent_ids.includes(id)), ...parent_ids.filter((id) => !next.includes(id))]);
 
   const columns: TableColumn<Row>[] = [
-    {
-      label: "Category",
-      id: "name",
-      cell: (row) =>
-        rename.renaming === row.id ? (
-          rename.field(row.id, row.name)
-        ) : (
-          <>
-            <button type="button" className="link" title={`Open ${row.name}`} onClick={() => set_open_id(row.id)}>
-              {row.name}
-            </button>
-            {inside_count(row) > 0 && <span className="muted small"> ({inside_count(row)} inside)</span>}
-          </>
-        ),
-    },
+    { label: "Category", id: "name", cell: (row) => (rename.renaming === row.id ? rename.field(row.id, row.name) : row.name) },
     ...count_columns,
     row_actions_column<Row>({
       name: (row) => row.name,
       buttons: (row) => (
         <>
+          <button type="button" aria-label={`Add inside ${row.name}`} onClick={() => set_adding_to(row)}>
+            Add inside
+          </button>
           <button type="button" aria-label={`Rename ${row.name}`} onClick={() => rename.start(row.id)}>
             Rename
           </button>
@@ -332,23 +334,36 @@ export function CategoryManager<Row extends PlacedCategory>({ categories, count_
         </>
       ),
       remove: (row) => confirm_delete(`Delete ${row.name}?`, describe_delete(row), () => calls.remove(row.id)),
-      width: 230,
+      width: 330,
     }),
   ];
 
-  const label = open ? `New category in ${open.name}` : "New category";
+  function add_inside(parent: Row, name: string): Promise<boolean> {
+    return calls.add(name, parent.id).then((added) => {
+      if (added === false) return false;
+      set_collapsed_ids(collapsed_ids.filter((id) => id !== parent.id));
+      set_adding_to(null);
+      return true;
+    });
+  }
+
   return (
     <div className="stack tight">
-      <Crumbs items={trail_to(open, categories, set_open_id)} />
-      <AddNameForm label={label} button="Add category" on_add={(name) => calls.add(name, open?.id ?? null).then((added) => added !== false)} />
-      {rows.length === 0 ? (
-        <Empty title={open ? `Nothing inside ${open.name} yet.` : "No categories yet."} />
+      <AddNameForm label="New category" button="Add category" on_add={(name) => calls.add(name, null).then((added) => added !== false)} />
+      {top.length === 0 ? (
+        <Empty title="No categories yet." />
       ) : (
         <DataTable
-          caption={open ? `Categories in ${open.name}` : "Categories"}
+          caption="Categories"
           columns={columns}
-          rows={rows}
+          rows={top}
           row_key={(row) => row.id}
+          get_children={children_of}
+          expanded={expanded}
+          on_expanded_change={change_expanded}
+          render_after_row={(row) =>
+            adding_to?.id === row.id ? <AddNameForm label={`New category in ${row.name}`} button="Add category" on_add={(name) => add_inside(row, name)} /> : null
+          }
           on_row_drag_start={(row) => set_dragged(row)}
           on_row_drag_end={() => set_dragged(null)}
           allow_inside_drop

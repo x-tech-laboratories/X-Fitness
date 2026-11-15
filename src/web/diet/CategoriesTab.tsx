@@ -1,5 +1,5 @@
 // The Categories and Units tabs: the category tree and the unit list foods, recipes and grocery lines share, each made
-// ahead of use, renamed everywhere at once and deleted; categories are opened like folders and moved or nested.
+// ahead of use, renamed everywhere at once and deleted; categories fold open in one tree and are moved or nested.
 
 // ── Imports ──────────────────────────────────────────────────────────────────
 
@@ -33,6 +33,7 @@ export function CategoriesTab({ data }: { data: DietData }) {
       categories={data.categories}
       count_columns={count_columns}
       describe_delete={describe_delete}
+      collapsed_key="x-fitness-diet-categories-collapsed"
       calls={{
         add: (name, parent_id) => succeeds(() => calls().add_category(name, parent_id)),
         rename: (id, name) => attempt(() => calls().rename_category(id, name)),
@@ -41,7 +42,7 @@ export function CategoriesTab({ data }: { data: DietData }) {
       }}
     >
       <p className="muted small">
-        Open a category to see what is inside it, and follow the trail above to climb back out. Drag a row above or below another to reorder them, or onto
+        Fold a category open or shut by its arrow, and use Add inside to put a new one under it. Drag a row above or below another to reorder them, or onto
         the middle of one to put it inside; Move does the same from a list. A category renamed or moved next to one with the same name merges into it. Deleting
         removes the category and everything inside it from every food and recipe; the foods and recipes themselves are kept.
       </p>
