@@ -165,12 +165,13 @@ describe("carrying the metrics' goals over", () => {
 
   it("upgrades an opened, synced database: the goals carried over, the column gone, an old metric version still restorable", () => {
     const { database, store } = open_device();
-    // The database is turned back to just before the carry-over, its sync triggers naming the goal column again.
+    // The database is turned back to just before the carry-over, its sync triggers naming the goal column again and the later tables gone.
     database.exec("ALTER TABLE body_metrics ADD goal real DEFAULT 0 NOT NULL");
     database.prepare("UPDATE schema_versions SET version = ? WHERE owner = 'body'").run(migrations.indexOf(carry_step));
     sync_engine.install(database);
     database.exec("UPDATE body_metrics SET goal = 82 WHERE id = 'waist'");
     store.save_body_metric({ id: "waist", name: "Belly", kind: "length", role: "waist" });
+    database.exec("DROP TABLE body_photos");
 
     open_store(database);
 

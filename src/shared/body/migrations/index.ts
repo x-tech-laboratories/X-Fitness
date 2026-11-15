@@ -69,5 +69,12 @@ export const migrations: DrizzleMigration[] = [
       "-- Sync's update trigger names every column, so it goes before the column does; sync makes it afresh once the migrations are done.\nDROP TRIGGER IF EXISTS `sync_body_metrics_update`;",
       "ALTER TABLE `body_metrics` DROP COLUMN `goal`;"
     ]
+  },
+  {
+    "name": "20261115022454_body_photos",
+    "statements": [
+      "CREATE TABLE `body_photos` (\n\t`id` text PRIMARY KEY,\n\t`date` text NOT NULL,\n\t`pose` text DEFAULT '' NOT NULL,\n\t`comment` text DEFAULT '' NOT NULL,\n\t`picture` text NOT NULL,\n\t`thumbnail` text DEFAULT '' NOT NULL\n);",
+      "CREATE INDEX `body_photos_by_date` ON `body_photos` (`date`);"
+    ]
   }
 ];

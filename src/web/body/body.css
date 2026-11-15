@@ -32,6 +32,45 @@
   max-width: var(--measure);
 }
 
+/* Progress photos stand upright, so the tiles do too. */
+.body-photos {
+  --media-aspect: 3 / 4;
+}
+
+/* A day's poses sit in one row, narrower than the grid's usual tiles. */
+.body-photos .media-grid {
+  grid-template-columns: repeat(auto-fill, minmax(min(160px, 100%), 1fr));
+}
+
+/* A whole photo fits the dialog's width and leaves room on the screen for its fields. */
+.body-photo-whole {
+  display: block;
+  max-width: 100%;
+  max-height: 55vh;
+  margin-inline: auto;
+  object-fit: contain;
+}
+
+/* Two days' photos side by side, still side by side on a phone, since comparing them is the point. */
+.body-photos-compare {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-3);
+}
+
+.body-photo-compared {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  align-items: center;
+  margin: 0;
+}
+
+/* A pair of photos fits a screen's height with its captions. */
+.body-photo-compared > .body-photo-whole {
+  max-height: 60vh;
+}
+
 /* The 3D body takes the width and most of a screen's height, never less than a phone needs to see it whole. */
 .body-viewer {
   width: 100%;

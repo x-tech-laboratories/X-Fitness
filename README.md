@@ -16,8 +16,8 @@ whenever it can be reached.
   Australia and NZ) picks the ones shown and a region's reference intakes the targets, each changeable by hand.
 - **Body:** weight, height, body fat, girths and any measure of your own, logged a day at a time on Metrics, where
   each metric is also added and edited and your sex and birth date sit above them, with a picture of where to pinch
-  beside each caliper skinfold; Reports shows goals and trends, and
-  3D a body shaped to your readings and to your goals.
+  beside each caliper skinfold; Reports shows goals and trends; Photos keeps progress photos by day and pose, from a
+  file or the phone's camera, and compares two days side by side; and 3D a body shaped to your readings and to your goals.
 - **Goals:** where you are now, where you want to be (goals for your weight, body fat and any girth, each a number of
   its own apart from the metrics, with helpers that fill the weight in from a BMI and the waist from your height), and
   how you get there: a pace, the daily energy and protein and fat that make the diet targets, set once or kept
@@ -89,7 +89,7 @@ belongs to that device or server and is never synced.
 ## History
 
 Every change to a workout (its exercises and sets included), program, exercise, food, recipe, diary entry, body metric,
-day of body readings or body goal is kept as a version, whichever device, page, API call or MCP tool made it. **History** in the
+day of body readings, body goal or progress photo is kept as a version, whichever device, page, API call or MCP tool made it. **History** in the
 sidebar lists the latest changes, and **History** beside any of those items lists its versions: any version can be
 restored, and a deleted item brought back with what was deleted along with it. Versions sync, so every device sees the
 same history. Changes older than **Settings → General → History** (180 days unless set) are pruned, each item keeping
