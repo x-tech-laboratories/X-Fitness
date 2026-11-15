@@ -12,12 +12,13 @@ import { calculators_feature } from "./calculators/store.ts";
 import { diet_feature } from "./diet/store.ts";
 import { forget_synced_changes, history_feature, install_history, record_history } from "./history/store.ts";
 import { is_read_only } from "./page_api.ts";
+import { schedule_feature } from "./schedule/store.ts";
 import { settings_feature } from "./settings.ts";
 import { workouts_feature } from "./workouts/store.ts";
 
 // ── Features ─────────────────────────────────────────────────────────────────
 
-export const features = [settings_feature, workouts_feature, diet_feature, body_feature, calculators_feature, history_feature];
+export const features = [settings_feature, workouts_feature, diet_feature, body_feature, calculators_feature, schedule_feature, history_feature];
 
 export const sync_engine = create_sync_engine({ tables: features.flatMap((feature) => feature.tables), after_apply: forget_synced_changes });
 
@@ -73,6 +74,7 @@ const all_methods = {
     typeof diet_feature.methods &
     typeof body_feature.methods &
     typeof calculators_feature.methods &
+    typeof schedule_feature.methods &
     typeof history_feature.methods),
   // Every setting, the ones never set at their defaults, so a page needs no list of defaults of its own.
   get_settings: (database: SqlDatabase): Record<string, unknown> => ({ ...setting_defaults, ...settings_feature.methods.get_settings(database) }),

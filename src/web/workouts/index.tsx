@@ -21,6 +21,7 @@ import { ExercisesTab } from "./ExercisesTab.tsx";
 import { LogTab } from "./LogTab.tsx";
 import { ProgramsTab } from "./ProgramsTab.tsx";
 import { ReportsTab } from "./ReportsTab.tsx";
+import { ScheduleSettings } from "./ScheduleSettings.tsx";
 import { TrainingSettings } from "./TrainingSettings.tsx";
 import { TrainingTab } from "./TrainingTab.tsx";
 import "./workouts.css";
@@ -134,6 +135,12 @@ export function workouts_settings({ settings, set_setting }: FeatureSettingsProp
           </SettingRow>
         </>
       ),
+    },
+    {
+      id: "workouts-schedule",
+      heading: "Schedule",
+      hint: "The program you follow and the days you train, which the Overview's next actions read.",
+      content: <ScheduleSettings settings={settings} set_setting={set_setting} />,
     },
     {
       id: "workouts-calculators",

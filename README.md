@@ -25,7 +25,7 @@ whenever it can be reached.
 - **Calculators:** BMI, body fat by the US Navy tape, by Jackson-Pollock 3- and 7-site calipers and from BMI, lean
   mass and FFMI, waist-to-height and waist-to-hip, BMR and TDEE, water a day, and the TDEE your diary and weight trend
   actually show, filled in from your latest readings, with the seven skinfold sites drawn and numbered over their fields.
-- **Overview:** today's eating against its targets, the weeks' training and every body metric's trend on one page.
+- **Overview:** what to do next (each meal at its start, the followed program's next session on its training days, a missed one marked), today's eating against its targets, the weeks' training and every body metric's trend on one page.
 
 ## Running it
 

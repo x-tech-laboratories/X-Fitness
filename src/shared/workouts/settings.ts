@@ -7,4 +7,6 @@ export const workout_setting_defaults = {
   "workouts.default_rest": 90,
   "workouts.rest_sound": true,
   "workouts.weekly_target": 3,
+  // The program followed, the iCalendar rule its sessions come round on in turn, and the day that rule counts from.
+  "workouts.schedule": { program: "", rule: "", start: "" },
 };

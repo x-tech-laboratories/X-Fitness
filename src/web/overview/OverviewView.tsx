@@ -1,4 +1,4 @@
-// The Overview: today's eating against its targets, how training has gone these weeks, and each body metric's trend.
+// The Overview: what to do next, today's eating against its targets, how training has gone these weeks, and each body metric's trend.
 
 // ── Imports ──────────────────────────────────────────────────────────────────
 
@@ -18,6 +18,7 @@ import { MacroDonut } from "../diet/macros.tsx";
 import { target_meters } from "../diet/targets.ts";
 import { shown_units, type ShownUnits } from "../units.ts";
 import { meets_target, WeeklyWorkoutsChart } from "../workouts/weekly_chart.tsx";
+import { NextActions } from "./NextActions.tsx";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -143,6 +144,7 @@ function OverviewBody({ date, settings, day, metrics, history }: OverviewBodyPro
         <Loaded resource={day}>
           {(eaten) => (
             <Stack>
+              <NextActions />
               <DietToday day={eaten} settings={settings} energy={energy} />
               <Workouts report={workouts} weekly_target={weekly_target} />
               {workouts.days.some((item) => item.workouts > 0) ? <Training report={workouts} weekly_target={weekly_target} units={units} /> : <Empty title="No workouts yet." hint="Log one under Workouts to see your training here." />}

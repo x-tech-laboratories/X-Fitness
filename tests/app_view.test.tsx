@@ -83,6 +83,22 @@ describe("overview", () => {
   });
 });
 
+describe("next actions", () => {
+  it("lists each meal and the followed program's next session, a missed one marked", async () => {
+    const store = fake_page();
+    const program = store.save_program({ name: "PPL" });
+    store.save_program_session(program, { name: "Push", entries: [] });
+    store.set_setting("workouts.schedule", { program, rule: "FREQ=WEEKLY;BYDAY=WE;BYHOUR=18;BYMINUTE=0", start: "2026-11-10" });
+    render(<App />);
+
+    const table = await screen.findByRole("table", { name: "Next actions" });
+    const rows = within(table).getAllByRole("row").slice(1);
+    expect(rows.map((row) => within(row).getByRole("link").textContent)).toEqual(["Eat Lunch", "Eat Dinner", "Eat Breakfast", "Do Push"]);
+    expect(within(rows[0]!).getByText("Missed")).toBeTruthy();
+    expect(within(rows[3]!).getByRole("link").getAttribute("href")).toBe("#/workouts/log");
+  });
+});
+
 describe("history page", () => {
   it("lists the latest changes and brings a deleted food back", async () => {
     const store = fake_page();

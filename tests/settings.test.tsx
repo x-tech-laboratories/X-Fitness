@@ -39,6 +39,18 @@ describe("settings", () => {
     expect(screen.queryByText("Sync")).toBeNull();
   });
 
+  it("saves the program followed and the training days the Overview's next actions read", async () => {
+    const saved: Record<string, unknown> = {};
+    const calls = fake_calls(saved);
+    Object.assign(calls, { get_workout_library: vi.fn(async () => ({ categories: [], exercises: [], programs: [{ id: "ppl", name: "PPL", notes: "", sessions: [] }] })) });
+    set_page_api({ host: "web", calls, device: null, on_change: () => () => undefined });
+    render(<SettingsView />);
+
+    fireEvent.change(await screen.findByRole("combobox", { name: "Program you follow" }), { target: { value: "ppl" } });
+    await waitFor(() => expect(calls.set_setting).toHaveBeenCalledWith("workouts.schedule", { program: "ppl", rule: "", start: "" }));
+    expect(screen.getAllByText("Training days").length).toBeGreaterThan(0);
+  });
+
   it("offers sync on a device and signs it in with the choice of copy", async () => {
     const device = {
       get_sync_status: vi.fn(async () => off),
