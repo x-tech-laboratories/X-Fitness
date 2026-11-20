@@ -1,16 +1,19 @@
 // Reminders of the next actions: each timed meal as it starts and each training day's session as it comes due, shown by
-// the desktop daemon whether its window is open or not.
+// the desktop daemon whether its window is open or not, and handed to a phone ahead of time.
 
 // ── Imports ──────────────────────────────────────────────────────────────────
 
-import { format_local, has_time, parse_local } from "@x-tech-laboratories/x-libs/dates";
+import { add_days, format_local, has_time, parse_local, start_of_day } from "@x-tech-laboratories/x-libs/dates";
 import type { SqlDatabase } from "@x-tech-laboratories/x-libs/sql";
 
 import { app_link } from "../links.ts";
 import { settings_feature } from "../settings.ts";
-import type { NextAction } from "./model.ts";
+import { normalize_meals } from "../diet/model.ts";
+import { diet_setting_defaults } from "../diet/settings.ts";
+import { diet_feature } from "../diet/store.ts";
+import { upcoming_sessions, type NextAction } from "./model.ts";
 import { schedule_setting_defaults } from "./settings.ts";
-import { schedule_feature } from "./store.ts";
+import { followed_sessions, read_schedule, schedule_feature } from "./store.ts";
 
 // ── Shapes ───────────────────────────────────────────────────────────────────
 
@@ -72,4 +75,30 @@ export function due_reminders(database: SqlDatabase, after: Date, until: Date): 
     })
     .map(reminder_of);
   return reminders.filter((reminder, index) => reminders.findIndex((other) => other.key === reminder.key) === index);
+}
+
+// Every reminder from one moment up to another, such as the next two weeks a phone is handed: each timed meal on each
+// day, but for one already eaten, and the training days' sessions in turn as if each is trained.
+export function reminders_between(database: SqlDatabase, after: Date, until: Date): (Reminder & { at: number })[] {
+  const all_settings = settings_feature.methods.get_settings(database);
+  const settings = reminder_settings(all_settings);
+  const found: (Reminder & { at: number })[] = [];
+  if (settings.remind_meals) {
+    const meals = normalize_meals(all_settings["diet.meals"] ?? diet_setting_defaults["diet.meals"]).filter((meal) => meal.start);
+    for (let day = start_of_day(after); day <= until; day = add_days(day, 1)) {
+      const date = format_local(day, false);
+      const eaten = new Set(diet_feature.methods.get_diary_day(database, date).entries.map((entry) => entry.meal));
+      for (const meal of meals.filter((meal) => !eaten.has(meal.id))) {
+        const action: NextAction = { kind: "meal", id: meal.id, title: `Eat ${meal.name}`, due: `${date}T${meal.start}`, overdue: false };
+        const at = parse_local(action.due);
+        if (at > after && at <= until) found.push({ ...reminder_of(action), at: at.getTime() });
+      }
+    }
+  }
+  if (settings.remind_training) {
+    const schedule = read_schedule(all_settings);
+    const { sessions, last } = followed_sessions(database, schedule);
+    for (const { action, at } of upcoming_sessions(schedule, sessions, last, after, until, settings.training_day_time)) found.push({ ...reminder_of(action), at: at.getTime() });
+  }
+  return found.sort((first, second) => first.at - second.at);
 }

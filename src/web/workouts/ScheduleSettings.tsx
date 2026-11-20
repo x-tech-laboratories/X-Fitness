@@ -58,7 +58,7 @@ function TrainingReminders({ settings, set_setting }: FeatureSettingsProps) {
   const time = String(settings["schedule.training_day_time"] ?? schedule_setting_defaults["schedule.training_day_time"]);
   return (
     <>
-      <SettingRow label="Remind me to train" hint="The desktop app shows a notification as each training day's session comes due, even with its window closed." as_label>
+      <SettingRow label="Remind me to train" hint="The desktop and Android apps show a notification as each training day's session comes due, even when closed." as_label>
         <Switch label="Remind me to train" checked={is_on} on_change={(on) => void set_setting("schedule.remind_training", on)} />
       </SettingRow>
       <SettingRow label="Reminder time on training days" hint="When a training day without a time of its own is reminded of.">

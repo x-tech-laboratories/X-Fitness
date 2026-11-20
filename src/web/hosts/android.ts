@@ -1,19 +1,23 @@
-// The phone's page: it keeps its own database, answers its calls on it, backs it up daily, and syncs with a server when
-// one is set.
+// The phone's page: it keeps its own database, answers its calls on it, backs it up daily, syncs with a server when one
+// is set, and hands Android its reminders ahead of time.
 
 // ── Imports ──────────────────────────────────────────────────────────────────
 
 import { App } from "@capacitor/app";
+import { LocalNotifications } from "@capacitor/local-notifications";
 import type { Client } from "@x-tech-laboratories/x-libs/electron/bridge";
 import { keep_backing_up } from "@x-tech-laboratories/x-libs/backups";
 import { phone_backups } from "@x-tech-laboratories/x-libs/phone_backups";
 import { phone_certificates } from "@x-tech-laboratories/x-libs/phone_certificates";
+import { keep_phone_notices } from "@x-tech-laboratories/x-libs/phone_notices";
 import { create_sync_client, sync_device_methods } from "@x-tech-laboratories/x-libs/sync_client";
 import { indexed_db_files, open_wasm_database } from "@x-tech-laboratories/x-libs/web/sqlite_wasm";
 import { local_sync_storage } from "@x-tech-laboratories/x-libs/web/sync_storage";
 
 import { fitness_backup_naming, read_schedule } from "../../shared/backups.ts";
+import { route_of_link } from "../../shared/links.ts";
 import type { DeviceMethods, PageApi } from "../../shared/page_api.ts";
+import { reminders_between } from "../../shared/schedule/reminders.ts";
 import { bind_methods, needs_upgrade, open_store, sync_engine, type FitnessMethods } from "../../shared/store.ts";
 
 // ── Files ────────────────────────────────────────────────────────────────────
@@ -67,16 +71,40 @@ export async function android_api(): Promise<PageApi> {
   await database.save_now();
   const backing_up = keep_backing_up(kept, read_backup_schedule);
 
+  // Reminders are set again after every change here or from the server, and whenever the app comes back; a tap opens
+  // the page to log it. Leave to show them is asked for only once there is something to remind of.
+  const notices = keep_phone_notices({
+    plugin: LocalNotifications,
+    read: (now, until) => {
+      const reminders = reminders_between(database.connection, new Date(now), new Date(until));
+      if (reminders.length > 0) void notices.ask_permission();
+      return reminders.map((reminder) => ({ key: reminder.key, title: reminder.title, body: reminder.body, at: reminder.at, extra: { url: reminder.url } }));
+    },
+    on_tap: (extra) => {
+      const route = route_of_link(extra.url ?? "");
+      if (route) location.hash = route;
+    },
+  });
+  const changed = (): void => {
+    announce();
+    notices.refresh();
+  };
+
   // The server and token stay in the app's private storage, never in the synced data.
   const storage = local_sync_storage({ key: sync_config_key, back_up_before_download: back_up_if_folder });
-  const sync = create_sync_client({ engine: sync_engine, database: () => database.connection, storage, data_name: "fitness data", device_name: "X-Fitness on Android", on_remote_change: announce });
+  const sync = create_sync_client({ engine: sync_engine, database: () => database.connection, storage, data_name: "fitness data", device_name: "X-Fitness on Android", on_remote_change: changed });
 
   // A phone may close the app at any moment once it is in the background, so the database is saved straight away.
   void App.addListener("pause", () => void database.save_now());
-  void App.addListener("resume", () => void sync.sync_now());
+  void App.addListener("resume", () => {
+    void sync.sync_now();
+    notices.refresh();
+  });
   sync.start();
+  notices.refresh();
 
-  const methods: FitnessMethods = bind_methods(() => database.connection, () => undefined);
+  // The page tells its own views of its writes, so a write here only sets the reminders again.
+  const methods: FitnessMethods = bind_methods(() => database.connection, () => notices.refresh());
   const device: DeviceMethods = {
     ...sync_device_methods(sync),
     list_backups: kept.list,
@@ -84,7 +112,7 @@ export async function android_api(): Promise<PageApi> {
     // The current data is backed up first, and sync waits until the user picks which copy wins.
     restore_backup: async (name) => {
       await kept.restore(name);
-      announce();
+      changed();
     },
     remove_backup: kept.remove,
     get_backup_schedule: read_backup_schedule,

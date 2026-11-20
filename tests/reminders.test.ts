@@ -3,7 +3,7 @@ import { DatabaseSync } from "node:sqlite";
 import { describe, expect, it } from "vitest";
 
 import { app_link, route_of_link } from "../src/shared/links.ts";
-import { due_reminders, reminder_moment, reminder_settings } from "../src/shared/schedule/reminders.ts";
+import { due_reminders, reminder_moment, reminder_settings, reminders_between } from "../src/shared/schedule/reminders.ts";
 import { bind_methods, open_store } from "../src/shared/store.ts";
 
 // A store on a throwaway database, with the methods the page calls.
@@ -97,5 +97,50 @@ describe("due reminders", () => {
 
     store.set_setting("schedule.remind_training", false);
     expect(due_reminders(database, tuesday("07:59:40"), tuesday("08:00:10"))).toEqual([]);
+  });
+});
+
+// ============================================================================
+// Reminders ahead of time
+// ============================================================================
+
+describe("reminders over a stretch of time", () => {
+  it("give each timed meal every day, leaving out one already eaten", () => {
+    const { database, store } = open_methods();
+    store.set_setting("schedule.remind_meals", true);
+    store.set_setting("schedule.remind_training", false);
+    const oats = store.save_food({ name: "Oats", serving_size: 100, serving_unit: "g", nutrients: { calories: 380 } } as never);
+    store.add_diary_entry({ date: "2026-11-10", kind: "food", ref_id: oats, amount: 50, unit: "g", meal: "dinner" } as never);
+
+    const reminders = reminders_between(database, tuesday("12:00"), new Date(2026, 10, 11, 12, 0));
+
+    expect(reminders.map((reminder) => reminder.key)).toEqual(["meal-breakfast-2026-11-11T07:00", "meal-lunch-2026-11-11T11:00"]);
+    expect(reminders[0]!.at).toBe(new Date(2026, 10, 11, 7, 0).getTime());
+  });
+
+  it("take the sessions in turn on the training days to come, passing over a day already trained", () => {
+    const { database, store } = open_methods();
+    const program = store.save_program({ name: "PPL" });
+    const push = store.save_program_session(program, { name: "Push", entries: [] });
+    store.save_program_session(program, { name: "Pull", entries: [] });
+    store.save_program_session(program, { name: "Legs", entries: [] });
+    store.set_setting("workouts.schedule", { program, rule: "FREQ=DAILY", start: "2026-11-02" });
+    store.set_setting("schedule.training_day_time", "07:30");
+    store.start_workout("2026-11-10", push, "2026-11-10T06:00:00.000Z");
+
+    const reminders = reminders_between(database, tuesday("06:00"), new Date(2026, 10, 13, 12, 0));
+
+    expect(reminders.map((reminder) => [reminder.title, new Date(reminder.at).getDate(), new Date(reminder.at).getHours()])).toEqual([
+      ["Do Pull", 11, 7],
+      ["Do Legs", 12, 7],
+      ["Do Push", 13, 7],
+    ]);
+  });
+
+  it("give nothing with both kinds turned off", () => {
+    const { database, store } = open_methods();
+    store.set_setting("schedule.remind_training", false);
+
+    expect(reminders_between(database, tuesday("06:00"), new Date(2026, 10, 24))).toEqual([]);
   });
 });

@@ -113,6 +113,30 @@ export function workout_action(schedule: TrainingSchedule, sessions: ScheduledSe
   return null;
 }
 
+// The sessions on the training days to come, up to a moment, each one after the session before as if every one is
+// trained; a day already trained on is passed over. A whole training day comes at the time given, such as a reminder's.
+export function upcoming_sessions(schedule: TrainingSchedule, sessions: ScheduledSession[], last: { session_id: string; date: string }, after: Date, until: Date, day_time: string): { action: NextAction; at: Date }[] {
+  let session = next_session(sessions, last.session_id);
+  if (!session || !schedule.rule) return [];
+  const all_day = is_all_day(schedule.rule);
+  const start = schedule.start || format_local(add_days(start_of_day(after), -28), false);
+  const upcoming: { action: NextAction; at: Date }[] = [];
+  try {
+    for (const occurrence of occurrences(schedule.rule, start)) {
+      const day = format_local(occurrence, false);
+      if (day <= last.date) continue;
+      const at = all_day ? parse_local(`${day}T${day_time}`) : occurrence;
+      if (at > until) break;
+      if (at <= after) continue;
+      upcoming.push({ action: { kind: "workout", id: session.id, title: `Do ${session.name}`, due: format_local(occurrence, !all_day), overdue: false }, at });
+      session = next_session(sessions, session.id)!;
+    }
+  } catch {
+    return upcoming;
+  }
+  return upcoming;
+}
+
 // Missed ones first, then the soonest.
 export function sort_actions(actions: NextAction[]): NextAction[] {
   return actions.toSorted((first, second) => Number(second.overdue) - Number(first.overdue) || first.due.localeCompare(second.due));

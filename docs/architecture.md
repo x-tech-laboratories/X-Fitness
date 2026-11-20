@@ -97,7 +97,10 @@ The desktop daemon turns these into reminders (`src/shared/schedule/reminders.ts
 `agent/scheduled_notices`: every 30 seconds it reads the next actions at the start and the end of the stretch since the
 last check and shows each whose time fell in between, a whole training day at `schedule.training_day_time`. Meals are
 off and training on unless set (`schedule.remind_meals`, `schedule.remind_training`); where the checks got to is kept in
-`reminders.json` beside the database, so a reminder missed while the daemon was stopped shows if under 15 minutes late.
+`reminders.json` beside the database, so a reminder missed while the daemon was stopped shows if under 15 minutes late. A phone has no daemon, so its page
+hands Android the reminders of the next two weeks through X-Libs `phone_notices` (`reminders_between`, the sessions
+after the next taken in turn by `upcoming_sessions`), renewed after every write, every change from the server and every
+return to the app.
 
 ## History
 

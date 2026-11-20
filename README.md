@@ -67,7 +67,9 @@ brings the window back; **Quit completely** there or under **Settings → Deskto
 The daemon also reminds you, with a desktop notification, as each training day's session comes due (turned off under
 **Settings → Workouts → Schedule**, which also sets the time for training days without one) and, once turned on under
 **Settings → Diet → Meals**, as each timed meal starts unless something is already logged in it. A click opens the app
-on the workout log or the diary: the app opens `x-fitness://<page>` links, such as `x-fitness://diet/diary`.
+on the workout log or the diary: the app opens `x-fitness://<page>` links, such as `x-fitness://diet/diary`. The
+Android app hands the next two weeks of reminders to Android ahead of time, renewed whenever anything changes and
+whenever the app opens, and asks to show notifications once there is something to remind of.
 
 **Settings → Desktop** turns off the tray icon, keeping running in the background, and starting at login, which runs
 `x-fitness-desktop --daemon` without opening the window. These belong to the computer and are never synced. The
