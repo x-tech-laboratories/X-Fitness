@@ -47,9 +47,11 @@ buildNpmPackage {
       name = "x-fitness";
       desktopName = "X-Fitness";
       comment = "Workouts, diet and body measurements";
-      exec = "x-fitness-desktop";
+      exec = "x-fitness-desktop %U";
       icon = "x-fitness";
       categories = [ "Utility" ];
+      # Opens x-fitness://<page> links, such as a reminder's, in the app.
+      mimeTypes = [ "x-scheme-handler/x-fitness" ];
     })
   ];
 

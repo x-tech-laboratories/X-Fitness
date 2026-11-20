@@ -20,6 +20,7 @@ import {
   with_shown,
 } from "../../shared/diet/labels.ts";
 import { normalize_meals, nutrient_keys, nutrients, target_key, type Meal, type NutrientGroup } from "../../shared/diet/model.ts";
+import { schedule_setting_defaults } from "../../shared/schedule/settings.ts";
 import type { FeatureSettingsProps } from "../features.tsx";
 import { shown_units } from "../units.ts";
 import { field_value, format_amount, format_nutrient, shown_unit, to_shown_value, to_stored_value } from "./format.ts";
@@ -148,6 +149,13 @@ export function MealSettings({ settings, set_setting }: FeatureSettingsProps) {
       ))}
       <SettingRow label="Add a meal" hint={`The shares add up to ${format_amount(shares)}% of the day's energy target.`}>
         <button type="button" onClick={() => save([...meals, { id: crypto.randomUUID(), name: `Meal ${meals.length + 1}`, start: "", share: 0 }])}>Add meal</button>
+      </SettingRow>
+      <SettingRow label="Remind me of meals" hint="The desktop app shows a notification as each meal with a start time begins, unless something is already logged in it, even with its window closed." as_label>
+        <Switch
+          label="Remind me of meals"
+          checked={(settings["schedule.remind_meals"] ?? schedule_setting_defaults["schedule.remind_meals"]) === true}
+          on_change={(on) => void set_setting("schedule.remind_meals", on)}
+        />
       </SettingRow>
     </>
   );

@@ -8,7 +8,7 @@ import { join } from "node:path";
 import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, nativeTheme, screen, shell, Tray } from "electron";
 import { launch_command, set_autostart } from "@x-tech-laboratories/x-libs/autostart";
 import { format_local } from "@x-tech-laboratories/x-libs/dates";
-import { bring_to_front, hold_single_instance } from "@x-tech-laboratories/x-libs/electron/app";
+import { bring_to_front, first_argument, hold_single_instance } from "@x-tech-laboratories/x-libs/electron/app";
 import type { Implementation, IpcMainEventLike } from "@x-tech-laboratories/x-libs/electron/bridge";
 import { create_app_tray } from "@x-tech-laboratories/x-libs/electron/tray";
 import { create_window, is_app_page } from "@x-tech-laboratories/x-libs/electron/window";
@@ -18,6 +18,7 @@ import { local_mcp_method_names } from "@x-tech-laboratories/x-libs/local_mcp_pr
 
 import { certificate_bridge, desktop_bridge, device_bridge, fitness_bridge, fitness_events, local_mcp_bridge } from "../shared/bridge.ts";
 import type { DesktopMethods, DesktopSettings } from "../shared/desktop.ts";
+import { route_of_link } from "../shared/links.ts";
 import { device_method_names, is_read_only } from "../shared/page_api.ts";
 import type { NextAction } from "../shared/schedule/model.ts";
 import { method_names } from "../shared/store.ts";
@@ -50,7 +51,7 @@ function ensure_daemon(): Promise<unknown> {
   return start_daemon({
     socket_path,
     script: join(import.meta.dirname, "daemon.js"),
-    env: { X_FITNESS_DB: database_path, X_FITNESS_SOCKET: socket_path, X_FITNESS_VERSION: app.getVersion() },
+    env: { X_FITNESS_DB: database_path, X_FITNESS_SOCKET: socket_path, X_FITNESS_VERSION: app.getVersion(), X_FITNESS_ICON: icon_path },
     log_file,
   });
 }
@@ -227,7 +228,8 @@ function start_app(): void {
     register_bridges();
     follow_daemon();
     await apply_window_settings().catch(() => undefined);
-    open_window();
+    // A link the app was opened with, such as a reminder's, opens the window on its page.
+    show_window(first_argument(process.argv, route_of_link) ?? undefined);
   });
 
   app.on("will-quit", () => {
@@ -253,6 +255,11 @@ async function start_daemon_alone(): Promise<void> {
   }
 }
 
-// A second launch brings the window forward, but one that only starts the daemon leaves the window be.
+// A second launch brings the window forward on the page its link names, but one that only starts the daemon leaves the
+// window be.
+function open_from_second_launch(argv: string[]): void {
+  if (!argv.includes("--daemon")) show_window(first_argument(argv, route_of_link) ?? undefined);
+}
+
 if (process.argv.includes("--daemon")) void start_daemon_alone();
-else if (hold_single_instance(app, (argv) => argv.includes("--daemon") || show_window())) start_app();
+else if (hold_single_instance(app, open_from_second_launch)) start_app();

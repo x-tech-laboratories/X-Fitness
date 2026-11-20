@@ -3,12 +3,13 @@
 // ── Imports ──────────────────────────────────────────────────────────────────
 
 import { today } from "@x-tech-laboratories/x-libs/dates";
-import { Select } from "@x-tech-laboratories/x-libs/web/react/controls";
+import { CommitInput, Select, Switch } from "@x-tech-laboratories/x-libs/web/react/controls";
 import { SettingRow } from "@x-tech-laboratories/x-libs/web/react/layout";
 import { RecurrenceField } from "@x-tech-laboratories/x-libs/web/react/recurrence";
 import { Loaded } from "@x-tech-laboratories/x-libs/web/react/states";
 
 import type { TrainingSchedule } from "../../shared/schedule/model.ts";
+import { schedule_setting_defaults } from "../../shared/schedule/settings.ts";
 import { workout_setting_defaults } from "../../shared/workouts/settings.ts";
 import { use_data } from "../api.ts";
 import type { FeatureSettingsProps } from "../features.tsx";
@@ -42,9 +43,27 @@ export function ScheduleSettings({ settings, set_setting }: FeatureSettingsProps
                 on_change={(rule) => save({ rule, start: today() })}
               />
             </SettingRow>
+            <TrainingReminders settings={settings} set_setting={set_setting} />
           </>
         );
       }}
     </Loaded>
+  );
+}
+
+// ── Reminders ────────────────────────────────────────────────────────────────
+
+function TrainingReminders({ settings, set_setting }: FeatureSettingsProps) {
+  const is_on = (settings["schedule.remind_training"] ?? schedule_setting_defaults["schedule.remind_training"]) === true;
+  const time = String(settings["schedule.training_day_time"] ?? schedule_setting_defaults["schedule.training_day_time"]);
+  return (
+    <>
+      <SettingRow label="Remind me to train" hint="The desktop app shows a notification as each training day's session comes due, even with its window closed." as_label>
+        <Switch label="Remind me to train" checked={is_on} on_change={(on) => void set_setting("schedule.remind_training", on)} />
+      </SettingRow>
+      <SettingRow label="Reminder time on training days" hint="When a training day without a time of its own is reminded of.">
+        <CommitInput aria-label="Reminder time on training days" type="time" value={time} disabled={!is_on} on_commit={(event) => event.currentTarget.value && void set_setting("schedule.training_day_time", event.currentTarget.value)} />
+      </SettingRow>
+    </>
   );
 }

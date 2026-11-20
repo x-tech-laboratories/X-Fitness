@@ -93,6 +93,12 @@ day the rule counts from, which resets on every change so an interval keeps its 
 last one logged; one is done once a workout of the program is logged that day, and missed until the next training day
 comes due. A rule without an hour gives whole days.
 
+The desktop daemon turns these into reminders (`src/shared/schedule/reminders.ts`) through X-Libs
+`agent/scheduled_notices`: every 30 seconds it reads the next actions at the start and the end of the stretch since the
+last check and shows each whose time fell in between, a whole training day at `schedule.training_day_time`. Meals are
+off and training on unless set (`schedule.remind_meals`, `schedule.remind_training`); where the checks got to is kept in
+`reminders.json` beside the database, so a reminder missed while the daemon was stopped shows if under 15 minutes late.
+
 ## History
 
 `src/shared/history/store.ts` keeps a version of every item a write touches through X-Libs `create_history`, one
