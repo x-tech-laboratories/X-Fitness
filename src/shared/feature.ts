@@ -10,7 +10,7 @@ import type { SyncedTable } from "@x-tech-laboratories/x-libs/sync_engine";
 
 // ── Features ─────────────────────────────────────────────────────────────────
 
-// A call runs where the database is: on the server, in the desktop app's main process, or in the phone's page.
+// A call runs where the database is: on the server, in the desktop app's daemon, or in the phone's page.
 export type StoreMethod = (database: SqlDatabase, ...args: never[]) => unknown;
 
 export interface Feature<Methods extends Record<string, StoreMethod>> {

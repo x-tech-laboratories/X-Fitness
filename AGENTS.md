@@ -16,7 +16,8 @@ server. Read `README.md` first, then `docs/architecture.md`. It follows the
 
 - Every feature lives in `src/shared/<feature>/` (store, types, importers) and `src/web/<feature>/` (views, settings);
   `src/shared/store.ts`, `src/web/features.tsx` and `src/web/App.tsx` only list features.
-- Code in `src/shared/` runs on the server, in Electron's main process and in the phone's page: no DOM, no `node:` imports.
+- Code in `src/shared/` runs on the server, in the desktop daemon and in the phone's page: no DOM, no `node:` imports.
+- The desktop app's work goes in `src/daemon`; `src/main` keeps only what needs Electron: the window, the tray and the login entry.
 - A store call that only reads is named `list_`, `get_`, `search_`, `lookup_` or `export_`; any other name announces a change.
 - Every store call has a spec in `src/shared/<feature>/api.ts` saying what it does and its arguments, so the API and MCP
   offer it too; describe it for someone who has never seen the page.

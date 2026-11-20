@@ -8,12 +8,27 @@ the page a `PageApi` (`src/shared/bridge.ts`):
 | Host    | Where the data is                                   | How a call travels                                   | Sync                        |
 | ------- | --------------------------------------------------- | ---------------------------------------------------- | --------------------------- |
 | web     | the server's SQLite file                            | `POST api/call/<method>` with the arguments as JSON  | none; the browser is online |
-| desktop | `fitness.db` in Electron's profile folder           | IPC through the preload (`src/preload/index.ts`)     | X-Libs `sync_client`        |
+| desktop | `fitness.db` in Electron's profile folder           | IPC through the preload to the main process, then HTTP over the daemon's socket | X-Libs `sync_client` in the daemon |
 | android | SQLite in WebAssembly, saved to IndexedDB           | straight to the store in the same page               | X-Libs `sync_client`        |
 
 Views never ask which host they are on. They call `calls().<method>(...)` from `src/web/api.ts` and load with
 `use_data`, which reloads quietly whenever `data_watch` is bumped: after this page writes, and when another page or
 device changed something.
+
+## The desktop daemon
+
+The desktop app is a window and a daemon, as the Application Standard sets out. `src/daemon/main.ts` is plain Node on
+Electron's own binary: it opens the database, runs sync, backups and the local MCP endpoint, and serves the same data
+calls as the web server (`src/server/calls.ts`) over HTTP on `$XDG_RUNTIME_DIR/x-fitness/daemon.sock`, with sync,
+backups, certificates, MCP settings and its own settings under `/api/device`, `/api/certificates`, `/api/local_mcp` and
+`/api/daemon`. `src/main/index.ts` starts it through X-Libs `local_daemon` unless one answers, passes the preload's calls
+on to it, and hands its change events to the window. The main process keeps only the window, the tray icon
+(`src/main/tray.ts`, its menu worked out in `tray_menu.ts`) and the login entry through X-Libs `autostart`.
+
+The tray, background running and start at login are kept in `desktop.json` beside the database, not in the synced
+settings. Without "Keep running in the background" the daemon stops half a minute after its last window. A profile other
+than the installed app's, such as `X_FITNESS_USER_DATA` in dev, gets a socket and log of its own and never writes the
+login entry.
 
 ## Features
 

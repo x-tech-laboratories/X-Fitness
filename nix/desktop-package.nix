@@ -36,7 +36,8 @@ buildNpmPackage {
     install -Dm644 resources/icon.png $out/share/icons/hicolor/512x512/apps/x-fitness.png
     makeWrapper ${lib.getExe electron_43} $out/bin/x-fitness-desktop \
       --add-flags $out/lib/x-fitness-desktop \
-      --unset ELECTRON_RUN_AS_NODE
+      --unset ELECTRON_RUN_AS_NODE \
+      --set X_FITNESS_LAUNCHER x-fitness-desktop
 
     runHook postInstall
   '';

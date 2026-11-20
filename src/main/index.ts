@@ -1,110 +1,123 @@
-// The desktop app: its own database in the profile folder, the page's calls answered on it, daily backups beside it,
-// and sync with a server when one is set, so it works offline and catches up once the server answers.
+// The desktop app's window: Electron's main process, which shows X-Fitness, keeps its tray icon and its login entry, and
+// leaves the work to the daemon in src/daemon, reached over a Unix socket.
 
 // ── Imports ──────────────────────────────────────────────────────────────────
 
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { hostname } from "node:os";
 import { join } from "node:path";
-import { DatabaseSync } from "node:sqlite";
 
-import { app, BrowserWindow, ipcMain, nativeTheme, screen, session, shell } from "electron";
+import { app, BrowserWindow, ipcMain, nativeTheme, screen, shell, dialog } from "electron";
+import { launch_command, set_autostart } from "@x-tech-laboratories/x-libs/autostart";
+import { format_local } from "@x-tech-laboratories/x-libs/dates";
 import { bring_to_front, hold_single_instance } from "@x-tech-laboratories/x-libs/electron/app";
-import type { IpcMainEventLike } from "@x-tech-laboratories/x-libs/electron/bridge";
+import type { Implementation, IpcMainEventLike } from "@x-tech-laboratories/x-libs/electron/bridge";
 import { create_window, is_app_page } from "@x-tech-laboratories/x-libs/electron/window";
-import { keep_backing_up, type BackupSchedule } from "@x-tech-laboratories/x-libs/backups";
-import { sqlite_backups } from "@x-tech-laboratories/x-libs/server/sqlite_backups";
-import { create_certificate_trust } from "@x-tech-laboratories/x-libs/certificates";
-import { create_local_mcp } from "@x-tech-laboratories/x-libs/electron/mcp";
-import { trust_in_session, trusting_fetch } from "@x-tech-laboratories/x-libs/electron/certificates";
-import { create_sync_client, sync_device_methods } from "@x-tech-laboratories/x-libs/sync_client";
-import { file_sync_storage } from "@x-tech-laboratories/x-libs/sync_file_storage";
+import { call_daemon, daemon_log_path, daemon_socket_path, follow_daemon_events, start_daemon } from "@x-tech-laboratories/x-libs/local_daemon";
+import { certificate_method_names } from "@x-tech-laboratories/x-libs/certificate_protocol";
+import { local_mcp_method_names } from "@x-tech-laboratories/x-libs/local_mcp_protocol";
 
-import { fitness_backup_naming, read_schedule } from "../shared/backups.ts";
-import { certificate_bridge, device_bridge, fitness_bridge, fitness_events, local_mcp_bridge } from "../shared/bridge.ts";
-import { mcp_instructions, without_secrets } from "../shared/mcp.ts";
-import { bind_methods, fitness_api, is_read_only, needs_upgrade, open_store, sync_engine } from "../shared/store.ts";
+import { certificate_bridge, desktop_bridge, device_bridge, fitness_bridge, fitness_events, local_mcp_bridge } from "../shared/bridge.ts";
+import type { DesktopMethods, DesktopSettings } from "../shared/desktop.ts";
+import { device_method_names, is_read_only } from "../shared/page_api.ts";
+import type { NextAction } from "../shared/schedule/model.ts";
+import { method_names } from "../shared/store.ts";
+import type { Workout } from "../shared/workouts/model.ts";
+import { apply_tray_setting, is_tray_shown, refresh_tray, stop_tray, type TrayHost } from "./tray.ts";
+import { running_workouts, type TrayState } from "./tray_menu.ts";
 
 // ── Profile ──────────────────────────────────────────────────────────────────
 
 // Dev runs set this so they never touch the installed app's data.
-if (process.env.X_FITNESS_USER_DATA) app.setPath("userData", join(process.cwd(), process.env.X_FITNESS_USER_DATA));
+const is_own_profile = process.env.X_FITNESS_USER_DATA === undefined;
+if (!is_own_profile) app.setPath("userData", join(process.cwd(), process.env.X_FITNESS_USER_DATA!));
 
 const profile = app.getPath("userData");
-const backups_folder = join(profile, "backups");
-
-// ── Database ─────────────────────────────────────────────────────────────────
-
 const database_path = join(profile, "fitness.db");
-mkdirSync(profile, { recursive: true });
-let database = new DatabaseSync(database_path);
-database.exec("PRAGMA journal_mode = WAL");
 
-// ── Backups ──────────────────────────────────────────────────────────────────
+// Any other profile gets a daemon, socket and log of its own, so a dev or test run never reaches the user's daemon.
+const socket_path = daemon_socket_path({ app: "x-fitness", data_file: is_own_profile ? null : database_path });
+const log_file = is_own_profile ? daemon_log_path("x-fitness") : join(profile, "daemon.log");
 
-const kept = sqlite_backups({
-  folder: () => {
-    mkdirSync(backups_folder, { recursive: true });
-    return backups_folder;
-  },
-  naming: fitness_backup_naming,
-  database: () => database,
-  database_path: () => database_path,
-  close: () => database.close(),
-  open: () => {
-    database = new DatabaseSync(database_path);
-    database.exec("PRAGMA journal_mode = WAL");
-    open_store(database);
-  },
-  after_restore: (restored) => sync_engine.forget_history(restored),
-});
+// The built app sits in out/main, and resources/ beside out/ both in the source tree and in the package.
+const icon_path = join(import.meta.dirname, "../../resources/icon.png");
 
-if (needs_upgrade(database)) await kept.create();
-open_store(database);
+// The command that starts this app again, which the login entry runs.
+const own_command = (args: string[]): string[] =>
+  launch_command({ launcher: process.env.X_FITNESS_LAUNCHER, is_packaged: app.isPackaged, app_path: app.getAppPath(), args });
 
-// The schedule belongs to this device, so it is kept beside the database rather than in the synced settings.
-const schedule_file = join(profile, "backup-schedule.json");
+// ── Daemon ───────────────────────────────────────────────────────────────────
 
-function read_backup_schedule(): BackupSchedule {
-  return read_schedule(existsSync(schedule_file) ? JSON.parse(readFileSync(schedule_file, "utf8")) : null);
+function ensure_daemon(): Promise<unknown> {
+  return start_daemon({
+    socket_path,
+    script: join(import.meta.dirname, "daemon.js"),
+    env: { X_FITNESS_DB: database_path, X_FITNESS_SOCKET: socket_path, X_FITNESS_VERSION: app.getVersion() },
+    log_file,
+  });
 }
 
-const backing_up = keep_backing_up(kept, read_backup_schedule);
+// Given by the daemon when this process connects, so the window is not told about its own changes.
+let client_id = "";
+
+// One call to the daemon, as the page made it; a change also shows in the tray at once.
+async function call(path: string, args: unknown[]): Promise<unknown> {
+  const result = await call_daemon(socket_path, `/api/${path}`, args, { "x-client-id": client_id });
+  if (!is_read_only(path.slice(path.lastIndexOf("/") + 1))) void refresh_tray(tray_host);
+  return result;
+}
+
+// Every call in a table, passed on to the daemon under a path of its own.
+function forwarded(names: readonly string[], prefix: string): Record<string, (...args: unknown[]) => Promise<unknown>> {
+  return Object.fromEntries(names.map((name) => [name, (...args: unknown[]) => call(`${prefix}/${name}`, args)]));
+}
+
+function get_desktop_settings(): Promise<DesktopSettings> {
+  return call("daemon/get_desktop_settings", []) as Promise<DesktopSettings>;
+}
+
+// Settings the window itself acts on: the tray and starting at login.
+async function apply_window_settings(): Promise<void> {
+  const settings = await get_desktop_settings();
+  apply_tray_setting(settings.show_tray_icon, tray_host);
+  apply_autostart(settings);
+}
+
+// Only the user's own profile starts at login; a dev run never writes the login entry.
+function apply_autostart(settings: DesktopSettings): void {
+  if (!is_own_profile) return;
+  set_autostart(
+    { id: "x-fitness-daemon", name: "X-Fitness in the background", comment: "Sync and backups for X-Fitness", icon: icon_path, command: own_command(["--daemon"]) },
+    settings.start_at_login && settings.keep_running_in_background,
+  );
+}
+
+// Every window hears of the daemon's changes, and comes back to a daemon that stopped, such as one quit from the tray.
+let is_quitting = false;
+let stop_following = (): void => {};
+
+function follow_daemon(): void {
+  stop_following = follow_daemon_events(
+    socket_path,
+    "/api/events",
+    (event, data) => {
+      if (event === "hello") client_id = data;
+      if (event === "changed") announce_change();
+      if (event === "sync_status") fitness_events.emit(BrowserWindow.getAllWindows(), "sync_status", JSON.parse(data));
+    },
+    {
+      // A reconnect may have missed changes, so the windows fetch again.
+      on_connect: announce_change,
+      on_disconnect: () => {
+        if (!is_quitting) void ensure_daemon().catch((error: unknown) => console.error(error));
+      },
+    },
+  );
+}
 
 function announce_change(): void {
   fitness_events.emit(BrowserWindow.getAllWindows(), "changed", null);
+  void apply_window_settings().catch(() => undefined);
+  void refresh_tray(tray_host);
 }
-
-// ── Sync ─────────────────────────────────────────────────────────────────────
-
-// Server certificates the user trusted, such as a home server's self-signed one, kept beside the database.
-const certificates = create_certificate_trust({ file: join(profile, "trusted-certificates.json") });
-
-const sync = create_sync_client({
-  engine: sync_engine,
-  database: () => database,
-  storage: file_sync_storage({ file: join(profile, "sync.json"), back_up_before_download: async () => void (await kept.create()) }),
-  data_name: "fitness data",
-  device_name: `X-Fitness on ${hostname()}`,
-  on_remote_change: announce_change,
-  on_status: (status) => fitness_events.emit(BrowserWindow.getAllWindows(), "sync_status", status),
-  // Chromium's network stack honours the trusted certificates, which Node's own fetch would not.
-  fetch: trusting_fetch(session, certificates),
-});
-
-// ── MCP ──────────────────────────────────────────────────────────────────────
-
-// Off until turned on in Settings; a change made through it reaches the open window and syncs like any other.
-const local_mcp = create_local_mcp({
-  name: "x-fitness",
-  version: app.getVersion(),
-  instructions: mcp_instructions,
-  api: fitness_api,
-  is_read_only,
-  settings_file: join(profile, "mcp.json"),
-  default_port: 3918,
-  call: async (method, args) => without_secrets(method, await fitness_bridge.dispatch(bind_methods(() => database, announce_change), method, args)),
-});
 
 // ── Window ───────────────────────────────────────────────────────────────────
 
@@ -117,7 +130,7 @@ function open_window(): BrowserWindow {
   return create_window(BrowserWindow, {
     ...page,
     title: "X-Fitness",
-    icon: join(import.meta.dirname, "../../resources/icon.png"),
+    icon: icon_path,
     // electron-vite emits an ESM preload as .mjs; loading .js here silently yields no bridge.
     preload: join(import.meta.dirname, "../preload/index.mjs"),
     default_size: { width: 1100, height: 760 },
@@ -129,55 +142,110 @@ function open_window(): BrowserWindow {
   });
 }
 
-// ── Start ────────────────────────────────────────────────────────────────────
+// Brings the window forward, making one if it was closed, and hands it the route once its page listens.
+function show_window(route?: string): void {
+  const existing = BrowserWindow.getAllWindows()[0];
+  const window = existing ?? open_window();
+  bring_to_front(window);
+  if (!route) return;
+  if (existing) fitness_events.emit([window], "open", route);
+  else window.webContents.once("did-finish-load", () => fitness_events.emit([window], "open", route));
+}
+
+// Stops the daemon as well, so nothing runs until the app is opened again.
+async function quit_completely(): Promise<void> {
+  is_quitting = true;
+  await call("daemon/stop_daemon", []).catch(() => undefined);
+  app.quit();
+}
+
+// ── Tray icon ────────────────────────────────────────────────────────────────
+
+async function read_tray_state(): Promise<TrayState> {
+  const now = new Date();
+  const today = format_local(now, false);
+  const [workouts, next] = (await Promise.all([call("call/list_workouts", [today]), call("call/list_next_actions", [format_local(now, true)])])) as [Workout[], NextAction[]];
+  return { workouts: running_workouts(workouts, now), next, today };
+}
+
+const tray_host: TrayHost = {
+  icon_path,
+  read_state: read_tray_state,
+  finish_workout: (workout_id) => call("call/finish_workout", [workout_id, new Date().toISOString()]).then(() => undefined),
+  open_route: (route) => show_window(route),
+  show_window: () => show_window(),
+  quit: () => {
+    is_quitting = true;
+    app.quit();
+  },
+  quit_completely: () => void quit_completely(),
+};
+
+// ── Bridges ──────────────────────────────────────────────────────────────────
 
 // Only the app's own page may call in, never a site a link led to.
 function trusted(event: IpcMainEventLike): boolean {
   return is_app_page(event.senderFrame?.url ?? "", page);
 }
 
-function show_existing_window(): void {
-  const [window] = BrowserWindow.getAllWindows();
-  if (window) bring_to_front(window);
+// The page's calls go to the daemon, but for quitting and the settings the window acts on.
+function register_bridges(): void {
+  const options = { trusted, envelopes: true };
+  fitness_bridge.handle(ipcMain, forwarded(method_names, "call") as never, options);
+  device_bridge.handle(ipcMain, forwarded(device_method_names, "device") as never, options);
+  certificate_bridge.handle(ipcMain, forwarded(certificate_method_names, "certificates") as never, options);
+  local_mcp_bridge.handle(ipcMain, forwarded(local_mcp_method_names, "local_mcp") as never, options);
+  const desktop: Implementation<DesktopMethods> = {
+    get_desktop_settings,
+    set_desktop_setting: async (key, value) => {
+      await call("daemon/set_desktop_setting", [key, value]);
+      await apply_window_settings();
+    },
+    quit_completely,
+  };
+  desktop_bridge.handle(ipcMain, desktop, options);
 }
 
-if (hold_single_instance(app, show_existing_window)) {
-  void app.whenReady().then(() => {
-    fitness_bridge.handle(ipcMain, bind_methods(() => database, announce_change), { trusted, envelopes: true });
-    certificate_bridge.handle(ipcMain, certificates.methods, { trusted, envelopes: true });
-    local_mcp_bridge.handle(ipcMain, local_mcp.methods, { trusted, envelopes: true });
-    trust_in_session(session.defaultSession, certificates.is_trusted);
-    device_bridge.handle(
-      ipcMain,
-      {
-        ...sync_device_methods(sync),
-        list_backups: kept.list,
-        create_backup: () => kept.create(),
-        // The restored data no longer matches the server's, so sync waits until the user picks which copy wins.
-        restore_backup: async (name) => {
-          sync.disconnect();
-          await kept.restore(name);
-          announce_change();
-        },
-        remove_backup: kept.remove,
-        get_backup_schedule: read_backup_schedule,
-        set_backup_schedule: (schedule) => {
-          writeFileSync(schedule_file, JSON.stringify(read_schedule(schedule), null, 2));
-          void backing_up.check();
-        },
-      },
-      { trusted, envelopes: true },
-    );
+// ── Start ────────────────────────────────────────────────────────────────────
+
+function start_app(): void {
+  void app.whenReady().then(async () => {
+    try {
+      await ensure_daemon();
+    } catch (error) {
+      dialog.showErrorBox("X-Fitness could not start", `${error instanceof Error ? error.message : String(error)}\n\nSee ${log_file}.`);
+      app.exit(1);
+      return;
+    }
+    register_bridges();
+    follow_daemon();
+    await apply_window_settings().catch(() => undefined);
     open_window();
-    sync.start();
-    void local_mcp.start();
   });
 
+  app.on("will-quit", () => {
+    is_quitting = true;
+    stop_following();
+    stop_tray();
+  });
+
+  // Closing the window ends only the window, or leaves the app in the tray; the daemon runs on either way.
   app.on("window-all-closed", () => {
-    sync.stop();
-    backing_up.stop();
-    void local_mcp.stop();
-    database.close();
-    app.quit();
+    if (!is_tray_shown()) app.quit();
   });
 }
+
+// `x-fitness-desktop --daemon`, as the login entry runs it, starts only the daemon.
+async function start_daemon_alone(): Promise<void> {
+  try {
+    await ensure_daemon();
+    app.exit(0);
+  } catch (error) {
+    console.error(error instanceof Error ? error.message : error);
+    app.exit(1);
+  }
+}
+
+// A second launch brings the window forward, but one that only starts the daemon leaves the window be.
+if (process.argv.includes("--daemon")) void start_daemon_alone();
+else if (hold_single_instance(app, (argv) => argv.includes("--daemon") || show_window())) start_app();
