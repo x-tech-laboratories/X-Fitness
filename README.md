@@ -57,6 +57,17 @@ The address and port come from `X_FITNESS_HOST` and `X_FITNESS_PORT` (or `--host
 set. The admins are read from the accounts file `X_FITNESS_PASSWORD_HASH_FILE` names, one `name:hash` line each;
 `npm run hash-password -- <name> <file>` adds one or changes their password. `x-fitness --help` lists every option.
 
+## The desktop app in the background
+
+The desktop app runs as two processes: a daemon that holds the data and does the work, and the window that shows it.
+Closing the window leaves sync, backups and the MCP server running, and the window opens again straight onto the data.
+A tray icon shows the workout under way with its time and a Finish, lists the next meals and training sessions, and
+brings the window back; **Quit completely** there or under **Settings → Desktop** stops the daemon too.
+
+**Settings → Desktop** turns off the tray icon, keeping running in the background, and starting at login, which runs
+`x-fitness-desktop --daemon` without opening the window. These belong to the computer and are never synced. The
+daemon's log is `~/.local/state/x-fitness/daemon.log`.
+
 ## Signing in
 
 A browser signs in with a name and password, the X-Libs accounts every X-app shares. Unless "Keep me signed in" is
@@ -113,7 +124,7 @@ Every call the page makes is open to other programs on the server, behind a toke
   ```
 
 The desktop app can serve the same MCP tools itself, on its own data and with no server or token: turn on **Settings →
-MCP server** and it listens on `http://127.0.0.1:3918/mcp` (the port is set there too), reachable only from the same
+MCP server** and, while its daemon runs, and it listens on `http://127.0.0.1:3918/mcp` (the port is set there too), reachable only from the same
 computer:
 
 ```sh
@@ -142,8 +153,9 @@ services.x-fitness = {
 
 ```
 src/
-  server/    Fastify app and main.ts
-  main/      Electron main process: its database, the page's calls, sync
+  server/    Fastify app and main.ts, and the calls it shares with the daemon
+  daemon/    the desktop app's daemon: its database, the page's calls, sync, backups and MCP, on a Unix socket
+  main/      Electron main process: the window, the tray icon and the login entry, passing calls to the daemon
   preload/   the desktop page's bridge
   web/       the React page, one folder per feature, and hosts/ for web, desktop and Android
   shared/    the store every host runs, one folder per feature, and the bridge's method tables

@@ -7,7 +7,8 @@ import type { CertificateClient } from "@x-tech-laboratories/x-libs/certificate_
 import type { EventsClient } from "@x-tech-laboratories/x-libs/electron/events";
 import type { LocalMcpClient } from "@x-tech-laboratories/x-libs/local_mcp_protocol";
 
-import { certificates_api_name, device_api_name, events_api_name, fitness_api_name, local_mcp_api_name, type DeviceMethods, type FitnessEvents, type PageApi } from "../../shared/page_api.ts";
+import { certificates_api_name, desktop_api_name, device_api_name, events_api_name, fitness_api_name, local_mcp_api_name, type DeviceMethods, type FitnessEvents, type PageApi } from "../../shared/page_api.ts";
+import type { DesktopMethods } from "../../shared/desktop.ts";
 import type { FitnessMethods } from "../../shared/store.ts";
 
 // ── Api ──────────────────────────────────────────────────────────────────────
@@ -22,6 +23,8 @@ export function desktop_api(): PageApi {
   const desktop = window as unknown as DesktopWindow;
   const events = desktop[events_api_name] as EventsClient<FitnessEvents>;
   const device = desktop[device_api_name] as Client<DeviceMethods>;
+  // The tray opens the page on a route, such as the workout under way.
+  events.on("open", (route) => (location.hash = route));
   return {
     host: "desktop",
     calls: desktop[fitness_api_name] as Client<FitnessMethods>,
@@ -29,6 +32,7 @@ export function desktop_api(): PageApi {
     backups: device,
     certificates: desktop[certificates_api_name] as CertificateClient,
     local_mcp: desktop[local_mcp_api_name] as LocalMcpClient,
+    desktop: desktop[desktop_api_name] as Client<DesktopMethods>,
     on_change: (listener) => events.on("changed", listener),
   };
 }

@@ -9,6 +9,7 @@ import type { CertificateClient } from "@x-tech-laboratories/x-libs/certificate_
 import type { LocalMcpClient } from "@x-tech-laboratories/x-libs/local_mcp_protocol";
 import { sync_device_method_names, type SyncDeviceMethods, type SyncStatus } from "@x-tech-laboratories/x-libs/sync_protocol";
 
+import type { DesktopMethods } from "./desktop.ts";
 import type { FitnessMethods } from "./store.ts";
 
 // ── Names ────────────────────────────────────────────────────────────────────
@@ -18,6 +19,7 @@ export const device_api_name = "x_fitness_device";
 export const events_api_name = "x_fitness_events";
 export const certificates_api_name = "x_fitness_certificates";
 export const local_mcp_api_name = "x_fitness_local_mcp";
+export const desktop_api_name = "x_fitness_desktop";
 
 // ── Device calls ─────────────────────────────────────────────────────────────
 
@@ -26,8 +28,9 @@ export type DeviceMethods = SyncDeviceMethods & BackupMethods;
 
 export const device_method_names = [...sync_device_method_names, ...backup_method_names] as const;
 
-// What the main process tells the page on its own: the data changed elsewhere, or sync's status moved.
-export type FitnessEvents = { changed: null; sync_status: SyncStatus };
+// What the main process tells the page on its own: the data changed elsewhere, sync's status moved, or the tray asked
+// for a route such as "#/workouts/log".
+export type FitnessEvents = { changed: null; sync_status: SyncStatus; open: string };
 
 // ── The page's api ───────────────────────────────────────────────────────────
 
@@ -47,6 +50,8 @@ export interface PageApi {
   certificates?: CertificateClient;
   // Set on the desktop, which can serve its own MCP endpoint to AI clients on the same computer.
   local_mcp?: LocalMcpClient;
+  // Set on the desktop, whose tray, background running and start at login belong to the computer.
+  desktop?: Client<DesktopMethods>;
   // Runs whenever the data changed somewhere else; returns the function that stops listening.
   on_change: (listener: () => void) => () => void;
 }
