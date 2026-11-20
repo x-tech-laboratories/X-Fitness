@@ -5,11 +5,12 @@
 
 import { join } from "node:path";
 
-import { app, BrowserWindow, ipcMain, nativeTheme, screen, shell, dialog } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, nativeTheme, screen, shell, Tray } from "electron";
 import { launch_command, set_autostart } from "@x-tech-laboratories/x-libs/autostart";
 import { format_local } from "@x-tech-laboratories/x-libs/dates";
 import { bring_to_front, hold_single_instance } from "@x-tech-laboratories/x-libs/electron/app";
 import type { Implementation, IpcMainEventLike } from "@x-tech-laboratories/x-libs/electron/bridge";
+import { create_app_tray } from "@x-tech-laboratories/x-libs/electron/tray";
 import { create_window, is_app_page } from "@x-tech-laboratories/x-libs/electron/window";
 import { call_daemon, daemon_log_path, daemon_socket_path, follow_daemon_events, start_daemon } from "@x-tech-laboratories/x-libs/local_daemon";
 import { certificate_method_names } from "@x-tech-laboratories/x-libs/certificate_protocol";
@@ -21,8 +22,7 @@ import { device_method_names, is_read_only } from "../shared/page_api.ts";
 import type { NextAction } from "../shared/schedule/model.ts";
 import { method_names } from "../shared/store.ts";
 import type { Workout } from "../shared/workouts/model.ts";
-import { apply_tray_setting, is_tray_shown, refresh_tray, stop_tray, type TrayHost } from "./tray.ts";
-import { running_workouts, type TrayState } from "./tray_menu.ts";
+import { running_workouts, tray_view, type TrayState } from "./tray_menu.ts";
 
 // ── Profile ──────────────────────────────────────────────────────────────────
 
@@ -61,7 +61,7 @@ let client_id = "";
 // One call to the daemon, as the page made it; a change also shows in the tray at once.
 async function call(path: string, args: unknown[]): Promise<unknown> {
   const result = await call_daemon(socket_path, `/api/${path}`, args, { "x-client-id": client_id });
-  if (!is_read_only(path.slice(path.lastIndexOf("/") + 1))) void refresh_tray(tray_host);
+  if (!is_read_only(path.slice(path.lastIndexOf("/") + 1))) void tray.refresh();
   return result;
 }
 
@@ -77,7 +77,7 @@ function get_desktop_settings(): Promise<DesktopSettings> {
 // Settings the window itself acts on: the tray and starting at login.
 async function apply_window_settings(): Promise<void> {
   const settings = await get_desktop_settings();
-  apply_tray_setting(settings.show_tray_icon, tray_host);
+  tray.set_shown(settings.show_tray_icon);
   apply_autostart(settings);
 }
 
@@ -116,7 +116,7 @@ function follow_daemon(): void {
 function announce_change(): void {
   fitness_events.emit(BrowserWindow.getAllWindows(), "changed", null);
   void apply_window_settings().catch(() => undefined);
-  void refresh_tray(tray_host);
+  void tray.refresh();
 }
 
 // ── Window ───────────────────────────────────────────────────────────────────
@@ -168,18 +168,25 @@ async function read_tray_state(): Promise<TrayState> {
   return { workouts: running_workouts(workouts, now), next, today };
 }
 
-const tray_host: TrayHost = {
+// The tray brings the window forward, making one again if it was closed, and opens the page where a row points.
+// Its own calls go with this process's client id, and the page hears of them as a change from elsewhere.
+const tray = create_app_tray({
+  electron: { Tray, Menu, nativeImage },
   icon_path,
-  read_state: read_tray_state,
-  finish_workout: (workout_id) => call("call/finish_workout", [workout_id, new Date().toISOString()]).then(() => undefined),
-  open_route: (route) => show_window(route),
-  show_window: () => show_window(),
-  quit: () => {
-    is_quitting = true;
-    app.quit();
-  },
-  quit_completely: () => void quit_completely(),
-};
+  on_click: () => show_window(),
+  on_error: (error) => console.error(error),
+  read: async () =>
+    tray_view(await read_tray_state(), {
+      open_route: (route) => show_window(route),
+      finish_workout: (workout_id) => call("call/finish_workout", [workout_id, new Date().toISOString()]).then(announce_change),
+      show: () => show_window(),
+      quit: () => {
+        is_quitting = true;
+        app.quit();
+      },
+      quit_completely: () => void quit_completely(),
+    }),
+});
 
 // ── Bridges ──────────────────────────────────────────────────────────────────
 
@@ -226,12 +233,12 @@ function start_app(): void {
   app.on("will-quit", () => {
     is_quitting = true;
     stop_following();
-    stop_tray();
+    tray.stop();
   });
 
   // Closing the window ends only the window, or leaves the app in the tray; the daemon runs on either way.
   app.on("window-all-closed", () => {
-    if (!is_tray_shown()) app.quit();
+    if (!tray.is_shown()) app.quit();
   });
 }
 

@@ -5,10 +5,10 @@ import { describe, expect, it, vi } from "vitest";
 
 import { EventStream } from "@x-tech-laboratories/x-libs/server/events";
 
-import { register_fitness_calls, register_method_calls } from "../src/server/calls.ts";
+import { register_fitness_calls } from "../src/server/calls.ts";
 import { open_store } from "../src/shared/store.ts";
 import { desktop_setting_defaults, read_desktop_settings } from "../src/shared/desktop.ts";
-import { due_label, running_workouts, tray_items, tray_tooltip, type TrayState } from "../src/main/tray_menu.ts";
+import { due_label, running_workouts, tray_view, type TrayActions, type TrayState } from "../src/main/tray_menu.ts";
 import type { NextAction } from "../src/shared/schedule/model.ts";
 import type { Workout } from "../src/shared/workouts/model.ts";
 
@@ -59,6 +59,9 @@ describe("the tray menu", () => {
     expect(due_label(action({ overdue: true }), "2026-11-19")).toBe("missed");
   });
 
+  const actions = (): TrayActions => ({ open_route: vi.fn(), finish_workout: vi.fn(), show: vi.fn(), quit: vi.fn(), quit_completely: vi.fn() });
+  const labels = (state: TrayState) => tray_view(state, actions()).rows.map((row) => (row.kind === "item" ? row.label : "—"));
+
   it("lists a running workout with Finish, the next three actions, then the commands", () => {
     const state: TrayState = {
       workouts: [{ id: "w1", name: "Push", seconds: 2530 }],
@@ -66,52 +69,34 @@ describe("the tray menu", () => {
       today: "2026-11-19",
     };
 
-    expect(tray_items(state)).toEqual([
-      { kind: "open", label: "Push — 42:10", route: "#/workouts/log" },
-      { kind: "finish", label: "Finish workout", workout_id: "w1" },
-      { kind: "separator" },
-      { kind: "open", label: "Eat Lunch — 12:30", route: "#/overview" },
-      { kind: "open", label: "Eat Dinner — 19:00", route: "#/overview" },
-      { kind: "open", label: "Do Pull — tomorrow", route: "#/overview" },
-      { kind: "separator" },
-      { kind: "command", label: "Show X-Fitness", command: "show" },
-      { kind: "command", label: "Quit", command: "quit" },
-      { kind: "command", label: "Quit completely", command: "quit_completely" },
-    ]);
-    expect(tray_tooltip(state)).toBe("X-Fitness\nPush — 42:10");
+    expect(labels(state)).toEqual(["Push — 42:10", "Finish workout", "—", "Eat Lunch — 12:30", "Eat Dinner — 19:00", "Do Pull — tomorrow", "—", "Show X-Fitness", "Quit", "Quit completely"]);
+    expect(tray_view(state, actions()).tooltip).toBe("X-Fitness\nPush — 42:10");
+  });
+
+  it("finishes the workout and opens the page where each row points", () => {
+    const state: TrayState = { workouts: [{ id: "w1", name: "Push", seconds: 60 }], next: [action({})], today: "2026-11-19" };
+    const done = actions();
+    const rows = tray_view(state, done).rows.filter((row) => row.kind === "item");
+
+    for (const row of rows) row.run();
+
+    expect(done.finish_workout).toHaveBeenCalledWith("w1");
+    expect(done.open_route).toHaveBeenCalledWith("#/workouts/log");
+    expect(done.open_route).toHaveBeenCalledWith("#/overview");
+    expect(done.quit_completely).toHaveBeenCalled();
   });
 
   it("shows only the commands when nothing runs or comes next", () => {
     const state: TrayState = { workouts: [], next: [], today: "2026-11-19" };
 
-    expect(tray_items(state).map((item) => item.kind)).toEqual(["command", "command", "command"]);
-    expect(tray_tooltip(state)).toBe("X-Fitness");
+    expect(labels(state)).toEqual(["Show X-Fitness", "Quit", "Quit completely"]);
+    expect(tray_view(state, actions()).tooltip).toBe("X-Fitness");
   });
 });
 
 // ============================================================================
-// Calls over HTTP
+// Data calls over HTTP
 // ============================================================================
-
-describe("a table of calls over HTTP", () => {
-  it("answers each call as JSON, refuses one it lacks, and tells of changes but not reads", async () => {
-    const app = fastify();
-    const changed = vi.fn();
-    const methods = { get_name: () => "plain text", set_name: (name: string) => void name };
-    register_method_calls(app, "/daemon", methods, new EventStream(), { on_change: changed });
-
-    const read = await app.inject({ method: "POST", url: "/daemon/get_name", payload: [] });
-    const write = await app.inject({ method: "POST", url: "/daemon/set_name", payload: ["Ada"], headers: { "x-client-id": "window" } });
-    const missing = await app.inject({ method: "POST", url: "/daemon/toString", payload: [] });
-
-    expect(JSON.parse(read.body)).toBe("plain text");
-    expect(write.statusCode).toBe(204);
-    expect(changed).toHaveBeenCalledTimes(1);
-    expect(changed).toHaveBeenCalledWith("window");
-    expect(missing.statusCode).toBe(404);
-    await app.close();
-  });
-});
 
 describe("the data calls over HTTP", () => {
   it("send a call's text answer as JSON, so the window can read it", async () => {

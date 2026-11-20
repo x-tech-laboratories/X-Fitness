@@ -1,5 +1,5 @@
-// The calls the web server and the desktop daemon both answer: the page's data calls on the database, and any other
-// table of calls, such as backups or sync settings, each telling the other pages when it changed something.
+// The page's data calls on the database, as the web server and the desktop daemon both answer them, taking the
+// arguments in order or by name and telling the other pages when a call changed something.
 
 // ── Imports ──────────────────────────────────────────────────────────────────
 
@@ -37,26 +37,5 @@ export function register_fitness_calls(api: FastifyInstance, database: () => Sql
     if (is_read_only(request.params.method)) reply.header("cache-control", "no-store");
     // Fastify would send a string as bare text, which the caller could not tell from JSON.
     return reply.type("application/json").send(JSON.stringify(result));
-  });
-}
-
-// ── Other calls ──────────────────────────────────────────────────────────────
-
-export interface MethodCallOptions {
-  // Runs after a call that is not named as only reading, with the client id of the page that made it.
-  on_change?: (client_id: string) => void;
-}
-
-// Calls arrive as POST <path>/<method> with the arguments as a JSON list; a call named in no table is refused.
-export function register_method_calls(api: FastifyInstance, path: string, methods: object, changes: EventStream, options: MethodCallOptions = {}): void {
-  api.post<{ Params: { method: string } }>(`${path}/:method`, async (request, reply) => {
-    const { method } = request.params;
-    if (!Object.hasOwn(methods, method)) return send_text(reply, 404, `no call named ${method}`);
-    const args = Array.isArray(request.body) ? (request.body as unknown[]) : [];
-    const result: unknown = await (methods as Record<string, (...args: unknown[]) => unknown>)[method]!(...args);
-    if (!is_read_only(method)) options.on_change?.(changes.client_id_of(request));
-    if (result === undefined) return reply.code(204).send();
-    // Fastify would send a string as bare text, which the caller could not tell from JSON.
-    return reply.header("cache-control", "no-store").type("application/json").send(JSON.stringify(result));
   });
 }

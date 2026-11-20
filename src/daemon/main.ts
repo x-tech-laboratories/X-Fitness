@@ -14,6 +14,7 @@ import { keep_backing_up, type BackupSchedule } from "@x-tech-laboratories/x-lib
 import { create_certificate_trust } from "@x-tech-laboratories/x-libs/certificates";
 import { create_local_mcp } from "@x-tech-laboratories/x-libs/electron/mcp";
 import { daemon_socket_path, DaemonRunningError, listen_on_socket } from "@x-tech-laboratories/x-libs/local_daemon";
+import { register_call_table } from "@x-tech-laboratories/x-libs/server/call_table";
 import { EventStream } from "@x-tech-laboratories/x-libs/server/events";
 import { register_error_replies, register_lenient_json_body } from "@x-tech-laboratories/x-libs/server/replies";
 import { sqlite_backups } from "@x-tech-laboratories/x-libs/server/sqlite_backups";
@@ -26,7 +27,7 @@ import { read_desktop_settings, type DaemonMethods, type DesktopSettings } from 
 import { mcp_instructions, without_secrets } from "../shared/mcp.ts";
 import type { DeviceMethods } from "../shared/page_api.ts";
 import { bind_methods, fitness_api, is_read_only, needs_upgrade, open_store, sync_engine } from "../shared/store.ts";
-import { register_fitness_calls, register_method_calls } from "../server/calls.ts";
+import { register_fitness_calls } from "../server/calls.ts";
 
 // ── Profile ──────────────────────────────────────────────────────────────────
 
@@ -168,10 +169,10 @@ async function build_daemon(shut_down: () => void): Promise<FastifyInstance> {
     async (api) => {
       changes.register(api, "/events");
       register_fitness_calls(api, () => database, changes);
-      register_method_calls(api, "/device", device_methods(), changes, { on_change: tell_others });
-      register_method_calls(api, "/certificates", certificates.methods, changes);
-      register_method_calls(api, "/local_mcp", local_mcp.methods, changes);
-      register_method_calls(api, "/daemon", daemon_methods(shut_down), changes, { on_change: tell_others });
+      register_call_table(api, "/device", device_methods(), { is_read_only, on_change: tell_others });
+      register_call_table(api, "/certificates", certificates.methods, { is_read_only });
+      register_call_table(api, "/local_mcp", local_mcp.methods, { is_read_only });
+      register_call_table(api, "/daemon", daemon_methods(shut_down), { is_read_only, on_change: tell_others });
     },
     { prefix: "/api" },
   );
