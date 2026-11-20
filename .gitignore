@@ -7,3 +7,4 @@ result-*
 *.tsbuildinfo
 dev-data/
 password.hash
+coverage/
