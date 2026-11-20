@@ -7,6 +7,7 @@ import { readFileSync } from "node:fs";
 import fastify, { type FastifyInstance } from "fastify";
 import { openapi_document } from "@x-tech-laboratories/x-libs/api_spec";
 import { EventStream } from "@x-tech-laboratories/x-libs/server/events";
+import { register_call_table } from "@x-tech-laboratories/x-libs/server/call_table";
 import { register_mcp_route } from "@x-tech-laboratories/x-libs/server/mcp";
 import { register_error_replies, register_lenient_json_body } from "@x-tech-laboratories/x-libs/server/replies";
 import { register_accounts } from "@x-tech-laboratories/x-libs/server/account_sign_in";
@@ -20,7 +21,7 @@ import type { SqlDatabase } from "@x-tech-laboratories/x-libs/sql";
 import { fitness_bridge } from "../shared/bridge.ts";
 import { mcp_instructions as instructions, without_secrets } from "../shared/mcp.ts";
 import { bind_methods, fitness_api, is_read_only, sync_engine } from "../shared/store.ts";
-import { register_fitness_calls, register_method_calls } from "./calls.ts";
+import { register_fitness_calls } from "./calls.ts";
 
 // ── Options ──────────────────────────────────────────────────────────────────
 
@@ -74,7 +75,7 @@ export async function build_app(options: AppOptions): Promise<FastifyInstance> {
       });
 
       // Backup calls arrive as POST /api/backup/<method> with the arguments as a JSON list.
-      register_method_calls(api, "/backup", options.backups, changes);
+      register_call_table(api, "/backup", options.backups, { is_read_only });
       register_sync_routes(api, {
         engine: sync_engine,
         database,

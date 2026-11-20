@@ -5,6 +5,7 @@
 
 import { format_clock } from "@x-tech-laboratories/x-libs/durations";
 import { shift_day } from "@x-tech-laboratories/x-libs/dates";
+import { app_rows, tray_groups, type TrayRow, type TrayView } from "@x-tech-laboratories/x-libs/electron/tray";
 
 import type { NextAction } from "../shared/schedule/model.ts";
 import type { Workout } from "../shared/workouts/model.ts";
@@ -25,12 +26,14 @@ export interface TrayState {
   today: string;
 }
 
-// One row of the tray's menu: a link into the page, finishing a workout, a command, or a line between groups.
-export type TrayItem =
-  | { kind: "open"; label: string; route: string }
-  | { kind: "finish"; label: string; workout_id: string }
-  | { kind: "command"; label: string; command: "show" | "quit" | "quit_completely" }
-  | { kind: "separator" };
+// What the tray's rows do.
+export interface TrayActions {
+  open_route: (route: string) => void;
+  finish_workout: (workout_id: string) => unknown;
+  show: () => void;
+  quit: () => void;
+  quit_completely: () => void;
+}
 
 // How many of the next actions the menu lists.
 const most_next = 3;
@@ -61,23 +64,17 @@ export function due_label(action: NextAction, today: string): string {
 // ── Menu ─────────────────────────────────────────────────────────────────────
 
 // Each running workout with Finish, the next few actions, then showing the window, quitting the window and tray, and
-// quitting the daemon too.
-export function tray_items(state: TrayState): TrayItem[] {
-  const workout_items = state.workouts.flatMap((workout): TrayItem[] => [
-    { kind: "open", label: workout_label(workout), route: "#/workouts/log" },
-    { kind: "finish", label: state.workouts.length === 1 ? "Finish workout" : `Finish ${workout.name}`, workout_id: workout.id },
+// quitting the daemon too; the tooltip names the running workouts and their times.
+export function tray_view(state: TrayState, actions: TrayActions): TrayView {
+  const workout_rows = state.workouts.flatMap((workout): TrayRow[] => [
+    { kind: "item", label: workout_label(workout), run: () => actions.open_route("#/workouts/log") },
+    { kind: "item", label: state.workouts.length === 1 ? "Finish workout" : `Finish ${workout.name}`, run: () => actions.finish_workout(workout.id) },
   ]);
-  const next_items = state.next.slice(0, most_next).map((action): TrayItem => ({ kind: "open", label: `${action.title} — ${due_label(action, state.today)}`, route: "#/overview" }));
-  const groups = [workout_items, next_items].filter((group) => group.length > 0);
-  return [
-    ...groups.flatMap((group): TrayItem[] => [...group, { kind: "separator" }]),
-    { kind: "command", label: "Show X-Fitness", command: "show" },
-    { kind: "command", label: "Quit", command: "quit" },
-    { kind: "command", label: "Quit completely", command: "quit_completely" },
-  ];
-}
-
-// The tooltip names the running workouts and their times, or the app alone when none runs.
-export function tray_tooltip(state: TrayState): string {
-  return ["X-Fitness", ...state.workouts.map(workout_label)].join("\n");
+  const next_rows = state.next
+    .slice(0, most_next)
+    .map((action): TrayRow => ({ kind: "item", label: `${action.title} — ${due_label(action, state.today)}`, run: () => actions.open_route("#/overview") }));
+  return {
+    tooltip: ["X-Fitness", ...state.workouts.map(workout_label)].join("\n"),
+    rows: tray_groups(workout_rows, next_rows, app_rows({ app_name: "X-Fitness", show: actions.show, quit: actions.quit, quit_completely: actions.quit_completely })),
+  };
 }

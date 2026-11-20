@@ -19,11 +19,11 @@ device changed something.
 
 The desktop app is a window and a daemon, as the Application Standard sets out. `src/daemon/main.ts` is plain Node on
 Electron's own binary: it opens the database, runs sync, backups and the local MCP endpoint, and serves the same data
-calls as the web server (`src/server/calls.ts`) over HTTP on `$XDG_RUNTIME_DIR/x-fitness/daemon.sock`, with sync,
+calls as the web server (`src/server/calls.ts`, the other tables through X-Libs `server/call_table`) over HTTP on `$XDG_RUNTIME_DIR/x-fitness/daemon.sock`, with sync,
 backups, certificates, MCP settings and its own settings under `/api/device`, `/api/certificates`, `/api/local_mcp` and
 `/api/daemon`. `src/main/index.ts` starts it through X-Libs `local_daemon` unless one answers, passes the preload's calls
 on to it, and hands its change events to the window. The main process keeps only the window, the tray icon
-(`src/main/tray.ts`, its menu worked out in `tray_menu.ts`) and the login entry through X-Libs `autostart`.
+(X-Libs `electron/tray`, its menu worked out in `src/main/tray_menu.ts`) and the login entry through X-Libs `autostart`.
 
 The tray, background running and start at login are kept in `desktop.json` beside the database, not in the synced
 settings. Without "Keep running in the background" the daemon stops half a minute after its last window. A profile other
