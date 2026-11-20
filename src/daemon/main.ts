@@ -1,5 +1,5 @@
-// The desktop app's daemon: everything X-Fitness does without a window, being the database, sync, backups, history and
-// the MCP endpoint. The window reaches it over a Unix socket with the same calls a browser makes to the web server, and
+// The desktop app's daemon: everything X-Fitness does without a window, being the database, sync, backups, history, the
+// MCP endpoint and reminders. The window reaches it over a Unix socket with the same calls a browser makes to the web server, and
 // closing the window leaves it running.
 
 // ── Imports ──────────────────────────────────────────────────────────────────
@@ -10,6 +10,8 @@ import { dirname, join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 
 import fastify, { type FastifyInstance } from "fastify";
+import { Notifier } from "@x-tech-laboratories/x-libs/agent/desktop_notify";
+import { keep_giving_scheduled_notices } from "@x-tech-laboratories/x-libs/agent/scheduled_notices";
 import { keep_backing_up, type BackupSchedule } from "@x-tech-laboratories/x-libs/backups";
 import { create_certificate_trust } from "@x-tech-laboratories/x-libs/certificates";
 import { create_local_mcp } from "@x-tech-laboratories/x-libs/electron/mcp";
@@ -25,6 +27,7 @@ import { fitness_backup_naming, read_schedule } from "../shared/backups.ts";
 import { fitness_bridge } from "../shared/bridge.ts";
 import { read_desktop_settings, type DaemonMethods, type DesktopSettings } from "../shared/desktop.ts";
 import { mcp_instructions, without_secrets } from "../shared/mcp.ts";
+import { due_reminders } from "../shared/schedule/reminders.ts";
 import type { DeviceMethods } from "../shared/page_api.ts";
 import { bind_methods, fitness_api, is_read_only, needs_upgrade, open_store, sync_engine } from "../shared/store.ts";
 import { register_fitness_calls } from "../server/calls.ts";
@@ -39,6 +42,8 @@ if (!database_path) {
 }
 const socket_path = process.env.X_FITNESS_SOCKET || daemon_socket_path({ app: "x-fitness", data_file: database_path });
 const version = process.env.X_FITNESS_VERSION || "0.0.0";
+// The built daemon sits in out/main, and resources/ beside out/ both in the source tree and in the package.
+const icon_path = process.env.X_FITNESS_ICON || join(import.meta.dirname, "../../resources/icon.png");
 
 const profile = dirname(database_path);
 const backups_folder = join(profile, "backups");
@@ -129,6 +134,24 @@ function read_desktop(): DesktopSettings {
   return read_desktop_settings(existsSync(desktop_file) ? JSON.parse(readFileSync(desktop_file, "utf8")) : null);
 }
 
+// ── Reminders ────────────────────────────────────────────────────────────────
+
+// Where the reminders got to, so one that fell while the daemon was stopped still shows, if it is not long past.
+const reminders_file = join(profile, "reminders.json");
+const most_late_reminder_ms = 15 * 60 * 1000;
+
+function remind(): () => void {
+  const notifier = new Notifier({ app_name: "X-Fitness", icons: { app: icon_path }, on_error: (message) => console.error(message) });
+  return keep_giving_scheduled_notices({
+    notifier,
+    due: (after, until) => due_reminders(database, new Date(after), new Date(until)).map((reminder) => ({ ...reminder, icon: "app" })),
+    read_checked_until: () => (existsSync(reminders_file) ? Number((JSON.parse(readFileSync(reminders_file, "utf8")) as { checked_until?: unknown }).checked_until) || null : null),
+    write_checked_until: (moment) => writeFileSync(reminders_file, JSON.stringify({ checked_until: moment })),
+    most_late_ms: most_late_reminder_ms,
+    on_error: (error) => console.error(error),
+  });
+}
+
 // ── Calls ────────────────────────────────────────────────────────────────────
 
 function device_methods(): DeviceMethods {
@@ -184,12 +207,14 @@ async function build_daemon(shut_down: () => void): Promise<FastifyInstance> {
 async function main(): Promise<void> {
   let is_stopping = false;
   let unused_timer: ReturnType<typeof setInterval> | undefined;
+  let stop_reminders = (): void => {};
   const daemon = await build_daemon(() => shut_down());
 
   function shut_down(): void {
     if (is_stopping) return;
     is_stopping = true;
     clearInterval(unused_timer);
+    stop_reminders();
     sync.stop();
     backing_up.stop();
     void daemon
@@ -212,6 +237,7 @@ async function main(): Promise<void> {
 
   sync.start();
   void local_mcp.start();
+  stop_reminders = remind();
 
   // Without "Keep running in the background", the daemon stops a while after its last window has gone.
   let unused_since = Date.now();

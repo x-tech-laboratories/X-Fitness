@@ -16,6 +16,7 @@ import { program_sessions, workouts } from "../workouts/schema.ts";
 import { workout_setting_defaults } from "../workouts/settings.ts";
 import { schedule_api } from "./api.ts";
 import { meal_actions, sort_actions, workout_action, type NextAction, type TrainingSchedule } from "./model.ts";
+import { schedule_setting_defaults } from "./settings.ts";
 
 // ── Reading ──────────────────────────────────────────────────────────────────
 
@@ -61,4 +62,5 @@ export const schedule_feature = define_feature({
     },
   },
   api: schedule_api,
+  setting_defaults: schedule_setting_defaults,
 });
