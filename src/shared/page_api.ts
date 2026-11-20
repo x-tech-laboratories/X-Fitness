@@ -6,6 +6,7 @@
 import type { Client } from "@x-tech-laboratories/x-libs/electron/bridge";
 import { backup_method_names, type BackupClient, type BackupMethods } from "@x-tech-laboratories/x-libs/backup_protocol";
 import type { CertificateClient } from "@x-tech-laboratories/x-libs/certificate_protocol";
+import type { ConnectionClient } from "@x-tech-laboratories/x-libs/connection_protocol";
 import type { LocalMcpClient } from "@x-tech-laboratories/x-libs/local_mcp_protocol";
 import { sync_device_method_names, type SyncDeviceMethods, type SyncStatus } from "@x-tech-laboratories/x-libs/sync_protocol";
 
@@ -20,6 +21,8 @@ export const events_api_name = "x_fitness_events";
 export const certificates_api_name = "x_fitness_certificates";
 export const local_mcp_api_name = "x_fitness_local_mcp";
 export const desktop_api_name = "x_fitness_desktop";
+export const connections_api_name = "x_fitness_connections";
+export const connection_certificates_api_name = "x_fitness_connection_certificates";
 
 // ── Device calls ─────────────────────────────────────────────────────────────
 
@@ -52,6 +55,10 @@ export interface PageApi {
   local_mcp?: LocalMcpClient;
   // Set on the desktop, whose tray, background running and start at login belong to the computer.
   desktop?: Client<DesktopMethods>;
+  // Set on the desktop: the daemons it can connect to, this computer's and others by address.
+  connections?: ConnectionClient;
+  // The certificates the desktop trusts for those other daemons, apart from the ones the daemon's own sync trusts.
+  connection_certificates?: CertificateClient;
   // Runs whenever the data changed somewhere else; returns the function that stops listening.
   on_change: (listener: () => void) => () => void;
 }

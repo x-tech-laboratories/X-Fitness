@@ -13,8 +13,8 @@ import { call_daemon, follow_daemon_events, is_answering } from "@x-tech-laborat
 
 // ── Daemon process ───────────────────────────────────────────────────────────
 
-const daemon_script = join(import.meta.dirname, "../src/daemon/main.ts");
-const daemon_args: string[] = [];
+const daemon_script = join(import.meta.dirname, "../src/server/main.ts");
+const daemon_args = ["--local"];
 
 interface Running {
   child: ChildProcess;

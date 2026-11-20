@@ -1,23 +1,31 @@
-// The desktop app's window: Electron's main process, which shows X-Fitness, keeps its tray icon and its login entry, and
-// leaves the work to the daemon in src/daemon, reached over a Unix socket.
+// The desktop app's window: Electron's main process, which shows X-Fitness, keeps its tray icon, its login entry and the
+// list of daemons it connects to, and leaves the work to the chosen daemon: this computer's own, the src/server program
+// run as a local daemon on a Unix socket, or one on another host over https.
 
 // ── Imports ──────────────────────────────────────────────────────────────────
 
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { hostname } from "node:os";
 import { join } from "node:path";
 
-import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, nativeTheme, screen, shell, Tray } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, nativeTheme, screen, session, shell, Tray } from "electron";
 import { launch_command, set_autostart } from "@x-tech-laboratories/x-libs/autostart";
+import { create_certificate_trust } from "@x-tech-laboratories/x-libs/certificates";
+import { connection_file_storage } from "@x-tech-laboratories/x-libs/connection_file_storage";
+import { create_connections } from "@x-tech-laboratories/x-libs/connections";
+import { create_daemon_link } from "@x-tech-laboratories/x-libs/daemon_link";
 import { format_local } from "@x-tech-laboratories/x-libs/dates";
 import { bring_to_front, first_argument, hold_single_instance } from "@x-tech-laboratories/x-libs/electron/app";
 import type { Implementation, IpcMainEventLike } from "@x-tech-laboratories/x-libs/electron/bridge";
+import { trusting_fetch } from "@x-tech-laboratories/x-libs/electron/certificates";
 import { create_app_tray } from "@x-tech-laboratories/x-libs/electron/tray";
 import { create_window, is_app_page } from "@x-tech-laboratories/x-libs/electron/window";
-import { call_daemon, daemon_log_path, daemon_socket_path, follow_daemon_events, start_daemon } from "@x-tech-laboratories/x-libs/local_daemon";
+import { call_daemon, daemon_log_path, daemon_socket_path, is_answering, start_daemon } from "@x-tech-laboratories/x-libs/local_daemon";
 import { certificate_method_names } from "@x-tech-laboratories/x-libs/certificate_protocol";
 import { local_mcp_method_names } from "@x-tech-laboratories/x-libs/local_mcp_protocol";
 
-import { certificate_bridge, desktop_bridge, device_bridge, fitness_bridge, fitness_events, local_mcp_bridge } from "../shared/bridge.ts";
-import type { DesktopMethods, DesktopSettings } from "../shared/desktop.ts";
+import { certificate_bridge, connection_bridge, connection_certificate_bridge, desktop_bridge, device_bridge, fitness_bridge, fitness_events, local_mcp_bridge } from "../shared/bridge.ts";
+import { read_desktop_settings, type DesktopMethods, type DesktopSettings } from "../shared/desktop.ts";
 import { route_of_link } from "../shared/links.ts";
 import { device_method_names, is_read_only } from "../shared/page_api.ts";
 import type { NextAction } from "../shared/schedule/model.ts";
@@ -45,39 +53,23 @@ const icon_path = join(import.meta.dirname, "../../resources/icon.png");
 const own_command = (args: string[]): string[] =>
   launch_command({ launcher: process.env.X_FITNESS_LAUNCHER, is_packaged: app.isPackaged, app_path: app.getAppPath(), args });
 
-// ── Daemon ───────────────────────────────────────────────────────────────────
+// ── Desktop settings ─────────────────────────────────────────────────────────
 
-function ensure_daemon(): Promise<unknown> {
-  return start_daemon({
-    socket_path,
-    script: join(import.meta.dirname, "daemon.js"),
-    env: { X_FITNESS_DB: database_path, X_FITNESS_SOCKET: socket_path, X_FITNESS_VERSION: app.getVersion(), X_FITNESS_ICON: icon_path },
-    log_file,
-  });
+// Kept beside the database, where the local daemon reads whether to keep running.
+const desktop_file = join(profile, "desktop.json");
+
+function get_desktop_settings(): DesktopSettings {
+  return read_desktop_settings(existsSync(desktop_file) ? JSON.parse(readFileSync(desktop_file, "utf8")) : null);
 }
 
-// Given by the daemon when this process connects, so the window is not told about its own changes.
-let client_id = "";
-
-// One call to the daemon, as the page made it; a change also shows in the tray at once.
-async function call(path: string, args: unknown[]): Promise<unknown> {
-  const result = await call_daemon(socket_path, `/api/${path}`, args, { "x-client-id": client_id });
-  if (!is_read_only(path.slice(path.lastIndexOf("/") + 1))) void tray.refresh();
-  return result;
-}
-
-// Every call in a table, passed on to the daemon under a path of its own.
-function forwarded(names: readonly string[], prefix: string): Record<string, (...args: unknown[]) => Promise<unknown>> {
-  return Object.fromEntries(names.map((name) => [name, (...args: unknown[]) => call(`${prefix}/${name}`, args)]));
-}
-
-function get_desktop_settings(): Promise<DesktopSettings> {
-  return call("daemon/get_desktop_settings", []) as Promise<DesktopSettings>;
+function set_desktop_setting(key: keyof DesktopSettings, value: boolean): void {
+  writeFileSync(desktop_file, JSON.stringify(read_desktop_settings({ ...get_desktop_settings(), [key]: value }), null, 2));
+  apply_window_settings();
 }
 
 // Settings the window itself acts on: the tray and starting at login.
-async function apply_window_settings(): Promise<void> {
-  const settings = await get_desktop_settings();
+function apply_window_settings(): void {
+  const settings = get_desktop_settings();
   tray.set_shown(settings.show_tray_icon);
   apply_autostart(settings);
 }
@@ -91,13 +83,59 @@ function apply_autostart(settings: DesktopSettings): void {
   );
 }
 
-// Every window hears of the daemon's changes, and comes back to a daemon that stopped, such as one quit from the tray.
+// ── Connections ──────────────────────────────────────────────────────────────
+
+// Certificates the user trusted for daemons on other hosts, such as a home server's self-signed one.
+const connection_trust = create_certificate_trust({ file: join(profile, "connection-certificates.json") });
+const remote_fetch = trusting_fetch(session, connection_trust);
+
+// "This computer" and the daemons on other hosts, each signed in with this device's own token.
+const connections = create_connections({
+  storage: connection_file_storage(join(profile, "connections.json")),
+  offers_local: true,
+  device_name: `X-Fitness on ${hostname()}`,
+  fetch: remote_fetch,
+});
+
+const link = create_daemon_link({ connections, socket_path, fetch: remote_fetch });
+
+const is_local = (): boolean => connections.current()?.kind === "local";
+
+// ── Daemon ───────────────────────────────────────────────────────────────────
+
+// This computer's daemon is the same program a server runs, started with --local on Electron's own binary.
+function ensure_local_daemon(): Promise<unknown> {
+  return start_daemon({
+    socket_path,
+    script: join(import.meta.dirname, "daemon.js"),
+    args: ["--local"],
+    env: { X_FITNESS_DB: database_path, X_FITNESS_SOCKET: socket_path, X_FITNESS_VERSION: app.getVersion(), X_FITNESS_ICON: icon_path },
+    log_file,
+  });
+}
+
+// Given by the daemon when this process connects, so the window is not told about its own changes.
+let client_id = "";
+
+// One call to the chosen daemon, as the page made it; a change also shows in the tray at once.
+async function call(path: string, args: unknown[]): Promise<unknown> {
+  const result = await link.call(`/api/${path}`, args, { "x-client-id": client_id });
+  if (!is_read_only(path.slice(path.lastIndexOf("/") + 1))) void tray.refresh();
+  return result;
+}
+
+// Every call in a table, passed on to the daemon under a path of its own.
+function forwarded(names: readonly string[], prefix: string): Record<string, (...args: unknown[]) => Promise<unknown>> {
+  return Object.fromEntries(names.map((name) => [name, (...args: unknown[]) => call(`${prefix}/${name}`, args)]));
+}
+
+// Every window hears of the chosen daemon's changes, and comes back to this computer's daemon when it stopped, such as
+// one quit from the tray.
 let is_quitting = false;
 let stop_following = (): void => {};
 
 function follow_daemon(): void {
-  stop_following = follow_daemon_events(
-    socket_path,
+  stop_following = link.follow_events(
     "/api/events",
     (event, data) => {
       if (event === "hello") client_id = data;
@@ -108,7 +146,7 @@ function follow_daemon(): void {
       // A reconnect may have missed changes, so the windows fetch again.
       on_connect: announce_change,
       on_disconnect: () => {
-        if (!is_quitting) void ensure_daemon().catch((error: unknown) => console.error(error));
+        if (!is_quitting && is_local()) void ensure_local_daemon().catch((error: unknown) => console.error(error));
       },
     },
   );
@@ -116,7 +154,15 @@ function follow_daemon(): void {
 
 function announce_change(): void {
   fitness_events.emit(BrowserWindow.getAllWindows(), "changed", null);
-  void apply_window_settings().catch(() => undefined);
+  void tray.refresh();
+}
+
+// Another daemon was chosen: this computer's is started when it is the one, and every window loads again from the new
+// daemon, since all it shows came from the old one.
+function on_daemon_chosen(): void {
+  client_id = "";
+  if (is_local()) void ensure_local_daemon().catch((error: unknown) => console.error(error));
+  for (const window of BrowserWindow.getAllWindows()) window.webContents.reload();
   void tray.refresh();
 }
 
@@ -153,10 +199,10 @@ function show_window(route?: string): void {
   else window.webContents.once("did-finish-load", () => fitness_events.emit([window], "open", route));
 }
 
-// Stops the daemon as well, so nothing runs until the app is opened again.
+// Stops this computer's daemon as well, whichever daemon is chosen, so nothing runs until the app is opened again.
 async function quit_completely(): Promise<void> {
   is_quitting = true;
-  await call("daemon/stop_daemon", []).catch(() => undefined);
+  if (await is_answering(socket_path)) await call_daemon(socket_path, "/api/daemon/stop_daemon").catch(() => undefined);
   app.quit();
 }
 
@@ -196,22 +242,17 @@ function trusted(event: IpcMainEventLike): boolean {
   return is_app_page(event.senderFrame?.url ?? "", page);
 }
 
-// The page's calls go to the daemon, but for quitting and the settings the window acts on.
+// The page's calls go to the chosen daemon, but for quitting, the settings the window acts on and the connections.
 function register_bridges(): void {
   const options = { trusted, envelopes: true };
   fitness_bridge.handle(ipcMain, forwarded(method_names, "call") as never, options);
   device_bridge.handle(ipcMain, forwarded(device_method_names, "device") as never, options);
   certificate_bridge.handle(ipcMain, forwarded(certificate_method_names, "certificates") as never, options);
   local_mcp_bridge.handle(ipcMain, forwarded(local_mcp_method_names, "local_mcp") as never, options);
-  const desktop: Implementation<DesktopMethods> = {
-    get_desktop_settings,
-    set_desktop_setting: async (key, value) => {
-      await call("daemon/set_desktop_setting", [key, value]);
-      await apply_window_settings();
-    },
-    quit_completely,
-  };
+  const desktop: Implementation<DesktopMethods> = { get_desktop_settings, set_desktop_setting, quit_completely };
   desktop_bridge.handle(ipcMain, desktop, options);
+  connection_bridge.handle(ipcMain, connections.methods, options);
+  connection_certificate_bridge.handle(ipcMain, connection_trust.methods, options);
 }
 
 // ── Start ────────────────────────────────────────────────────────────────────
@@ -219,7 +260,7 @@ function register_bridges(): void {
 function start_app(): void {
   void app.whenReady().then(async () => {
     try {
-      await ensure_daemon();
+      if (is_local()) await ensure_local_daemon();
     } catch (error) {
       dialog.showErrorBox("X-Fitness could not start", `${error instanceof Error ? error.message : String(error)}\n\nSee ${log_file}.`);
       app.exit(1);
@@ -227,7 +268,8 @@ function start_app(): void {
     }
     register_bridges();
     follow_daemon();
-    await apply_window_settings().catch(() => undefined);
+    connections.subscribe(on_daemon_chosen);
+    apply_window_settings();
     // A link the app was opened with, such as a reminder's, opens the window on its page.
     show_window(first_argument(process.argv, route_of_link) ?? undefined);
   });
@@ -244,10 +286,11 @@ function start_app(): void {
   });
 }
 
-// `x-fitness-desktop --daemon`, as the login entry runs it, starts only the daemon.
+// `x-fitness-desktop --daemon`, as the login entry runs it, starts only this computer's daemon, which keeps syncing
+// whichever daemon the window is connected to.
 async function start_daemon_alone(): Promise<void> {
   try {
-    await ensure_daemon();
+    await ensure_local_daemon();
     app.exit(0);
   } catch (error) {
     console.error(error instanceof Error ? error.message : error);

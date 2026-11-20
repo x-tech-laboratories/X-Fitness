@@ -6,6 +6,7 @@ import { DatabaseSync } from "node:sqlite";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { FastifyInstance, InjectOptions } from "fastify";
 
+import { EventStream } from "@x-tech-laboratories/x-libs/server/events";
 import { hash_password } from "@x-tech-laboratories/x-libs/server/passwords";
 
 import { build_app } from "../src/server/app.ts";
@@ -42,11 +43,26 @@ const fake_backups = {
   set_backup_schedule: vi.fn(),
 };
 
-async function start(web_folder = "/nonexistent"): Promise<FastifyInstance> {
+const status = { state: "off", server_url: "", user: "", last_synced_at: "", pending_changes: 0, error: "" } as const;
+const fake_device = { ...fake_backups, get_sync_status: vi.fn(() => status), connect_sync: vi.fn(async () => status), disconnect_sync: vi.fn(() => status), sync_now: vi.fn(async () => status) };
+const fake_certificates = { check_certificate: vi.fn(async () => null), trust_certificate: vi.fn(async () => []), list_trusted_certificates: vi.fn(() => []), forget_certificate: vi.fn(() => []) };
+const fake_local_mcp = { get_local_mcp_settings: vi.fn(() => ({ enabled: false, port: 3918 })), set_local_mcp_settings: vi.fn(async () => undefined), get_local_mcp_status: vi.fn(async () => ({ state: "off" as const, url: "", error: "" })) };
+
+// The daemon as a server runs it, signed in as an admin from the accounts file, or as a desktop's socket with no sign-in.
+async function start(web_folder = "/nonexistent", on_socket = false): Promise<FastifyInstance> {
   const database = new DatabaseSync(":memory:");
   open_store(database);
-  app = await build_app({ database, declared: new Map([["root", hash_password(password)]]), web_folder, backups: fake_backups });
-  token = (await app.inject({ method: "POST", url: "/api/login", payload: { name: "root", password, device: "tests" } })).json().token;
+  app = await build_app({
+    database: () => database,
+    changes: new EventStream(),
+    declared: on_socket ? null : new Map([["root", hash_password(password)]]),
+    web_folder,
+    backups: fake_backups,
+    device: fake_device,
+    certificates: fake_certificates,
+    local_mcp: fake_local_mcp,
+  });
+  if (!on_socket) token = (await app.inject({ method: "POST", url: "/api/login", payload: { name: "root", password, device: "tests" } })).json().token;
   return app;
 }
 
@@ -148,5 +164,31 @@ describe("server", () => {
     expect((await signed({ method: "POST", url: "/api/backup/create_backup", payload: [] })).json()).toEqual(taken);
     expect(fake_backups.create_backup).toHaveBeenCalled();
     expect((await signed({ method: "POST", url: "/api/backup/drop_everything", payload: [] })).statusCode).toBe(404);
+  });
+
+  it("answers the same handlers on the network for an admin only", async () => {
+    await start();
+    // Users are managed from a session, never with a token.
+    const session = (await app.inject({ method: "POST", url: "/api/login", payload: { name: "root", password } })).headers["set-cookie"] as string | string[];
+    const cookie = (Array.isArray(session) ? session[0]! : session).split(";")[0]!;
+    const added = await app.inject({ method: "POST", url: "/api/users", payload: { name: "sam", password, role: "user" }, headers: { cookie } });
+    expect(added.statusCode).toBeLessThan(300);
+    const sam = (await app.inject({ method: "POST", url: "/api/login", payload: { name: "sam", password, device: "tests" } })).json().token as string;
+    const as_sam = (url: string) => app.inject({ method: "POST", url, payload: [], headers: { authorization: `Bearer ${sam}` } });
+
+    expect((await as_sam("/api/call/get_settings")).statusCode).toBe(200);
+    for (const url of ["/api/device/get_sync_status", "/api/certificates/list_trusted_certificates", "/api/local_mcp/get_local_mcp_settings", "/api/backup/list_backups"]) {
+      expect((await app.inject({ method: "POST", url, payload: [] })).statusCode).toBe(401);
+      expect((await as_sam(url)).statusCode).toBe(403);
+      expect((await signed({ method: "POST", url, payload: [] })).statusCode).toBe(200);
+    }
+    expect((await signed({ method: "POST", url: "/api/daemon/stop_daemon", payload: [] })).statusCode).toBe(404);
+  });
+
+  it("needs no sign-in on a desktop's socket", async () => {
+    await start("/nonexistent", true);
+    expect((await app.inject({ method: "POST", url: "/api/call/get_settings", payload: [] })).statusCode).toBe(200);
+    expect((await app.inject({ method: "POST", url: "/api/device/get_sync_status", payload: [] })).json()).toEqual(status);
+    expect((await app.inject({ method: "POST", url: "/api/login", payload: { name: "root", password } })).statusCode).toBe(404);
   });
 });

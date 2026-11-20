@@ -6,7 +6,7 @@ import { defineConfig, externalizeDepsPlugin } from "electron-vite";
 export default defineConfig({
   main: {
     plugins: [externalizeDepsPlugin()],
-    build: { rollupOptions: { input: { index: resolve("src/main/index.ts"), daemon: resolve("src/daemon/main.ts") } } },
+    build: { rollupOptions: { input: { index: resolve("src/main/index.ts"), daemon: resolve("src/server/main.ts") } } },
   },
   preload: {
     plugins: [externalizeDepsPlugin()],

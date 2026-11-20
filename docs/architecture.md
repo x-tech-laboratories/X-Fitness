@@ -7,28 +7,51 @@ the page a `PageApi` (`src/shared/bridge.ts`):
 
 | Host    | Where the data is                                   | How a call travels                                   | Sync                        |
 | ------- | --------------------------------------------------- | ---------------------------------------------------- | --------------------------- |
-| web     | the server's SQLite file                            | `POST api/call/<method>` with the arguments as JSON  | none; the browser is online |
-| desktop | `fitness.db` in Electron's profile folder           | IPC through the preload to the main process, then HTTP over the daemon's socket | X-Libs `sync_client` in the daemon |
+| web     | the daemon's SQLite file                            | `POST api/call/<method>` with the arguments as JSON  | none; the browser is on its daemon |
+| desktop | the chosen daemon's: `fitness.db` in Electron's profile folder for this computer's | IPC through the preload to the main process, then HTTP over the local daemon's socket or https to a remote daemon | X-Libs `sync_client` in the local daemon |
 | android | SQLite in WebAssembly, saved to IndexedDB           | straight to the store in the same page               | X-Libs `sync_client`        |
 
 Views never ask which host they are on. They call `calls().<method>(...)` from `src/web/api.ts` and load with
 `use_data`, which reloads quietly whenever `data_watch` is bumped: after this page writes, and when another page or
 device changed something.
 
-## The desktop daemon
+## One daemon
 
-The desktop app is a window and a daemon, as the Application Standard sets out. `src/daemon/main.ts` is plain Node on
-Electron's own binary: it opens the database, runs sync, backups and the local MCP endpoint, and serves the same data
-calls as the web server (`src/server/calls.ts`, the other tables through X-Libs `server/call_table`) over HTTP on `$XDG_RUNTIME_DIR/x-fitness/daemon.sock`, with sync,
-backups, certificates, MCP settings and its own settings under `/api/device`, `/api/certificates`, `/api/local_mcp` and
-`/api/daemon`. `src/main/index.ts` starts it through X-Libs `local_daemon` unless one answers, passes the preload's calls
-on to it, and hands its change events to the window. The main process keeps only the window, the tray icon
-(X-Libs `electron/tray`, its menu worked out in `src/main/tray_menu.ts`) and the login entry through X-Libs `autostart`.
+X-Fitness is one daemon in `src/server`, plain Node with no Electron in it, as the Application Standard's "Daemon and
+UI" sets out. `main.ts` picks how it runs:
+
+- `headless.ts`, on a server: reads the config and the accounts file, and listens on a network address behind the X-Libs
+  sign-in, serving the built page too. A restore is staged for the next start and the daemon stops, since the accounts
+  hold the database connection.
+- `local.ts` with `--local`, as a desktop's local daemon: listens on `$XDG_RUNTIME_DIR/x-fitness/daemon.sock` (a socket
+  of its own for any other database) through X-Libs `local_daemon`, with no sign-in, restores in place, gives the
+  desktop's reminders and stops when asked or, without "Keep running in the background", half a minute after its last
+  window.
+
+Both open the same `daemon.ts`: the database with its backups and schedule, the sync client with the certificates it
+trusts, and the MCP endpoint on 127.0.0.1 (X-Libs `electron/mcp`, off until turned on), and serve the same handlers from
+`app.ts`: `/api/call` (`calls.ts`), `/api/events`, `/api/openapi.json`, `/api/mcp`, the sync routes other daemons and
+devices sync with, and through X-Libs `server/call_table` `/api/backup`, `/api/device` (the daemon's own sync and
+backups), `/api/certificates` and `/api/local_mcp`. On the network those last four need an admin. Only the local daemon
+adds `/api/daemon/stop_daemon`. The daemon's files sit beside its database: `backup-schedule.json`, `sync.json`,
+`trusted-certificates.json`, `mcp.json` and, for the local daemon, `reminders.json`.
+
+## The desktop app
+
+`src/main/index.ts` keeps only what needs Electron: the window, the tray icon (X-Libs `electron/tray`, its menu worked
+out in `src/main/tray_menu.ts`), the login entry through X-Libs `autostart`, and the list of daemons. X-Libs
+`connections` keeps "This computer" and remote daemons in `connections.json` in the profile, each with a token of its own
+from signing in as `X-Fitness on <host>`; `daemon_link` sends the preload's calls to the chosen one, over the socket or
+over https through `trusting_fetch` with the certificates trusted for connections (`connection-certificates.json`, apart
+from the local daemon's), and follows its change events, moving when another is chosen. The page's
+`ConnectionSettings` under Settings → Connections reaches them through the `x_fitness_connections` bridge. Choosing a
+daemon reloads every window from it, and starts the local daemon when "This computer" is chosen and none answers.
 
 The tray, background running and start at login are kept in `desktop.json` beside the database, not in the synced
-settings. Without "Keep running in the background" the daemon stops half a minute after its last window. A profile other
-than the installed app's, such as `X_FITNESS_USER_DATA` in dev, gets a socket and log of its own and never writes the
-login entry.
+settings; the main process writes them and the local daemon reads whether to keep running. `--daemon` only starts the
+local daemon, whichever daemon the window uses, so it keeps syncing. Quit completely stops the local daemon over its
+socket. A profile other than the installed app's, such as `X_FITNESS_USER_DATA` in dev, gets a socket and log of its own
+and never writes the login entry.
 
 ## Features
 
@@ -93,7 +116,7 @@ day the rule counts from, which resets on every change so an interval keeps its 
 last one logged; one is done once a workout of the program is logged that day, and missed until the next training day
 comes due. A rule without an hour gives whole days.
 
-The desktop daemon turns these into reminders (`src/shared/schedule/reminders.ts`) through X-Libs
+The local daemon turns these into reminders (`src/shared/schedule/reminders.ts`) through X-Libs
 `agent/scheduled_notices`: every 30 seconds it reads the next actions at the start and the end of the stretch since the
 last check and shows each whose time fell in between, a whole training day at `schedule.training_day_time`. Meals are
 off and training on unless set (`schedule.remind_meals`, `schedule.remind_training`); where the checks got to is kept in

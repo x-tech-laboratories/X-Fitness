@@ -4,7 +4,7 @@
 
 import { contextBridge, ipcRenderer } from "electron";
 
-import { certificate_bridge, desktop_bridge, device_bridge, fitness_bridge, fitness_events, local_mcp_bridge } from "../shared/bridge.ts";
+import { certificate_bridge, connection_bridge, connection_certificate_bridge, desktop_bridge, device_bridge, fitness_bridge, fitness_events, local_mcp_bridge } from "../shared/bridge.ts";
 
 // ── Bridge ───────────────────────────────────────────────────────────────────
 
@@ -13,4 +13,6 @@ device_bridge.expose(contextBridge, ipcRenderer, { envelopes: true });
 certificate_bridge.expose(contextBridge, ipcRenderer, { envelopes: true });
 local_mcp_bridge.expose(contextBridge, ipcRenderer, { envelopes: true });
 desktop_bridge.expose(contextBridge, ipcRenderer, { envelopes: true });
+connection_bridge.expose(contextBridge, ipcRenderer, { envelopes: true });
+connection_certificate_bridge.expose(contextBridge, ipcRenderer, { envelopes: true });
 fitness_events.expose(contextBridge, ipcRenderer);

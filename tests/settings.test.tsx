@@ -124,4 +124,37 @@ describe("settings", () => {
     expect(screen.getByRole("button", { name: "Back up" })).toHaveProperty("disabled", false);
     await waitFor(() => expect(backups.list_backups).toHaveBeenCalledTimes(2));
   });
+
+  it("lists this computer and the other daemons on the desktop, and adds one by its address", async () => {
+    const local = { id: "local", name: "This computer", kind: "local", address: "", user: "" } as const;
+    const home = { id: "home", name: "Home server", kind: "remote", address: "https://fitness.example.org", user: "ada" } as const;
+    const connections = {
+      list_connections: vi.fn(async () => ({ connections: [local], current: "local" })),
+      add_connection: vi.fn(async () => ({ connections: [local, home], current: "local" })),
+      rename_connection: vi.fn(),
+      remove_connection: vi.fn(),
+      choose_connection: vi.fn(async () => ({ connections: [local, home], current: "home" })),
+    };
+    set_page_api({ host: "desktop", calls: fake_calls({}), device: null, connections, on_change: () => () => undefined });
+    render(<><SettingsView /><Dialogs /></>);
+
+    expect(await screen.findByText("This computer")).toBeTruthy();
+    expect(screen.getAllByText("Connected").length).toBeGreaterThan(0);
+    fireEvent.change(screen.getByLabelText("Daemon address"), { target: { value: "fitness.example.org" } });
+    fireEvent.change(screen.getByLabelText("User name"), { target: { value: "ada" } });
+    fireEvent.change(screen.getByLabelText("Password"), { target: { value: "secret" } });
+    fireEvent.click(screen.getByRole("button", { name: "Add daemon" }));
+    await waitFor(() => expect(connections.add_connection).toHaveBeenCalledWith("fitness.example.org", { name: "ada", password: "secret" }, ""));
+
+    fireEvent.click(await screen.findByRole("button", { name: "Connect" }));
+    await waitFor(() => expect(connections.choose_connection).toHaveBeenCalledWith("home"));
+  });
+
+  it("shows no connections in a browser, which is already on its daemon", async () => {
+    set_page_api({ host: "web", calls: fake_calls({}), device: null, on_change: () => () => undefined });
+    render(<SettingsView />);
+
+    await screen.findByRole("radiogroup", { name: "Body weight" });
+    expect(screen.queryByText("Connections")).toBeNull();
+  });
 });

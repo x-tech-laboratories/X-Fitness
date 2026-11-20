@@ -2,9 +2,10 @@
 
 <a href="https://liberapay.com/BeatLink/donate"><img alt="Donate using Liberapay" src="https://liberapay.com/assets/widgets/donate.svg"></a> <a href="https://ko-fi.com/I4V52ANK6N"><img alt="Support me on Ko-fi" src="https://ko-fi.com/img/githubbutton_sm.svg"></a>
 
-Workouts, diet and body measurements in one app. It runs as a web page served by your own server, as a desktop app and
-as an Android app; the desktop and Android apps keep their own copy of the data, work offline, and sync with the server
-whenever it can be reached.
+Workouts, diet and body measurements in one app. All of its work is done by one daemon, which runs headless on your own
+server or as the desktop app's local daemon; the web page, the desktop app and the Android app are views onto it. The
+desktop app works on its own computer's daemon or on one on another host, and the local daemon and the Android app keep
+their own copy of the data, work offline, and sync with your server whenever it can be reached.
 
 - **Workouts:** exercises with pictures, shown as a table or a grid, filled in from wger or by hand, routines, logged sessions with their sets, rest timer, and progress per exercise.
   Its Training page holds the training calculators: one-rep maxes (Epley, Brzycki, Lombardi, RPE counted) with the
@@ -40,13 +41,13 @@ npm run dev:web           # the page with live reload, reaching that server
 npm run dev               # the desktop app, with its profile in dev-data/desktop
 ```
 
-`npm run build` type-checks and builds the page into `out/web`; `npm start` serves it. `npm run build:desktop` builds
+`npm run build` type-checks and builds the page into `out/web`; `npm start` runs the daemon headless and serves it. `npm run build:desktop` builds
 the desktop app into `out/`, and `npm run build:android` builds the phone's page and copies it into `android/`
 (build the app itself in `nix develop .#android` with `cd android && ./gradlew assembleDebug`).
 
 ## Configuration
 
-The server reads a JSON file named by `X_FITNESS_CONFIG`; `config.example.json` is the complete default:
+The daemon on a server reads a JSON file named by `X_FITNESS_CONFIG`; `config.example.json` is the complete default:
 
 | Field            | Means                                                     |
 | ---------------- | --------------------------------------------------------- |
@@ -57,21 +58,45 @@ The address and port come from `X_FITNESS_HOST` and `X_FITNESS_PORT` (or `--host
 set. The admins are read from the accounts file `X_FITNESS_PASSWORD_HASH_FILE` names, one `name:hash` line each;
 `npm run hash-password -- <name> <file>` adds one or changes their password. `x-fitness --help` lists every option.
 
-## The desktop app in the background
+## The daemon and the desktop app
 
-The desktop app runs as two processes: a daemon that holds the data and does the work, and the window that shows it.
-Closing the window leaves sync, backups and the MCP server running, and the window opens again straight onto the data.
-A tray icon shows the workout under way with its time and a Finish, lists the next meals and training sessions, and
-brings the window back; **Quit completely** there or under **Settings → Desktop** stops the daemon too.
+X-Fitness is one daemon, `src/server/main.ts`, that holds the database and does all the work: the page's calls, sync,
+backups, history, the API and MCP. It runs in one of two ways, serving the same calls either way:
 
-The daemon also reminds you, with a desktop notification, as each training day's session comes due (turned off under
-**Settings → Workouts → Schedule**, which also sets the time for training days without one) and, once turned on under
-**Settings → Diet → Meals**, as each timed meal starts unless something is already logged in it. A click opens the app
-on the workout log or the diary: the app opens `x-fitness://<page>` links, such as `x-fitness://diet/diary`.
+- **Headless on a server**, from `npm start`, `x-fitness` or the NixOS module, listening on a network address behind
+  the sign-in.
+- **As the desktop app's local daemon** (`--local`), on a Unix socket only you can open
+  (`$XDG_RUNTIME_DIR/x-fitness/daemon.sock`), with no sign-in and no network port. The desktop app starts it on
+  Electron's own binary when "This computer" is chosen and none is running. Its log is
+  `~/.local/state/x-fitness/daemon.log`. A profile other than the installed app's, such as `X_FITNESS_USER_DATA` in dev,
+  gets a socket and log of its own, so it never reaches your daemon.
+
+**Settings → Connections** lists the daemons the desktop app can work on, like Deluge's connection manager: **This
+computer** for the local daemon, and daemons on other hosts added by address, name and password. Each is signed in once
+as this computer, with a token of its own listed on that daemon's **Your account**; Remove gives it back. **Connect**
+switches, and the window loads again from the chosen daemon. A daemon whose https certificate this computer refuses,
+such as a home server's self-signed one, is reached only once you trust that certificate. The app opens on the daemon it
+used last. The local daemon keeps running and syncing while you work on another one, so a laptop has its data offline.
+On a daemon on another host, only an admin reaches its Sync, Backups and MCP server settings.
+
+Closing the window leaves the local daemon running: sync, backups, reminders and the MCP server carry on, and the window
+opens again straight onto the data. A tray icon shows the workout under way with its time and a Finish, lists the next
+meals and training sessions, and brings the window back; **Quit completely** there or under **Settings → Desktop** stops
+the local daemon too.
+
+The local daemon also reminds you, with a desktop notification, as each training day's session comes due (turned off
+under **Settings → Workouts → Schedule**, which also sets the time for training days without one) and, once turned on
+under **Settings → Diet → Meals**, as each timed meal starts unless something is already logged in it. A click opens the
+app on the workout log or the diary: the app opens `x-fitness://<page>` links, such as `x-fitness://diet/diary`.
 
 **Settings → Desktop** turns off the tray icon, keeping running in the background, and starting at login, which runs
-`x-fitness-desktop --daemon` without opening the window. These belong to the computer and are never synced. The
-daemon's log is `~/.local/state/x-fitness/daemon.log`.
+`x-fitness-desktop --daemon` to start the local daemon without opening the window. These belong to the computer, are kept
+in `desktop.json` in the profile and are never synced.
+
+Not yet: the local daemon does not offer "Let other devices connect" (a network port behind the sign-in), and the
+desktop app does not show reminders for a daemon on another host; the local daemon's own reminders still come while it
+runs. The Android app keeps its own synced copy and offers no connections: its page works on that copy, which a list of
+daemons to switch between would bypass, and it picks the daemon it syncs with under **Sync**.
 
 ## Signing in
 
@@ -82,7 +107,8 @@ adds users on **Users**.
 
 ## Sync
 
-In the desktop or Android app, open **Settings → This device → Sync**, enter the server's address, your name and
+The local daemon and the Android app each keep their own copy and sync it with your server. In the desktop app on
+**This computer**, or in the Android app, open **Settings → This device → Sync**, enter the server's address, your name and
 password, and choose whether this device starts from the server's data or the server from this device's. The copy that
 loses is backed up first. After that, changes go both ways within seconds, and a device that is offline catches up once
 it is back. The device gets a token of its own, listed on **Your account**, which Stop syncing gives back.
@@ -94,7 +120,7 @@ sync takes the other copy, and before an upgrade changes the database. **Setting
 the schedule and lists every backup to restore or delete; backups taken by hand are kept until deleted. The schedule
 belongs to that device or server and is never synced.
 
-- **Desktop:** in `backups/` beside the database in the profile folder. A restore backs up the current data first and
+- **Desktop:** the local daemon's, in `backups/` beside the database in the profile folder. A restore backs up the current data first and
   stops sync, so you choose again which copy wins.
 - **Android:** in a folder you pick once under **Settings → Backups → Backup folder**, such as Documents, where file
   managers and sync apps reach them. Until one is picked there are none, and daily backups wait. A restore backs up the
@@ -128,9 +154,9 @@ Every call the page makes is open to other programs on the server, behind a toke
   claude mcp add --transport http x-fitness https://<server>/api/mcp --header "Authorization: Bearer <token>"
   ```
 
-The desktop app can serve the same MCP tools itself, on its own data and with no server or token: turn on **Settings →
-MCP server** and, while its daemon runs, and it listens on `http://127.0.0.1:3918/mcp` (the port is set there too), reachable only from the same
-computer:
+The local daemon can serve the same MCP tools itself, on its own data and with no server or token: turn on **Settings →
+MCP server** and, while it runs, it listens on `http://127.0.0.1:3918/mcp` (the port is set there too), reachable only
+from the same computer:
 
 ```sh
 claude mcp add --transport http x-fitness http://127.0.0.1:3918/mcp
@@ -152,15 +178,17 @@ services.x-fitness = {
 };
 ```
 
-`packages.default` is the server and `packages.desktop` the desktop app.
+`packages.default` is the daemon for a server and `packages.desktop` the desktop app, which runs the same daemon as its
+local one.
 
 ## Layout
 
 ```
 src/
-  server/    Fastify app and main.ts, and the calls it shares with the daemon
-  daemon/    the desktop app's daemon: its database, the page's calls, sync, backups and MCP, on a Unix socket
-  main/      Electron main process: the window, the tray icon and the login entry, passing calls to the daemon
+  server/    the daemon: main.ts, headless.ts on a server, local.ts as a desktop's local daemon, daemon.ts for what
+             both hold, and app.ts for the handlers both serve
+  main/      Electron main process: the window, the tray icon, the login entry and the connections, passing calls to
+             the chosen daemon
   preload/   the desktop page's bridge
   web/       the React page, one folder per feature, and hosts/ for web, desktop and Android
   shared/    the store every host runs, one folder per feature, and the bridge's method tables

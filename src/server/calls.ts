@@ -1,4 +1,4 @@
-// The page's data calls on the database, as the web server and the desktop daemon both answer them, taking the
+// The page's data calls on the database, as the daemon answers them on a server and on a desktop's socket, taking the
 // arguments in order or by name and telling the other pages when a call changed something.
 
 // ── Imports ──────────────────────────────────────────────────────────────────

@@ -1,5 +1,6 @@
-// The desktop app's own settings, kept by its daemon beside the database rather than synced, since they belong to this
-// computer: the tray icon, running on with the window closed, and starting at login.
+// The desktop app's own settings, kept in desktop.json beside the database rather than synced, since they belong to this
+// computer: the tray icon, running on with the window closed, and starting at login. The main process writes them, and
+// the local daemon reads whether to keep running.
 
 // ── Settings ─────────────────────────────────────────────────────────────────
 
@@ -33,11 +34,9 @@ export interface DesktopMethods {
 
 export const desktop_method_names = ["get_desktop_settings", "set_desktop_setting", "quit_completely"] as const satisfies readonly (keyof DesktopMethods)[];
 
-// What the daemon answers about itself: its settings, and stopping.
+// What the local daemon answers about itself: stopping.
 export interface DaemonMethods {
-  get_desktop_settings: () => DesktopSettings;
-  set_desktop_setting: (key: keyof DesktopSettings, value: boolean) => void;
   stop_daemon: () => void;
 }
 
-export const daemon_method_names = ["get_desktop_settings", "set_desktop_setting", "stop_daemon"] as const satisfies readonly (keyof DaemonMethods)[];
+export const daemon_method_names = ["stop_daemon"] as const satisfies readonly (keyof DaemonMethods)[];

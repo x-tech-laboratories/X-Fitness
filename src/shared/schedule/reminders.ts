@@ -1,5 +1,5 @@
 // Reminders of the next actions: each timed meal as it starts and each training day's session as it comes due, shown by
-// the desktop daemon whether its window is open or not.
+// the local daemon whether its window is open or not.
 
 // ── Imports ──────────────────────────────────────────────────────────────────
 

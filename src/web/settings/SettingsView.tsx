@@ -1,5 +1,5 @@
-// Settings: the units every section shows, each feature's own settings, sync with a server on a device, backups, and
-// the desktop app's tray and background running.
+// Settings: the units every section shows, each feature's own settings, the daemons the desktop connects to, sync with a
+// server on a device, backups, and the desktop app's tray and background running.
 
 // ── Imports ──────────────────────────────────────────────────────────────────
 
@@ -7,6 +7,7 @@ import { useEffect, useState } from "react";
 
 import { NumberField, Segmented, Select, Switch } from "@x-tech-laboratories/x-libs/web/react/controls";
 import { BackupSettings } from "@x-tech-laboratories/x-libs/web/react/backup_settings";
+import { ConnectionSettings } from "@x-tech-laboratories/x-libs/web/react/connections";
 import { LocalMcpSettings } from "@x-tech-laboratories/x-libs/web/react/local_mcp_settings";
 import { PageHeading, SettingRow, SettingsPage, type SettingsCategory, type SettingsSection } from "@x-tech-laboratories/x-libs/web/react/layout";
 import { Loaded } from "@x-tech-laboratories/x-libs/web/react/states";
@@ -116,9 +117,13 @@ function Desktop() {
 
 // Sync on a device with its own database, and backups of whichever database the page works on.
 function data_category(): SettingsCategory[] {
-  const { device, backups, backup_folder, certificates, local_mcp, desktop } = page();
+  const { device, backups, backup_folder, certificates, local_mcp, desktop, connections, connection_certificates } = page();
   const sections: SettingsSection[] = [
-    ...(device ? [{ id: "sync", heading: "Sync", hint: "Keep this device's data alike with your X-Fitness server.", content: <>
+    ...(connections ? [{ id: "connections", heading: "Connections", hint: "The X-Fitness daemon this app works on: this computer's own, which keeps working offline and syncs, or one on another computer such as your server.", content: <>
+      <ConnectionSettings client={connections} certificates={connection_certificates} placeholder="https://fitness.example.org" />
+      {connection_certificates && <TrustedCertificates certificates={connection_certificates} />}
+    </> }] : []),
+    ...(device ? [{ id: "sync", heading: "Sync", hint: "Keep this daemon's data alike with your X-Fitness server.", content: <>
       <SyncSettings device={device} certificates={certificates} subscribe={data_watch.subscribe} data_name="fitness data" placeholder="https://fitness.example.org/" />
       {certificates && <TrustedCertificates certificates={certificates} />}
     </> }] : []),
@@ -126,7 +131,7 @@ function data_category(): SettingsCategory[] {
       ? [{ id: "backups", heading: "Backups", hint: backup_folder ? "Copies of this device's data, kept in a folder you pick." : device ? "Copies of this device's data, kept beside it." : "Copies of the server's data, kept in its data folder. A restore restarts the server.", content: <Backups /> }]
       : []),
     ...(local_mcp
-      ? [{ id: "mcp", heading: "MCP server", hint: "Let AI assistants such as Claude Code reach this device's data without the server.", content: <LocalMcpSettings device={local_mcp} name="x-fitness" data_name="read and change your workouts, diet and body readings" /> }]
+      ? [{ id: "mcp", heading: "MCP server", hint: "Let AI assistants such as Claude Code on the same computer reach this daemon's data without a token.", content: <LocalMcpSettings device={local_mcp} name="x-fitness" data_name="read and change your workouts, diet and body readings" /> }]
       : []),
     ...(desktop ? [{ id: "desktop", heading: "Desktop", hint: "The tray icon, and what runs while the window is closed.", content: <Desktop /> }] : []),
   ];

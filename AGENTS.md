@@ -1,8 +1,9 @@
 # Instructions for AI agents
 
-X-Fitness tracks workouts, diet and body measurements. It is a React page that runs in a browser against its own
-server, in Electron with its own database, and on Android in Capacitor with its own database, all syncing through the
-server. Read `README.md` first, then `docs/architecture.md`. It follows the
+X-Fitness tracks workouts, diet and body measurements. One daemon in `src/server` does all the work, headless on a
+server or as the desktop app's local daemon; the React page in `src/web` shows it in a browser, in Electron (on the local
+daemon or a remote one) and on Android in Capacitor with its own synced copy. Read `README.md` first, then
+`docs/architecture.md`. It follows the
 [X-Tech Application Standard](https://x-tech-laboratories.github.io/standards/application/).
 
 ## Setup and checks
@@ -16,8 +17,10 @@ server. Read `README.md` first, then `docs/architecture.md`. It follows the
 
 - Every feature lives in `src/shared/<feature>/` (store, types, importers) and `src/web/<feature>/` (views, settings);
   `src/shared/store.ts`, `src/web/features.tsx` and `src/web/App.tsx` only list features.
-- Code in `src/shared/` runs on the server, in the desktop daemon and in the phone's page: no DOM, no `node:` imports.
-- The desktop app's work goes in `src/daemon`; `src/main` keeps only what needs Electron: the window, the tray and the login entry.
+- Code in `src/shared/` runs in the daemon and in the phone's page: no DOM, no `node:` imports.
+- All of the app's work goes in the one daemon in `src/server`, which runs headless on a server or as the desktop's local
+  daemon (`--local`) with the same handlers; `src/main` keeps only what needs Electron: the window, the tray, the login
+  entry and the list of daemons it connects to.
 - A store call that only reads is named `list_`, `get_`, `search_`, `lookup_` or `export_`; any other name announces a change.
 - Every store call has a spec in `src/shared/<feature>/api.ts` saying what it does and its arguments, so the API and MCP
   offer it too; describe it for someone who has never seen the page.
