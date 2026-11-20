@@ -39,7 +39,7 @@ export const settings_feature = define_feature({
   api: {
     get_settings: {
       description:
-        "The settings stored, by key, such as mass_unit or workouts.default_rest; a key missing here has its default. diet.label (us, eu, ca, anz or all) picks the nutrients shown and diet.targets (us, eu, ca or anz) the reference amounts each day's targets start from; diet.target_<nutrient>, such as diet.target_protein, is a target set by hand, in kcal or grams, that a null or missing value leaves to the preset. schedule.remind_meals and schedule.remind_training turn the desktop app's reminders of meals and training days on or off, and schedule.training_day_time (HH:MM) is when a training day without a time is reminded of.",
+        "The settings stored, by key, such as mass_unit or workouts.default_rest; a key missing here has its default. diet.label (us, eu, ca, anz or all) picks the nutrients shown and diet.targets (us, eu, ca or anz) the reference amounts each day's targets start from; diet.target_<nutrient>, such as diet.target_protein, is a target set by hand, in kcal or grams, that a null or missing value leaves to the preset. schedule.remind_meals and schedule.remind_training turn the desktop and Android apps' reminders of meals and training days on or off, and schedule.training_day_time (HH:MM) is when a training day without a time is reminded of.",
       params: [],
     },
     set_setting: {

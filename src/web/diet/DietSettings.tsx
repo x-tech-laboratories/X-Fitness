@@ -150,7 +150,7 @@ export function MealSettings({ settings, set_setting }: FeatureSettingsProps) {
       <SettingRow label="Add a meal" hint={`The shares add up to ${format_amount(shares)}% of the day's energy target.`}>
         <button type="button" onClick={() => save([...meals, { id: crypto.randomUUID(), name: `Meal ${meals.length + 1}`, start: "", share: 0 }])}>Add meal</button>
       </SettingRow>
-      <SettingRow label="Remind me of meals" hint="The desktop app shows a notification as each meal with a start time begins, unless something is already logged in it, even with its window closed." as_label>
+      <SettingRow label="Remind me of meals" hint="The desktop and Android apps show a notification as each meal with a start time begins, unless something is already logged in it, even when closed." as_label>
         <Switch
           label="Remind me of meals"
           checked={(settings["schedule.remind_meals"] ?? schedule_setting_defaults["schedule.remind_meals"]) === true}
