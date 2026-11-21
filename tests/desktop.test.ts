@@ -7,7 +7,7 @@ import { EventStream } from "@x-tech-laboratories/x-libs/server/events";
 
 import { register_fitness_calls } from "../src/server/calls.ts";
 import { open_store } from "../src/shared/store.ts";
-import { desktop_setting_defaults, read_desktop_settings } from "../src/shared/desktop.ts";
+import { desktop_setting_defaults, read_desktop_settings, starts_hidden } from "../src/shared/desktop.ts";
 import { due_label, running_workouts, tray_view, type TrayActions, type TrayState } from "../src/main/tray_menu.ts";
 import type { NextAction } from "../src/shared/schedule/model.ts";
 import type { Workout } from "../src/shared/workouts/model.ts";
@@ -24,6 +24,12 @@ describe("the desktop settings", () => {
 
   it("keep what was saved and default anything damaged", () => {
     expect(read_desktop_settings({ show_tray_icon: false, start_at_login: "yes" })).toEqual({ show_tray_icon: false, keep_running_in_background: true, start_at_login: true });
+  });
+
+  it("start hidden only when asked and there is a tray icon to open the window from", () => {
+    expect(starts_hidden(["electron", "app", "--hidden"], true)).toBe(true);
+    expect(starts_hidden(["electron", "app", "--hidden"], false)).toBe(false);
+    expect(starts_hidden(["electron", "app"], true)).toBe(false);
   });
 });
 

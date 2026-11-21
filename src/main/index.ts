@@ -17,7 +17,7 @@ import { certificate_method_names } from "@x-tech-laboratories/x-libs/certificat
 import { local_mcp_method_names } from "@x-tech-laboratories/x-libs/local_mcp_protocol";
 
 import { certificate_bridge, desktop_bridge, device_bridge, fitness_bridge, fitness_events, local_mcp_bridge } from "../shared/bridge.ts";
-import type { DesktopMethods, DesktopSettings } from "../shared/desktop.ts";
+import { starts_hidden, type DesktopMethods, type DesktopSettings } from "../shared/desktop.ts";
 import { route_of_link } from "../shared/links.ts";
 import { device_method_names, is_read_only } from "../shared/page_api.ts";
 import type { NextAction } from "../shared/schedule/model.ts";
@@ -229,7 +229,7 @@ function start_app(): void {
     follow_daemon();
     await apply_window_settings().catch(() => undefined);
     // A link the app was opened with, such as a reminder's, opens the window on its page.
-    show_window(first_argument(process.argv, route_of_link) ?? undefined);
+    if (!starts_hidden(process.argv, tray.is_shown())) show_window(first_argument(process.argv, route_of_link) ?? undefined);
   });
 
   app.on("will-quit", () => {
@@ -255,10 +255,10 @@ async function start_daemon_alone(): Promise<void> {
   }
 }
 
-// A second launch brings the window forward on the page its link names, but one that only starts the daemon leaves the
-// window be.
+// A second launch brings the window forward on the page its link names, but one that only starts the daemon or starts
+// hidden leaves the window be.
 function open_from_second_launch(argv: string[]): void {
-  if (!argv.includes("--daemon")) show_window(first_argument(argv, route_of_link) ?? undefined);
+  if (!argv.includes("--daemon") && !argv.includes("--hidden")) show_window(first_argument(argv, route_of_link) ?? undefined);
 }
 
 if (process.argv.includes("--daemon")) void start_daemon_alone();
