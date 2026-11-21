@@ -22,6 +22,13 @@ export function read_desktop_settings(saved: unknown): DesktopSettings {
   return { show_tray_icon: flag("show_tray_icon"), keep_running_in_background: flag("keep_running_in_background"), start_at_login: flag("start_at_login") };
 }
 
+// ── Launch ───────────────────────────────────────────────────────────────────
+
+// `--hidden`, as a login entry may pass it, starts in the tray without the window, unless there is no tray to open it from.
+export function starts_hidden(argv: readonly string[], tray_shown: boolean): boolean {
+  return tray_shown && argv.includes("--hidden");
+}
+
 // ── Calls ────────────────────────────────────────────────────────────────────
 
 // What the page asks of the desktop app; quitting completely also stops the daemon.

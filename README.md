@@ -72,7 +72,8 @@ Android app hands the next two weeks of reminders to Android ahead of time, rene
 whenever the app opens, and asks to show notifications once there is something to remind of.
 
 **Settings → Desktop** turns off the tray icon, keeping running in the background, and starting at login, which runs
-`x-fitness-desktop --daemon` without opening the window. These belong to the computer and are never synced. The
+`x-fitness-desktop --daemon` without opening the window. `x-fitness-desktop --hidden` starts the app in the tray without
+its window, or with it when the tray icon is off. The Desktop settings belong to the computer and are never synced. The
 daemon's log is `~/.local/state/x-fitness/daemon.log`.
 
 ## Signing in
