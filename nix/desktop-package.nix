@@ -3,7 +3,7 @@
   buildNpmPackage,
   importNpmLock,
   nodejs_24,
-  electron_43,
+  electron_45,
   makeWrapper,
   copyDesktopItems,
   makeDesktopItem,
@@ -34,7 +34,7 @@ buildNpmPackage {
     mkdir -p $out/lib/x-fitness-desktop
     cp -r out package.json node_modules resources $out/lib/x-fitness-desktop/
     install -Dm644 resources/icon.png $out/share/icons/hicolor/512x512/apps/x-fitness.png
-    makeWrapper ${lib.getExe electron_43} $out/bin/x-fitness-desktop \
+    makeWrapper ${lib.getExe electron_45} $out/bin/x-fitness-desktop \
       --add-flags $out/lib/x-fitness-desktop \
       --unset ELECTRON_RUN_AS_NODE \
       --set X_FITNESS_LAUNCHER x-fitness-desktop
