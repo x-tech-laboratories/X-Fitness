@@ -46,9 +46,9 @@ describe("sidebar", () => {
     fake_page();
     render(<App />);
 
-    const tree = screen.getByRole("tree", { name: "Sections" });
+    const tree = screen.getByRole("tree", { name: "Main" });
     expect(within(tree).getAllByRole("treeitem").map((row) => row.getAttribute("aria-level"))).toContain("2");
-    expect(screen.getByRole("link", { name: "Overview" }).getAttribute("aria-current")).toBe("page");
+    expect(tree.querySelector("[data-id='section:overview']")?.getAttribute("aria-selected")).toBe("true");
 
     fireEvent.click(within(tree).getByText("Reports", { selector: "[data-id='body/reports'] *" }));
     expect(window.location.hash).toBe("#/body/reports");
@@ -61,7 +61,7 @@ describe("sidebar", () => {
     fake_page();
     render(<App />);
 
-    const tree = screen.getByRole("tree", { name: "Sections" });
+    const tree = screen.getByRole("tree", { name: "Main" });
     for (const section of ["workouts", "diet", "body"]) expect(tree.querySelector(`[data-id^='${section}/']`)?.getAttribute("data-id")).toBe(`${section}/reports`);
     go("#/diet");
     expect(await screen.findByRole("heading", { level: 1, name: /Reports/ })).toBeTruthy();
@@ -73,9 +73,9 @@ describe("sidebar", () => {
     go("#/workouts/log");
 
     fireEvent.click(screen.getByRole("button", { name: "Collapse Workouts" }));
-    const tree = screen.getByRole("tree", { name: "Sections" });
+    const tree = screen.getByRole("tree", { name: "Main" });
     expect(tree.querySelector("[data-id='workouts/log']")).toBeNull();
-    expect(tree.querySelector("[data-id='workouts']")?.getAttribute("aria-selected")).toBe("true");
+    expect(tree.querySelector("[data-id='section:workouts']")?.getAttribute("aria-selected")).toBe("true");
   });
 });
 

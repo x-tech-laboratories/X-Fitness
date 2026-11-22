@@ -15,7 +15,7 @@ import { page_features } from "./features.tsx";
 import { HistoryView } from "./history/HistoryView.tsx";
 import { OverviewView } from "./overview/OverviewView.tsx";
 import { SettingsView } from "./settings/SettingsView.tsx";
-import { Sidebar, SidebarFoot } from "./Sidebar.tsx";
+import { sidebar_pref, sidebar_sections, SidebarFoot } from "./Sidebar.tsx";
 
 // ── Sections ─────────────────────────────────────────────────────────────────
 
@@ -85,7 +85,10 @@ function Pages({ me, on_sign_out }: { me: Me | null; on_sign_out?: () => void })
     <Shell
       brand="X-Fitness"
       brand_icon={brand_icon}
-      sidebar={<Sidebar features={page_features} section={section} page={page?.id ?? ""} />}
+      sections={sidebar_sections(page_features)}
+      active={section}
+      active_item={page?.id ?? null}
+      sections_pref={sidebar_pref}
       sidebar_foot={<SidebarFoot section={section} show_users={is_admin} />}
       theme={theme}
       view_key={view_key}
