@@ -52,33 +52,37 @@ export function CategoriesTab({ data }: { data: DietData }) {
 
 // ── Units ────────────────────────────────────────────────────────────────────
 
+// A unit wrapped as an object, since DataTable rows must be objects.
+type UnitRow = { name: string };
+
 export function UnitsTab({ data }: { data: DietData }) {
   const rename = use_rename<string>((from, to) => void attempt(() => calls().rename_unit(from, to)));
 
-  const columns = useMemo((): TableColumn<string>[] => {
+  const columns = useMemo((): TableColumn<UnitRow>[] => {
     const usage = (unit: string) => unit_usage(data.foods, data.recipes, data.grocery, unit);
     return [
-      { label: "Unit", id: "name", cell: (unit) => (rename.renaming === unit ? rename.field(unit, unit) : unit) },
-      { label: "Foods", id: "foods", class: "number", cell: (unit) => usage(unit).foods },
-      { label: "Recipes", id: "recipes", class: "number", cell: (unit) => usage(unit).recipes },
-      { label: "Grocery", id: "grocery", class: "number", cell: (unit) => usage(unit).grocery },
-      row_actions_column<string>({
-        name: (unit) => unit,
-        buttons: (unit) => (
+      { label: "Unit", id: "name", cell: ({ name: unit }) => (rename.renaming === unit ? rename.field(unit, unit) : unit) },
+      { label: "Foods", id: "foods", class: "number", cell: ({ name: unit }) => usage(unit).foods },
+      { label: "Recipes", id: "recipes", class: "number", cell: ({ name: unit }) => usage(unit).recipes },
+      { label: "Grocery", id: "grocery", class: "number", cell: ({ name: unit }) => usage(unit).grocery },
+      row_actions_column<UnitRow>({
+        name: ({ name: unit }) => unit,
+        buttons: ({ name: unit }) => (
           <button type="button" aria-label={`Rename ${unit}`} onClick={() => rename.start(unit)}>
             Rename
           </button>
         ),
-        remove: (unit) => void succeeds(() => calls().delete_unit(unit)),
+        remove: ({ name: unit }) => void succeeds(() => calls().delete_unit(unit)),
         width: 170,
       }),
     ];
   }, [data, rename.renaming]);
+  const unit_rows = useMemo((): UnitRow[] => data.units.map((name) => ({ name })), [data.units]);
 
   return (
     <div className="stack tight">
       <AddNameForm label="New unit" button="Add unit" class_name="toolbar diet-log" on_add={(name) => succeeds(() => calls().add_unit(name))} />
-      {data.units.length === 0 ? <Empty title="No units yet." /> : <DataTable caption="Units" columns={columns} rows={data.units} row_key={(unit) => unit} />}
+      {data.units.length === 0 ? <Empty title="No units yet." /> : <DataTable caption="Units" columns={columns} rows={unit_rows} row_key={(unit) => unit.name} />}
       <p className="muted small">
         Renaming updates every food, recipe and grocery line using the unit. Renaming onto an existing unit merges the two. A unit still in use cannot be deleted:
         rename it onto another unit first, which moves everything over.

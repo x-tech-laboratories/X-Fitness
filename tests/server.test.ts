@@ -63,6 +63,13 @@ describe("server", () => {
     expect((await signed({ method: "POST", url: "/api/call/get_settings", payload: [] })).statusCode).toBe(200);
   });
 
+  it("refuses a percent-encoded API path without sign-in", async () => {
+    await start();
+    for (const url of ["/%61pi/call/get_settings", "/api/%63all/get_settings", "/%61pi/mcp", "/%61pi/backup/list_backups"]) {
+      expect([400, 401]).toContain((await app.inject({ method: "POST", url, payload: [] })).statusCode);
+    }
+  });
+
   it("serves the built page beside the API", async () => {
     const folder = mkdtempSync(join(tmpdir(), "x-fitness-web-"));
     writeFileSync(join(folder, "index.html"), "<title>X-Fitness</title>");
