@@ -6,6 +6,7 @@
 
 import { format_local } from "@x-tech-laboratories/x-libs/dates";
 import { between } from "@x-tech-laboratories/x-libs/drizzle";
+import { read_setting, settings_of, write_setting } from "@x-tech-laboratories/x-libs/settings";
 import { in_transaction, type SqlDatabase } from "@x-tech-laboratories/x-libs/sql";
 
 import { shift_day, skinfold_of, type BodyGoalKey, type BodyMetric, type MetricRole, type Point } from "../body/readings.ts";
@@ -147,8 +148,7 @@ export interface TrainingReport {
 const defaults: Record<string, unknown> = { ...body_setting_defaults, ...diet_setting_defaults, ...calculators_setting_defaults };
 
 function setting_of(database: SqlDatabase, key: string): unknown {
-  const row = database.prepare("SELECT value FROM settings WHERE key = ?").get(key) as { value: string } | undefined;
-  return row ? JSON.parse(row.value) : defaults[key];
+  return read_setting(database, key) ?? defaults[key];
 }
 
 function number_setting(database: SqlDatabase, key: string): number {
@@ -370,7 +370,7 @@ function apply_goals(database: SqlDatabase, keys: GoalKey[], date: string): numb
   for (const goal of report(database, date).goals) {
     if (!keys.includes(goal.key) || goal.value === null) continue;
     if (goal.current !== null && Math.abs(goal.current - goal.value) < 1e-6) continue;
-    database.prepare("INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT (key) DO UPDATE SET value = excluded.value").run(`diet.target_${goal.key}`, JSON.stringify(goal.value));
+    write_setting(database, `diet.target_${goal.key}`, goal.value);
     changed += 1;
   }
   return changed;
@@ -443,7 +443,7 @@ export const calculators_feature = define_feature({
     list_workout_energy: (database: SqlDatabase, from: string, to: string): WorkoutEnergy[] => list_workout_energy(database, check_day(from), check_day(to)),
   },
   api: calculators_api,
-  setting_defaults: calculators_setting_defaults,
+  settings: settings_of(calculators_setting_defaults),
   after_write: follow_plan,
   on_open: carry_over_body_goals,
 });

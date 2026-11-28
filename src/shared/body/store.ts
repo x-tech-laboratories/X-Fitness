@@ -4,6 +4,7 @@
 // ── Imports ──────────────────────────────────────────────────────────────────
 
 import { and, asc, count, desc, eq, gte, inArray, lte, max, ne, sql, synced_tables } from "@x-tech-laboratories/x-libs/drizzle";
+import { read_setting, settings_of } from "@x-tech-laboratories/x-libs/settings";
 import { in_transaction, type SqlDatabase } from "@x-tech-laboratories/x-libs/sql";
 
 import { define_feature, drizzle_of, new_id } from "../feature.ts";
@@ -135,8 +136,7 @@ export function latest_on_or_before(database: SqlDatabase, metric_id: string, da
 }
 
 function setting_of(database: SqlDatabase, key: keyof typeof body_setting_defaults): unknown {
-  const row = database.prepare("SELECT value FROM settings WHERE key = ?").get(key) as { value: string } | undefined;
-  return row ? JSON.parse(row.value) : body_setting_defaults[key];
+  return read_setting(database, key) ?? body_setting_defaults[key];
 }
 
 // BMI is worked out from the first weight metric, as the order lists them.
@@ -407,5 +407,5 @@ export const body_feature = define_feature({
     },
   },
   api: body_api,
-  setting_defaults: body_setting_defaults,
+  settings: settings_of(body_setting_defaults),
 });

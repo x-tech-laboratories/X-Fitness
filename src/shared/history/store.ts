@@ -4,6 +4,7 @@
 // ── Imports ──────────────────────────────────────────────────────────────────
 
 import { create_history, type History, type HistoryWatch, type Version, type VersionKind } from "@x-tech-laboratories/x-libs/history";
+import { read_setting, settings_of } from "@x-tech-laboratories/x-libs/settings";
 import type { SqlDatabase } from "@x-tech-laboratories/x-libs/sql";
 
 import { id_of, text } from "../api_schemas.ts";
@@ -242,8 +243,7 @@ export const history_setting_defaults = {
 };
 
 function keep_days(database: SqlDatabase): number {
-  const row = database.prepare("SELECT value FROM settings WHERE key = 'history.keep_days'").get() as { value: string } | undefined;
-  const days = row ? Number(JSON.parse(row.value)) : history_setting_defaults["history.keep_days"];
+  const days = Number(read_setting(database, "history.keep_days") ?? history_setting_defaults["history.keep_days"]);
   return Number.isFinite(days) && days > 0 ? days : history_setting_defaults["history.keep_days"];
 }
 
@@ -309,7 +309,7 @@ export const history_feature = define_feature({
   id: "history",
   migrations: [],
   tables: history_tables,
-  setting_defaults: history_setting_defaults,
+  settings: settings_of(history_setting_defaults),
   methods: {
     list_item_history: (database: SqlDatabase, kind: string, item_id: string): ItemChange[] => {
       const { item, history } = kind_of(kind);

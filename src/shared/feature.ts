@@ -5,6 +5,7 @@
 
 import type { ApiSpec } from "@x-tech-laboratories/x-libs/api_spec";
 import { open_drizzle, type Drizzle } from "@x-tech-laboratories/x-libs/drizzle";
+import type { SettingSpec } from "@x-tech-laboratories/x-libs/settings";
 import type { MigrationStep, SqlDatabase } from "@x-tech-laboratories/x-libs/sql";
 import type { SyncedTable } from "@x-tech-laboratories/x-libs/sync_engine";
 
@@ -23,8 +24,8 @@ export interface Feature<Methods extends Record<string, StoreMethod>> {
   methods: Methods;
   // What each call does and takes, for programs that reach them through MCP or the API.
   api: ApiSpec<Methods>;
-  // Settings this feature reads, by key such as "workouts.default_rest", with their defaults.
-  setting_defaults?: Record<string, unknown>;
+  // The settings this feature owns, by key such as "mass_unit".
+  settings?: Record<string, SettingSpec>;
   // Runs after every write the page, API or MCP makes, before history records it, such as goals that follow a plan.
   after_write?: (database: SqlDatabase) => void;
   // Runs each time the database opens, after every migration, for upgrades that need more than SQL; it must change nothing the second time.

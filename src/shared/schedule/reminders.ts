@@ -4,10 +4,10 @@
 // ── Imports ──────────────────────────────────────────────────────────────────
 
 import { add_days, format_local, has_time, parse_local, start_of_day } from "@x-tech-laboratories/x-libs/dates";
+import { read_stored_settings } from "@x-tech-laboratories/x-libs/settings";
 import type { SqlDatabase } from "@x-tech-laboratories/x-libs/sql";
 
 import { app_link } from "../links.ts";
-import { settings_feature } from "../settings.ts";
 import { normalize_meals } from "../diet/model.ts";
 import { diet_setting_defaults } from "../diet/settings.ts";
 import { diet_feature } from "../diet/store.ts";
@@ -64,7 +64,7 @@ function reminder_of(action: NextAction): Reminder {
 // whose reminder falls in between. Both are read, since a missed session hides the next until that one comes due, and a
 // meal already eaten has moved on to tomorrow, so it is left out.
 export function due_reminders(database: SqlDatabase, after: Date, until: Date): Reminder[] {
-  const settings = reminder_settings(settings_feature.methods.get_settings(database));
+  const settings = reminder_settings(read_stored_settings(database));
   if (!settings.remind_meals && !settings.remind_training) return [];
   const next_at = (moment: Date) => schedule_feature.methods.list_next_actions(database, format_local(moment, true));
   const reminders = [...next_at(after), ...next_at(until)]
@@ -80,7 +80,7 @@ export function due_reminders(database: SqlDatabase, after: Date, until: Date): 
 // Every reminder from one moment up to another, such as the next two weeks a phone is handed: each timed meal on each
 // day, but for one already eaten, and the training days' sessions in turn as if each is trained.
 export function reminders_between(database: SqlDatabase, after: Date, until: Date): (Reminder & { at: number })[] {
-  const all_settings = settings_feature.methods.get_settings(database);
+  const all_settings = read_stored_settings(database);
   const settings = reminder_settings(all_settings);
   const found: (Reminder & { at: number })[] = [];
   if (settings.remind_meals) {

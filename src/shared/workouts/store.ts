@@ -4,6 +4,7 @@
 // ── Imports ──────────────────────────────────────────────────────────────────
 
 import { asc, eq, inArray, max, ne, sql, synced_tables, type SQLiteTable } from "@x-tech-laboratories/x-libs/drizzle";
+import { settings_of } from "@x-tech-laboratories/x-libs/settings";
 import { in_transaction, type SqlDatabase } from "@x-tech-laboratories/x-libs/sql";
 
 import { add_category, delete_category, import_category_paths, move_category, read_categories, rename_category, save_category_refs, type Retag } from "../category_store.ts";
@@ -810,5 +811,5 @@ export const workouts_feature = define_feature({
     },
   },
   api: workouts_api,
-  setting_defaults: workout_setting_defaults,
+  settings: settings_of(workout_setting_defaults),
 });
