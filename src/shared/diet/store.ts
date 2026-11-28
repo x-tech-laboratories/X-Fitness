@@ -5,6 +5,7 @@
 
 import { add_days, format_local, parse_local } from "@x-tech-laboratories/x-libs/dates";
 import { asc, between, eq, sql, synced_tables, type InferInsertModel, type InferSelectModel } from "@x-tech-laboratories/x-libs/drizzle";
+import { read_setting as read_stored_setting, read_stored_settings, settings_of } from "@x-tech-laboratories/x-libs/settings";
 import { in_transaction, type SqlDatabase } from "@x-tech-laboratories/x-libs/sql";
 
 import { add_category, delete_category, move_category, read_categories, rename_category, save_category_refs, type Retag } from "../category_store.ts";
@@ -44,16 +45,13 @@ import { diet_setting_defaults, type DietSettingKey } from "./settings.ts";
 
 // ── Settings ─────────────────────────────────────────────────────────────────
 
-// The settings table is the shared store's, outside any Drizzle schema.
 function read_setting(database: SqlDatabase, key: DietSettingKey): unknown {
-  const row = database.prepare("SELECT value FROM settings WHERE key = ?").get(key) as { value: string } | undefined;
-  return row ? JSON.parse(row.value) : diet_setting_defaults[key];
+  return read_stored_setting(database, key) ?? diet_setting_defaults[key];
 }
 
 // Every setting stored over the diet's defaults, as labels.ts reads them.
 function read_settings(database: SqlDatabase): Record<string, unknown> {
-  const rows = database.prepare("SELECT key, value FROM settings").all() as { key: string; value: string }[];
-  return { ...diet_setting_defaults, ...Object.fromEntries(rows.map((row) => [row.key, JSON.parse(row.value)])) };
+  return { ...diet_setting_defaults, ...read_stored_settings(database) };
 }
 
 function day_targets(settings: Record<string, unknown>): Nutrients {
@@ -316,7 +314,7 @@ export const diet_feature = define_feature({
   id: "diet",
   migrations: migrations.map((migration) => migration.statements),
   tables: synced_tables(diet_tables),
-  setting_defaults: diet_setting_defaults,
+  settings: settings_of(diet_setting_defaults),
   api: diet_api,
   methods: {
     get_diet,

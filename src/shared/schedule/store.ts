@@ -5,13 +5,13 @@
 
 import { parse_local } from "@x-tech-laboratories/x-libs/dates";
 import { asc, desc, eq, inArray } from "@x-tech-laboratories/x-libs/drizzle";
+import { read_stored_settings, settings_of } from "@x-tech-laboratories/x-libs/settings";
 import type { SqlDatabase } from "@x-tech-laboratories/x-libs/sql";
 
 import { normalize_meals } from "../diet/model.ts";
 import { diet_setting_defaults } from "../diet/settings.ts";
 import { diet_feature } from "../diet/store.ts";
 import { define_feature, drizzle_of } from "../feature.ts";
-import { settings_feature } from "../settings.ts";
 import { program_sessions, workouts } from "../workouts/schema.ts";
 import { workout_setting_defaults } from "../workouts/settings.ts";
 import { schedule_api } from "./api.ts";
@@ -62,7 +62,7 @@ export const schedule_feature = define_feature({
     list_next_actions: (database: SqlDatabase, now: string): NextAction[] => {
       if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(now)) throw new Error("Give now as a local time such as 2026-11-10T12:30.");
       const moment = parse_local(now);
-      const settings = settings_feature.methods.get_settings(database);
+      const settings = read_stored_settings(database);
       const meals = normalize_meals(settings["diet.meals"] ?? diet_setting_defaults["diet.meals"]);
       const eaten = new Set(diet_feature.methods.get_diary_day(database, now.slice(0, 10)).entries.map((entry) => entry.meal));
       const training = training_action(database, read_schedule(settings), moment);
@@ -70,5 +70,5 @@ export const schedule_feature = define_feature({
     },
   },
   api: schedule_api,
-  setting_defaults: schedule_setting_defaults,
+  settings: settings_of(schedule_setting_defaults),
 });
