@@ -70,6 +70,23 @@ describe("store", () => {
     expect(bound.get_settings()).toEqual({ ...setting_defaults, mass_unit: "lb", week_start: 0 });
   });
 
+  it("exports the settings set and imports them elsewhere, keeping nutrient targets and dropping unknown keys", () => {
+    const source_database = open_database();
+    const target_database = open_database();
+    const source = bind_methods(() => source_database, () => undefined);
+    source.set_setting("mass_unit", "lb");
+    source.set_setting("diet.target_protein", 120);
+    const file = source.export_settings();
+
+    const target = bind_methods(() => target_database, () => undefined);
+    const result = target.import_settings(JSON.stringify({ ...file, settings: { ...file.settings, unknown: 1 } }));
+
+    expect(file).toMatchObject({ app: "x-fitness", kind: "settings", settings: { mass_unit: "lb", "diet.target_protein": 120 } });
+    expect(result).toEqual({ changed: 2, unchanged: 0 });
+    expect(target.get_settings()).toMatchObject({ mass_unit: "lb", "diet.target_protein": 120 });
+    expect(target.get_settings()).not.toHaveProperty("unknown");
+  });
+
   it("announces writes and not reads", () => {
     const database = open_database();
     const on_change = vi.fn();
