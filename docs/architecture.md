@@ -8,8 +8,8 @@ the page a `PageApi` (`src/shared/bridge.ts`):
 | Host    | Where the data is                                   | How a call travels                                   | Sync                        |
 | ------- | --------------------------------------------------- | ---------------------------------------------------- | --------------------------- |
 | web     | the server's SQLite file                            | `POST api/call/<method>` with the arguments as JSON  | none; the browser is online |
-| desktop | `fitness.db` in Electron's profile folder           | IPC through the preload to the main process, then HTTP over the daemon's socket | X-Libs `sync_client` in the daemon |
-| android | SQLite in WebAssembly, saved to IndexedDB           | straight to the store in the same page               | X-Libs `sync_client`        |
+| desktop | `fitness.db` in Electron's profile folder           | IPC through the preload to the main process, then HTTP over the daemon's socket | X-Libs `sync_peer` in the daemon |
+| android | SQLite in WebAssembly, saved to IndexedDB           | straight to the store in the same page               | X-Libs `sync_peer`          |
 
 Views never ask which host they are on. They call `calls().<method>(...)` from `src/web/api.ts` and load with
 `use_data`, which reloads quietly whenever `data_watch` is bumped: after this page writes, and when another page or
@@ -111,9 +111,12 @@ the page, the API and MCP are all covered; writes that arrive by sync are left t
 ## Sync
 
 The server and every device run the same store. X-Libs `sync_engine` stamps every write to a synced table through
-triggers, value by value; the newest write of each value wins. A device sends its changes within seconds and takes
-everyone else's in the same round trip, follows the server's event stream to hear of changes at once, and keeps working
-offline. On first connecting, the user chooses whether the server's copy or the device's wins; the other is backed up.
+triggers, value by value; the newest write of each value wins. Every copy is an X-Libs `sync_peer`: once paired through
+a one-time code, it sends each paired device its changes within seconds and takes theirs in the same round trip, holds a
+waiting call open to hear of theirs at once, passes on what it took from the others, and keeps working offline. The server
+answers devices at `/api/sync/peer`, open without signing in since each call is sealed with the two devices' keys, and
+serves its own pairing calls to an admin at `/api/sync_device/`. A desktop daemon answers on its own port once the user
+lets other devices connect (`sync-listening.json`), and keeps its keys and paired devices in `sync-peers.json`.
 
 ## Units
 

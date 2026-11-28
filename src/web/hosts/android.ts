@@ -1,5 +1,5 @@
-// The phone's page: it keeps its own database, answers its calls on it, backs it up daily, syncs with a server when one
-// is set, and hands Android its reminders ahead of time.
+// The phone's page: it keeps its own database, answers its calls on it, backs it up daily, syncs with the devices it is
+// paired with, and hands Android its reminders ahead of time.
 
 // ── Imports ──────────────────────────────────────────────────────────────────
 
@@ -10,7 +10,7 @@ import { keep_backing_up } from "@x-tech-laboratories/x-libs/backups";
 import { phone_backups } from "@x-tech-laboratories/x-libs/phone_backups";
 import { phone_certificates } from "@x-tech-laboratories/x-libs/phone_certificates";
 import { keep_phone_notices } from "@x-tech-laboratories/x-libs/phone_notices";
-import { create_sync_client, sync_device_methods } from "@x-tech-laboratories/x-libs/sync_client";
+import { create_sync_peer, sync_device_methods } from "@x-tech-laboratories/x-libs/sync_peer";
 import { indexed_db_files, open_wasm_database } from "@x-tech-laboratories/x-libs/web/sqlite_wasm";
 import { local_sync_storage } from "@x-tech-laboratories/x-libs/web/sync_storage";
 
@@ -24,7 +24,7 @@ import { bind_methods, needs_upgrade, open_store, sync_engine, type FitnessMetho
 
 const files = indexed_db_files("x-fitness");
 const database_file = "fitness.db";
-const sync_config_key = "x-fitness-sync";
+const sync_peers_key = "x-fitness-sync-peers";
 // The schedule belongs to this phone, so it is kept in its own storage rather than in the synced settings.
 const schedule_key = "x-fitness-backup-schedule";
 
@@ -52,12 +52,11 @@ export async function android_api(): Promise<PageApi> {
   };
 
   // Backups go to a folder the user picks in the phone's storage; the ones taken on their own wait until there is one.
-  // A restore stops sync first, so the user picks again which copy wins.
+  // A restore then reaches every paired device, which backs itself up first.
   const kept = phone_backups({
     naming: fitness_backup_naming,
     database,
     after_restore: (connection) => {
-      sync.disconnect();
       open_store(connection);
       sync_engine.forget_history(connection);
     },
@@ -90,9 +89,9 @@ export async function android_api(): Promise<PageApi> {
     notices.refresh();
   };
 
-  // The server and token stay in the app's private storage, never in the synced data.
-  const storage = local_sync_storage({ key: sync_config_key, back_up_before_download: back_up_if_folder });
-  const sync = create_sync_client({ engine: sync_engine, database: () => database.connection, storage, data_name: "fitness data", device_name: "X-Fitness on Android", on_remote_change: changed });
+  // The phone's keys and paired devices stay in the app's private storage, never in the synced data.
+  const storage = local_sync_storage({ key: sync_peers_key, back_up_before_replace: back_up_if_folder });
+  const sync = create_sync_peer({ app: "x-fitness", engine: sync_engine, database: () => database.connection, storage, device_name: "X-Fitness on Android", on_remote_change: changed });
 
   // A phone may close the app at any moment once it is in the background, so the database is saved straight away.
   void App.addListener("pause", () => void database.save_now());
@@ -109,7 +108,7 @@ export async function android_api(): Promise<PageApi> {
     ...sync_device_methods(sync),
     list_backups: kept.list,
     create_backup: () => kept.create(),
-    // The current data is backed up first, and sync waits until the user picks which copy wins.
+    // The current data is backed up first, and the restored copy then reaches every paired device.
     restore_backup: async (name) => {
       await kept.restore(name);
       changed();

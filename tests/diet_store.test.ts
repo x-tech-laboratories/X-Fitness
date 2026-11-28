@@ -434,7 +434,7 @@ describe("food lookup", () => {
     const food_id = phone.methods.save_food(oats);
     phone.methods.add_diary_entry({ date: "2026-11-10", kind: "food", ref_id: food_id, amount: 50, unit: "g" });
 
-    const outgoing = sync_engine.collect_unpushed_changes(phone.database);
+    const outgoing = sync_engine.collect_changes_since(phone.database, 0, "");
     sync_engine.apply_changes(desktop.database, outgoing.changes);
 
     expect(desktop.methods.get_diet().foods).toEqual(phone.methods.get_diet().foods);

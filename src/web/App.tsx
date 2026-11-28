@@ -30,8 +30,8 @@ const own_sections = ["settings", "account", "users"];
 
 // ── App ──────────────────────────────────────────────────────────────────────
 
-// A browser signs in to the server; the desktop and phone apps keep their own data and sign in only to sync.
-// A device that syncs asks to trust its server's certificate whenever sync fails over it.
+// A browser signs in to the server; the desktop and phone apps keep their own data and sync it with their paired devices.
+// A device that syncs asks to trust a paired device's certificate whenever sync fails over it.
 function DeviceApp() {
   const { certificates, device } = page();
   return <>

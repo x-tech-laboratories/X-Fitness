@@ -7,9 +7,11 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { FastifyInstance, InjectOptions } from "fastify";
 
 import { hash_password } from "@x-tech-laboratories/x-libs/server/passwords";
+import { create_sync_peer } from "@x-tech-laboratories/x-libs/sync_peer";
+import type { PeerIdentity, PeerRecord, PeerStorage } from "@x-tech-laboratories/x-libs/sync_protocol";
 
 import { build_app } from "../src/server/app.ts";
-import { method_names, open_store } from "../src/shared/store.ts";
+import { bind_methods, method_names, open_store, sync_engine } from "../src/shared/store.ts";
 
 let app: FastifyInstance;
 // The token every request but the sign-in tests carries.
@@ -42,10 +44,27 @@ const fake_backups = {
   set_backup_schedule: vi.fn(),
 };
 
+// A device's keys and paired devices, kept in memory for a test.
+function memory_peer_storage(): PeerStorage {
+  let identity: PeerIdentity | null = null;
+  let peers: PeerRecord[] = [];
+  return {
+    read_identity: () => identity,
+    write_identity: (written) => void (identity = written),
+    read_peers: () => peers,
+    write_peers: (written) => void (peers = written),
+    back_up_before_replace: () => undefined,
+  };
+}
+
+let server_database: DatabaseSync;
+
 async function start(web_folder = "/nonexistent"): Promise<FastifyInstance> {
   const database = new DatabaseSync(":memory:");
+  server_database = database;
   open_store(database);
-  app = await build_app({ database, declared: new Map([["root", hash_password(password)]]), web_folder, backups: fake_backups });
+  const sync = { storage: memory_peer_storage(), address: "https://fitness.example.org/api/" };
+  app = await build_app({ database, declared: new Map([["root", hash_password(password)]]), web_folder, backups: fake_backups, sync });
   token = (await app.inject({ method: "POST", url: "/api/login", payload: { name: "root", password, device: "tests" } })).json().token;
   return app;
 }
@@ -137,13 +156,26 @@ describe("server", () => {
     expect(values).not.toHaveProperty("diet.usda_api_key");
   });
 
-  it("serves sync to devices", async () => {
+  it("pairs a phone through an admin's code, then syncs it without signing in, and refuses a device it does not know", async () => {
     await start();
-    const snapshot = await signed({ method: "GET", url: "/api/sync/snapshot" });
-    expect(snapshot.statusCode).toBe(200);
-    const { generation, changes } = snapshot.json() as { generation: string; changes: { table: string; key: string }[] };
-    expect(generation).not.toBe("");
-    expect(changes).toContainEqual(expect.objectContaining({ table: "body_metrics", key: "weight" }));
+    const stranger = await app.inject({ method: "POST", url: "/api/sync/peer", headers: { "content-type": "application/octet-stream", "x-sync-device": "NOBODY" }, payload: Buffer.alloc(64) });
+    expect(stranger.statusCode).toBe(403);
+    expect((await app.inject({ method: "POST", url: "/api/sync_device/create_pairing_code", payload: [] })).statusCode).toBe(401);
+    const { code } = (await signed({ method: "POST", url: "/api/sync_device/create_pairing_code", payload: [] })).json() as { code: string };
+
+    // The phone reaches the server through the app itself, as it would through the server's proxy.
+    const via_app: typeof fetch = async (input, init) => {
+      const reply = await app.inject({ method: "POST", url: new URL(String(input)).pathname, headers: init?.headers as Record<string, string>, payload: Buffer.from(init!.body as Uint8Array) });
+      return new Response(new Uint8Array(reply.rawPayload), { status: reply.statusCode });
+    };
+    const phone_database = new DatabaseSync(":memory:");
+    open_store(phone_database);
+    bind_methods(() => phone_database, () => undefined).set_body_reading("weight", "2026-11-10", 82.5);
+    const phone = create_sync_peer({ app: "x-fitness", engine: sync_engine, database: () => phone_database, storage: memory_peer_storage(), device_name: "Phone", fetch: via_app });
+
+    const status = await phone.pair_device(code);
+    expect(status.peers.map((peer) => [peer.name, peer.state])).toEqual([["X-Fitness server", "idle"]]);
+    expect(bind_methods(() => server_database, () => undefined).get_body_day("2026-11-10").rows.find((row) => row.metric.id === "weight")?.value).toBe(82.5);
   });
 
   it("lets an admin list and take the server's backups, and refuses unknown backup calls", async () => {

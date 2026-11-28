@@ -14,9 +14,10 @@ import { create_app_tray } from "@x-tech-laboratories/x-libs/electron/tray";
 import { create_window, is_app_page } from "@x-tech-laboratories/x-libs/electron/window";
 import { call_daemon, daemon_log_path, daemon_socket_path, follow_daemon_events, start_daemon } from "@x-tech-laboratories/x-libs/local_daemon";
 import { certificate_method_names } from "@x-tech-laboratories/x-libs/certificate_protocol";
+import { peer_listening_method_names } from "@x-tech-laboratories/x-libs/sync_protocol";
 import { local_mcp_method_names } from "@x-tech-laboratories/x-libs/local_mcp_protocol";
 
-import { certificate_bridge, desktop_bridge, device_bridge, fitness_bridge, fitness_events, local_mcp_bridge } from "../shared/bridge.ts";
+import { certificate_bridge, desktop_bridge, device_bridge, fitness_bridge, fitness_events, listening_bridge, local_mcp_bridge } from "../shared/bridge.ts";
 import { starts_hidden, type DesktopMethods, type DesktopSettings } from "../shared/desktop.ts";
 import { route_of_link } from "../shared/links.ts";
 import { device_method_names, is_read_only } from "../shared/page_api.ts";
@@ -202,6 +203,7 @@ function register_bridges(): void {
   fitness_bridge.handle(ipcMain, forwarded(method_names, "call") as never, options);
   device_bridge.handle(ipcMain, forwarded(device_method_names, "device") as never, options);
   certificate_bridge.handle(ipcMain, forwarded(certificate_method_names, "certificates") as never, options);
+  listening_bridge.handle(ipcMain, forwarded(peer_listening_method_names, "listening") as never, options);
   local_mcp_bridge.handle(ipcMain, forwarded(local_mcp_method_names, "local_mcp") as never, options);
   const desktop: Implementation<DesktopMethods> = {
     get_desktop_settings,

@@ -3,8 +3,8 @@
 <a href="https://liberapay.com/BeatLink/donate"><img alt="Donate using Liberapay" src="https://liberapay.com/assets/widgets/donate.svg"></a> <a href="https://ko-fi.com/I4V52ANK6N"><img alt="Support me on Ko-fi" src="https://ko-fi.com/img/githubbutton_sm.svg"></a>
 
 Workouts, diet and body measurements in one app. It runs as a web page served by your own server, as a desktop app and
-as an Android app; the desktop and Android apps keep their own copy of the data, work offline, and sync with the server
-whenever it can be reached.
+as an Android app; every copy of the data works offline and syncs with the other devices it is paired with, the server
+being one of them, whenever they can reach each other.
 
 - **Workouts:** exercises with pictures, shown as a table or a grid, filled in from wger or by hand, routines, logged sessions with their sets, rest timer, and progress per exercise.
   Its Training page holds the training calculators: one-rep maxes (Epley, Brzycki, Lombardi, RPE counted) with the
@@ -85,25 +85,31 @@ adds users on **Users**.
 
 ## Sync
 
-In the desktop or Android app, open **Settings → This device → Sync**, enter the server's address, your name and
-password, and choose whether this device starts from the server's data or the server from this device's. The copy that
-loses is backed up first. After that, changes go both ways within seconds, and a device that is offline catches up once
-it is back. The device gets a token of its own, listed on **Your account**, which Stop syncing gives back.
+Devices sync once they are paired, with no account involved. On a device other devices can reach (the server, or a
+desktop with **Let other devices connect** turned on in **Settings → This device → Sync**), choose **Show pairing code**;
+an admin finds the server's under **Settings → Server → Sync** in the browser. Enter the code under **Pair with a device**
+on the other device. The two copies merge, the newest change to each value winning, and the group's devices are introduced
+to each other. After that, changes go both ways within seconds, pass on through any device both reach, and a device that
+is offline catches up once it is back. **Remove** stops a device syncing with the whole group.
+
+The server lists the address devices reach it at in its config's `sync_address` (the NixOS option `syncAddress`), such as
+`https://fitness.example.org/api/`. Every call between two devices is sealed with their keys, so it may travel over plain
+http on a home network.
 
 ## Backups
 
-Every copy of the data backs itself up: daily by default, keeping the last 14, and always before a restore, before a
-sync takes the other copy, and before an upgrade changes the database. **Settings → Backups** takes one by hand, sets
+Every copy of the data backs itself up: daily by default, keeping the last 14, and always before a restore, before
+another device's restore reaches it, and before an upgrade changes the database. **Settings → Backups** takes one by hand, sets
 the schedule and lists every backup to restore or delete; backups taken by hand are kept until deleted. The schedule
 belongs to that device or server and is never synced.
 
-- **Desktop:** in `backups/` beside the database in the profile folder. A restore backs up the current data first and
-  stops sync, so you choose again which copy wins.
+- **Desktop:** in `backups/` beside the database in the profile folder. A restore backs up the current data first, and
+  every paired device is then made to match the restored data.
 - **Android:** in a folder you pick once under **Settings → Backups → Backup folder**, such as Documents, where file
   managers and sync apps reach them. Until one is picked there are none, and daily backups wait. A restore backs up the
-  current data first and stops sync.
+  current data first, and every paired device is then made to match the restored data.
 - **Server:** in `backups_folder`. Only an admin sees them. A restore from the page backs up the current data first,
-  then the server stops and its service starts it again on the backup; every device then chooses which copy wins.
+  then the server stops and its service starts it again on the backup; every paired device is then made to match it.
 
 ## History
 

@@ -22,7 +22,7 @@ function fake_calls(saved: Record<string, unknown>): Client<FitnessMethods> {
   } as unknown as Client<FitnessMethods>;
 }
 
-const off = { state: "off", server_url: "", user: "", last_synced_at: "", pending_changes: 0, error: "" } as const;
+const off = { state: "off", device: "ABCDEFGHIJKLMNOP", name: "X-Fitness on laptop", addresses: [], peers: [], last_synced_at: "", pending_changes: 0, error: "" } as const;
 
 describe("settings", () => {
   it("shows the units with their defaults and saves a change", async () => {
@@ -64,22 +64,23 @@ describe("settings", () => {
     expect(calls.set_setting).not.toHaveBeenCalledWith("mass_unit", expect.anything());
   });
 
-  it("offers sync on a device and signs it in with the choice of copy", async () => {
+  it("offers sync on a device, pairs it with another device's code, and lets other devices connect on the desktop", async () => {
     const device = {
       get_sync_status: vi.fn(async () => off),
-      connect_sync: vi.fn(async () => ({ ...off, state: "idle", server_url: "https://fitness.example.org/" })),
-      disconnect_sync: vi.fn(),
-      sync_now: vi.fn(),
+      pair_device: vi.fn(async () => ({ ...off, state: "idle" })),
     } as unknown as Client<DeviceMethods>;
-    set_page_api({ host: "desktop", calls: fake_calls({}), device, on_change: () => () => undefined });
+    const listening = {
+      get_peer_listening: vi.fn(async () => ({ on: false, port: 3931, addresses: [], error: "" })),
+      set_peer_listening: vi.fn(async (on: boolean, port?: number) => ({ on, port: port ?? 3931, addresses: [], error: "" })),
+    };
+    set_page_api({ host: "desktop", calls: fake_calls({}), device, listening, on_change: () => () => undefined });
     render(<><SettingsView /><Dialogs /></>);
 
-    fireEvent.change(await screen.findByLabelText("Server address"), { target: { value: "https://fitness.example.org" } });
-    fireEvent.change(screen.getByLabelText("User name"), { target: { value: "ada" } });
-    fireEvent.change(screen.getByLabelText("Password"), { target: { value: "secret" } });
-    fireEvent.click(screen.getByRole("button", { name: "Use the server's fitness data" }));
-    fireEvent.click(await screen.findByRole("button", { name: "Use the server's" }));
-    await waitFor(() => expect(device.connect_sync).toHaveBeenCalledWith("https://fitness.example.org", { name: "ada", password: "secret" }, "download"));
+    fireEvent.change(await screen.findByPlaceholderText("x-sync:…"), { target: { value: "x-sync:from-the-server" } });
+    fireEvent.click(screen.getByRole("button", { name: "Pair" }));
+    await waitFor(() => expect(device.pair_device).toHaveBeenCalledWith("x-sync:from-the-server"));
+    fireEvent.click(await screen.findByRole("switch", { name: "Let other devices connect" }));
+    await waitFor(() => expect(listening.set_peer_listening).toHaveBeenCalledWith(true, 3931));
   });
 
   it("shows the server's backups in a browser and takes one by hand", async () => {

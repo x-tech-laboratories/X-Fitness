@@ -67,7 +67,7 @@ describe("history", () => {
     const desktop = open_methods();
     const squat = phone.store.save_exercise({ name: "Squat", measurement: "weight" });
 
-    sync_engine.apply_changes(desktop.database, sync_engine.collect_unpushed_changes(phone.database).changes);
+    sync_engine.apply_changes(desktop.database, sync_engine.collect_changes_since(phone.database, 0, "").changes);
     expect(desktop.store.list_item_history("exercise", squat).map((version) => [version.change, version.origin])).toEqual([["created", "elsewhere"]]);
 
     desktop.store.save_body_metric({ name: "Neck", kind: "length" });
