@@ -53,7 +53,7 @@ export async function build_app(options: AppOptions): Promise<FastifyInstance> {
   const accounts = new AccountStore({ database: options.database, app_name: "X-Fitness", declared: options.declared, token_prefix: "xf" });
   // Backups reach the whole database, the accounts included, and pairing lets a device change all of it, so only an admin may manage them.
   // The sync route needs no sign-in, since every call to it is sealed by a paired device.
-  await register_accounts(app, { accounts, cookie_name: "x_fitness_session", read_only_paths: ["/api/mcp"], open_paths: ["/api/sync/peer"], needed: (_method, path) => (path.startsWith("/api/backup/") || path.startsWith("/api/sync_device/") ? { role: accounts.top_role } : "any") });
+  await register_accounts(app, { accounts, cookie_name: "x_fitness_session", read_only_paths: ["/api/mcp"], open_paths: ["/api/sync/peer"], needed: (_method, path) => (path.startsWith("/api/backup/") || path.startsWith("/api/sync/") ? { role: accounts.top_role } : "any") });
 
   const changes = new EventStream();
   const database = () => options.database;
@@ -102,7 +102,7 @@ export async function build_app(options: AppOptions): Promise<FastifyInstance> {
       if (sync) {
         register_sync_peer_routes(api, sync);
         // The server's own pairing calls, which an admin makes from the page's Sync section.
-        register_call_table(api, "/sync_device", sync_device_methods(sync), { is_read_only });
+        register_call_table(api, "/sync", sync_device_methods(sync), { is_read_only });
       }
     },
     { prefix: "/api" },

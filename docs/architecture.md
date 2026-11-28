@@ -115,7 +115,7 @@ triggers, value by value; the newest write of each value wins. Every copy is an 
 a one-time code, it sends each paired device its changes within seconds and takes theirs in the same round trip, holds a
 waiting call open to hear of theirs at once, passes on what it took from the others, and keeps working offline. The server
 answers devices at `/api/sync/peer`, open without signing in since each call is sealed with the two devices' keys, and
-serves its own pairing calls to an admin at `/api/sync_device/`. A desktop daemon answers on its own port once the user
+serves its own pairing calls to an admin at `/api/sync/`. A desktop daemon answers on its own port once the user
 lets other devices connect (`sync-listening.json`), and keeps its keys and paired devices in `sync-peers.json`.
 
 ## Units

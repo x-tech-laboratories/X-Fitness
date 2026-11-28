@@ -160,8 +160,8 @@ describe("server", () => {
     await start();
     const stranger = await app.inject({ method: "POST", url: "/api/sync/peer", headers: { "content-type": "application/octet-stream", "x-sync-device": "NOBODY" }, payload: Buffer.alloc(64) });
     expect(stranger.statusCode).toBe(403);
-    expect((await app.inject({ method: "POST", url: "/api/sync_device/create_pairing_code", payload: [] })).statusCode).toBe(401);
-    const { code } = (await signed({ method: "POST", url: "/api/sync_device/create_pairing_code", payload: [] })).json() as { code: string };
+    expect((await app.inject({ method: "POST", url: "/api/sync/create_pairing_code", payload: [] })).statusCode).toBe(401);
+    const { code } = (await signed({ method: "POST", url: "/api/sync/create_pairing_code", payload: [] })).json() as { code: string };
 
     // The phone reaches the server through the app itself, as it would through the server's proxy.
     const via_app: typeof fetch = async (input, init) => {
