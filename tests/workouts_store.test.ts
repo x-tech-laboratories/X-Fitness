@@ -224,7 +224,7 @@ describe("workouts store", () => {
     phone.store.update_workout_set(entry.sets[0]!.id, { reps: 6, rpe: 9 });
     phone.store.finish_workout(workout, "2026-11-10T10:00:00.000Z");
     phone.store.save_exercise({ id: bench, name: "Bench Press", picture: "data:image/webp;base64,UklGRg==" });
-    const outgoing = sync_engine.collect_unpushed_changes(phone.database);
+    const outgoing = sync_engine.collect_changes_since(phone.database, 0, "");
     sync_engine.apply_changes(desktop.database, outgoing.changes);
 
     expect(desktop.store.list_workouts("2026-11-10")).toEqual(phone.store.list_workouts("2026-11-10"));

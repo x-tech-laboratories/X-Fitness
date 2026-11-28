@@ -7,7 +7,7 @@ import type { Client } from "@x-tech-laboratories/x-libs/electron/bridge";
 import { backup_method_names, type BackupClient, type BackupMethods } from "@x-tech-laboratories/x-libs/backup_protocol";
 import type { CertificateClient } from "@x-tech-laboratories/x-libs/certificate_protocol";
 import type { LocalMcpClient } from "@x-tech-laboratories/x-libs/local_mcp_protocol";
-import { sync_device_method_names, type SyncDeviceMethods, type SyncStatus } from "@x-tech-laboratories/x-libs/sync_protocol";
+import { sync_device_method_names, type PeerListeningClient, type SyncDeviceClient, type SyncDeviceMethods, type SyncStatus } from "@x-tech-laboratories/x-libs/sync_protocol";
 
 import type { DesktopMethods } from "./desktop.ts";
 import type { FitnessMethods } from "./store.ts";
@@ -19,11 +19,12 @@ export const device_api_name = "x_fitness_device";
 export const events_api_name = "x_fitness_events";
 export const certificates_api_name = "x_fitness_certificates";
 export const local_mcp_api_name = "x_fitness_local_mcp";
+export const listening_api_name = "x_fitness_listening";
 export const desktop_api_name = "x_fitness_desktop";
 
 // ── Device calls ─────────────────────────────────────────────────────────────
 
-// Sync with a server and backups of the device's own database; a browser is already on the server.
+// Sync with the paired devices and backups of the device's own database; a browser is already on a daemon.
 export type DeviceMethods = SyncDeviceMethods & BackupMethods;
 
 export const device_method_names = [...sync_device_method_names, ...backup_method_names] as const;
@@ -46,8 +47,12 @@ export interface PageApi {
   backups?: BackupClient;
   // Where a phone keeps its backups: a folder the user picks once, with no backups until then.
   backup_folder?: { get: () => Promise<string>; choose: () => Promise<string> };
+  // Set in a browser: the server's own sync, which an admin pairs devices with.
+  server_sync?: SyncDeviceClient;
   // Set where the app makes its own connections and can trust a certificate the system refuses.
   certificates?: CertificateClient;
+  // Set on the desktop, whose daemon can let paired devices connect to it.
+  listening?: PeerListeningClient;
   // Set on the desktop, which can serve its own MCP endpoint to AI clients on the same computer.
   local_mcp?: LocalMcpClient;
   // Set on the desktop, whose tray, background running and start at login belong to the computer.

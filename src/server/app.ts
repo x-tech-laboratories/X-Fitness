@@ -1,4 +1,5 @@
-// The web server: the page, every data call the page makes, and the sync every device runs against, all on one database.
+// The web server: the page, every data call the page makes, and this server's copy of the data as one of the paired
+// devices it syncs with, all on one database.
 
 // ── Imports ──────────────────────────────────────────────────────────────────
 
@@ -14,9 +15,11 @@ import { register_accounts } from "@x-tech-laboratories/x-libs/server/account_si
 import { AccountStore } from "@x-tech-laboratories/x-libs/server/account_store";
 import type { Accounts } from "@x-tech-laboratories/x-libs/server/passwords";
 import type { BackupMethods } from "@x-tech-laboratories/x-libs/backup_protocol";
-import { register_sync_routes } from "@x-tech-laboratories/x-libs/server/sync_routes";
+import { register_sync_peer_routes } from "@x-tech-laboratories/x-libs/server/sync_peer_routes";
 import { register_web_folder } from "@x-tech-laboratories/x-libs/server/web_folder";
 import type { SqlDatabase } from "@x-tech-laboratories/x-libs/sql";
+import { create_sync_peer, sync_device_methods } from "@x-tech-laboratories/x-libs/sync_peer";
+import type { PeerStorage } from "@x-tech-laboratories/x-libs/sync_protocol";
 
 import { fitness_bridge } from "../shared/bridge.ts";
 import { mcp_instructions as instructions, without_secrets } from "../shared/mcp.ts";
@@ -30,8 +33,11 @@ export interface AppOptions {
   // The users from the accounts file, who are admins; others are added on the Users page.
   declared: Accounts;
   web_folder: string;
-  // The database's backups, which an admin manages from the page; one is taken before a device's data replaces it.
+  // The database's backups, which an admin manages from the page; one is taken before a device's restore replaces the data.
   backups: BackupMethods;
+  // This server's keys and paired devices, and the address they reach it at, such as "https://fitness.example.org/api/";
+  // without them it syncs with no device.
+  sync?: { storage: PeerStorage; address: string | null };
 }
 
 // ── Other programs ───────────────────────────────────────────────────────────
@@ -45,11 +51,28 @@ export async function build_app(options: AppOptions): Promise<FastifyInstance> {
   register_lenient_json_body(app);
   register_error_replies(app);
   const accounts = new AccountStore({ database: options.database, app_name: "X-Fitness", declared: options.declared, token_prefix: "xf" });
-  // Backups reach the whole database, the accounts included, so only an admin may manage them.
-  await register_accounts(app, { accounts, cookie_name: "x_fitness_session", read_only_paths: ["/api/mcp"], needed: (_method, path) => (path.startsWith("/api/backup/") ? { role: accounts.top_role } : "any") });
+  // Backups reach the whole database, the accounts included, and pairing lets a device change all of it, so only an admin may manage them.
+  // The sync route needs no sign-in, since every call to it is sealed by a paired device.
+  await register_accounts(app, { accounts, cookie_name: "x_fitness_session", read_only_paths: ["/api/mcp"], open_paths: ["/api/sync/peer"], needed: (_method, path) => (path.startsWith("/api/backup/") || path.startsWith("/api/sync/") ? { role: accounts.top_role } : "any") });
 
   const changes = new EventStream();
   const database = () => options.database;
+  const sync_options = options.sync;
+  const sync = sync_options
+    ? create_sync_peer({
+        app: "x-fitness",
+        engine: sync_engine,
+        database,
+        storage: sync_options.storage,
+        device_name: "X-Fitness server",
+        addresses: () => (sync_options.address ? [sync_options.address] : []),
+        on_remote_change: () => changes.announce_change(),
+      })
+    : null;
+  if (sync) {
+    app.addHook("onReady", async () => sync.start());
+    app.addHook("onClose", async () => sync.stop());
+  }
 
   await app.register(
     async (api) => {
@@ -76,12 +99,11 @@ export async function build_app(options: AppOptions): Promise<FastifyInstance> {
 
       // Backup calls arrive as POST /api/backup/<method> with the arguments as a JSON list.
       register_call_table(api, "/backup", options.backups, { is_read_only });
-      register_sync_routes(api, {
-        engine: sync_engine,
-        database,
-        back_up: async () => void (await options.backups.create_backup()),
-        on_change: (request) => changes.announce_change(changes.client_id_of(request)),
-      });
+      if (sync) {
+        register_sync_peer_routes(api, sync);
+        // The server's own pairing calls, which an admin makes from the page's Sync section.
+        register_call_table(api, "/sync", sync_device_methods(sync), { is_read_only });
+      }
     },
     { prefix: "/api" },
   );

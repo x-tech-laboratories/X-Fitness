@@ -94,7 +94,7 @@ describe("body goals", () => {
     const desktop = open_device();
     phone.store.set_body_goal("weight", 75);
     phone.store.set_body_goal("neck", 38);
-    const outgoing = sync_engine.collect_unpushed_changes(phone.database);
+    const outgoing = sync_engine.collect_changes_since(phone.database, 0, "");
     sync_engine.apply_changes(desktop.database, outgoing.changes);
     expect(goals_of(desktop.store)).toEqual({ weight: 75, neck: 38 });
   });
@@ -181,6 +181,6 @@ describe("carrying the metrics' goals over", () => {
     const old_version = store.list_item_history("metric", "waist").find((version) => version.item_name === "Belly")!;
     store.restore_item_version("metric", old_version.id);
     expect(store.list_body_metrics().find((metric) => metric.id === "waist")?.name).toBe("Belly");
-    expect(sync_engine.collect_unpushed_changes(database).changes.length).toBeGreaterThan(0);
+    expect(sync_engine.collect_changes_since(database, 0, "").changes.length).toBeGreaterThan(0);
   });
 });

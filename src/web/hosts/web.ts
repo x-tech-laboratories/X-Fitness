@@ -4,6 +4,7 @@
 // ── Imports ──────────────────────────────────────────────────────────────────
 
 import type { BackupClient } from "@x-tech-laboratories/x-libs/backup_protocol";
+import type { SyncDeviceClient } from "@x-tech-laboratories/x-libs/sync_protocol";
 import type { Client } from "@x-tech-laboratories/x-libs/electron/bridge";
 import { LoginNeeded } from "@x-tech-laboratories/x-libs/web/states";
 
@@ -15,6 +16,7 @@ import type { FitnessMethods } from "../../shared/store.ts";
 // Relative, so a server behind a proxy under a folder keeps it.
 const call_path = "api/call/";
 const backup_path = "api/backup/";
+const sync_calls_path = "api/sync/";
 const events_path = "api/events";
 const client_id_header = "x-client-id";
 
@@ -73,6 +75,13 @@ function server_backups(): BackupClient {
   });
 }
 
+// The server's own copy as one of the paired devices, which only an admin may pair or remove devices for.
+function server_sync(): SyncDeviceClient {
+  return new Proxy({} as SyncDeviceClient, {
+    get: (_target, name) => (typeof name === "string" ? (...args: unknown[]) => call_server(name, args, sync_calls_path) : undefined),
+  });
+}
+
 export function web_api(): PageApi {
   const listeners = new Set<() => void>();
   follow_changes(() => {
@@ -82,6 +91,7 @@ export function web_api(): PageApi {
     host: "web",
     calls: server_calls(),
     backups: server_backups(),
+    server_sync: server_sync(),
     device: null,
     on_change: (listener) => {
       listeners.add(listener);

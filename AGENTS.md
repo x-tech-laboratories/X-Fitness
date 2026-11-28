@@ -1,8 +1,8 @@
 # Instructions for AI agents
 
 X-Fitness tracks workouts, diet and body measurements. It is a React page that runs in a browser against its own
-server, in Electron with its own database, and on Android in Capacitor with its own database, all syncing through the
-server. Read `README.md` first, then `docs/architecture.md`. It follows the
+server, in Electron with its own database, and on Android in Capacitor with its own database, every copy syncing with
+the others as paired devices. Read `README.md` first, then `docs/architecture.md`. It follows the
 [X-Tech Application Standard](https://x-tech-laboratories.github.io/standards/application/).
 
 ## Setup and checks

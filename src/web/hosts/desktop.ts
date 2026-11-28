@@ -4,10 +4,11 @@
 
 import type { Client } from "@x-tech-laboratories/x-libs/electron/bridge";
 import type { CertificateClient } from "@x-tech-laboratories/x-libs/certificate_protocol";
+import type { PeerListeningClient } from "@x-tech-laboratories/x-libs/sync_protocol";
 import type { EventsClient } from "@x-tech-laboratories/x-libs/electron/events";
 import type { LocalMcpClient } from "@x-tech-laboratories/x-libs/local_mcp_protocol";
 
-import { certificates_api_name, desktop_api_name, device_api_name, events_api_name, fitness_api_name, local_mcp_api_name, type DeviceMethods, type FitnessEvents, type PageApi } from "../../shared/page_api.ts";
+import { certificates_api_name, desktop_api_name, device_api_name, events_api_name, listening_api_name, fitness_api_name, local_mcp_api_name, type DeviceMethods, type FitnessEvents, type PageApi } from "../../shared/page_api.ts";
 import type { DesktopMethods } from "../../shared/desktop.ts";
 import type { FitnessMethods } from "../../shared/store.ts";
 
@@ -31,6 +32,7 @@ export function desktop_api(): PageApi {
     device,
     backups: device,
     certificates: desktop[certificates_api_name] as CertificateClient,
+    listening: desktop[listening_api_name] as PeerListeningClient,
     local_mcp: desktop[local_mcp_api_name] as LocalMcpClient,
     desktop: desktop[desktop_api_name] as Client<DesktopMethods>,
     on_change: (listener) => events.on("changed", listener),

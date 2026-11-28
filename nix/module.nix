@@ -17,10 +17,13 @@ let
 
   state_directory = "/var/lib/x-fitness";
 
-  config_file = (pkgs.formats.json { }).generate "x-fitness.json" {
-    database = "${state_directory}/fitness.db";
-    backups_folder = "${state_directory}/backups";
-  };
+  config_file = (pkgs.formats.json { }).generate "x-fitness.json" (
+    {
+      database = "${state_directory}/fitness.db";
+      backups_folder = "${state_directory}/backups";
+    }
+    // lib.optionalAttrs (cfg.syncAddress != null) { sync_address = cfg.syncAddress; }
+  );
 in
 {
   options.services.x-fitness = {
@@ -49,6 +52,13 @@ in
       type = types.bool;
       default = false;
       description = "Open the port in the firewall.";
+    };
+
+    syncAddress = mkOption {
+      type = types.nullOr types.str;
+      default = null;
+      example = "https://fitness.example.org/api/";
+      description = "Where paired devices reach this server's sync, through its reverse proxy; without it the server only reaches out to devices that let others connect.";
     };
 
     passwordHashFile = mkOption {

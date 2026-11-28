@@ -11,7 +11,7 @@ import { LocalMcpSettings } from "@x-tech-laboratories/x-libs/web/react/local_mc
 import { PageHeading, SettingRow, SettingsPage, type SettingsCategory, type SettingsSection } from "@x-tech-laboratories/x-libs/web/react/layout";
 import { Loaded } from "@x-tech-laboratories/x-libs/web/react/states";
 import { TrustedCertificates } from "@x-tech-laboratories/x-libs/web/react/certificates";
-import { SyncSettings } from "@x-tech-laboratories/x-libs/web/react/sync_settings";
+import { PeerListeningSettings, SyncSettings } from "@x-tech-laboratories/x-libs/web/react/sync_settings";
 
 import type { DesktopSettings } from "../../shared/desktop.ts";
 import { data_watch, page, set_setting, show_error, use_settings } from "../api.ts";
@@ -116,12 +116,13 @@ function Desktop() {
 
 // Sync on a device with its own database, and backups of whichever database the page works on.
 function data_category(): SettingsCategory[] {
-  const { device, backups, backup_folder, certificates, local_mcp, desktop } = page();
+  const { device, server_sync, backups, backup_folder, certificates, listening, local_mcp, desktop } = page();
   const sections: SettingsSection[] = [
-    ...(device ? [{ id: "sync", heading: "Sync", hint: "Keep this device's data alike with your X-Fitness server.", content: <>
-      <SyncSettings device={device} certificates={certificates} subscribe={data_watch.subscribe} data_name="fitness data" placeholder="https://fitness.example.org/" />
+    ...(device ? [{ id: "sync", heading: "Sync", hint: "Keep this device's data alike with your other devices.", content: <>
+      <SyncSettings device={device} subscribe={data_watch.subscribe} data_name="fitness data" extra={listening && <PeerListeningSettings listening={listening} />} />
       {certificates && <TrustedCertificates certificates={certificates} />}
     </> }] : []),
+    ...(server_sync ? [{ id: "sync", heading: "Sync", hint: "Keep the server's data alike with your devices. Only an admin may pair or remove a device.", content: <SyncSettings device={server_sync} subscribe={data_watch.subscribe} data_name="fitness data" /> }] : []),
     ...(backups
       ? [{ id: "backups", heading: "Backups", hint: backup_folder ? "Copies of this device's data, kept in a folder you pick." : device ? "Copies of this device's data, kept beside it." : "Copies of the server's data, kept in its data folder. A restore restarts the server.", content: <Backups /> }]
       : []),
